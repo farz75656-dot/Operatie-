@@ -1,0 +1,1 @@
+{ "name": "Operatie Staal", "short_name": "Op. Staal", "start_url": "./", "display": "fullscreen", "orientation": "landscape", "background_color": "#0d100c", "theme_color": "#0d100c", "icons": [{ "src": "icon.png", "sizes": "180x180", "type": "image/png" }] }
