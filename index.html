@@ -6591,6 +6591,138 @@ body.immersive #mapbox{transform:scale(.8);transform-origin:top right}
   if (standalone) document.body.classList.add('immersive');
 }
 
+// ================= HARDER BATTLES · BODYCAMS · MOVABLE HOSTAGE ALERT =================
+// ---------------- difficulty: slower ticket bleed, a richer and more aggressive enemy, enemy offensives ----------------
+const DIFFI = { makkelijk: 0, normaal: 1, moeilijk: 2, brutaal: 3 };
+const _income8 = income;
+income = function (t) { const v = _income8(t), k = DIFFI[SET.diff] || 1; return t === CMD.team ? v * (.62 - k * .04) : v * (1.12 + k * .28); };
+const OFF = { t: 150, n: 0, allT: [0, 0] };
+updateEconomy = function (dt) {
+  if (!ECO.on || ECO.over) return;
+  for (const t of [0, 1]) ECO.money[t] = Math.min(1e14, ECO.money[t] + income(t) * dt);
+  // only a clear majority makes the other side lose tickets, and slowly
+  const d = ownedCount(0) - ownedCount(1), lead = Math.abs(d) - Math.max(2, Math.round(POINTS.length * .15));
+  if (lead > 0) { const loser = d > 0 ? 1 : 0; ECO.tickets[loser] = Math.max(0, ECO.tickets[loser] - lead * .045 * dt); }
+  // the enemy commander buys more often and keeps a bigger army
+  const ai = 1 - CMD.team, k = DIFFI[SET.diff] || 1; ECO.aiT -= dt;
+  if (ECO.aiT <= 0) {
+    ECO.aiT = 2.6 - k * .4;
+    if (!ECO.plan) ECO.plan = aiChoose(ai);
+    const ground = units.filter(u => u.alive && u.team === ai && u.type !== 'jet' && !u.guard).length;
+    if (ground < 55 + k * 12 && ECO.money[ai] >= (COST[ECO.plan] || 0)) { ECO.money[ai] -= COST[ECO.plan] || 0; const kk = ECO.plan; ECO.plan = null; deliver(kk, ai, frontSpot(ai)); }
+  }
+  // big enemy offensives that grow over time
+  OFF.t -= dt;
+  if (OFF.t <= 0) {
+    OFF.n++; OFF.t = Math.max(95, 190 - k * 25 - OFF.n * 6);
+    const F = INTEL.focus || POINTS.filter(p => p.owner === CMD.team).sort((a, b) => Math.hypot(a.x - BASES[ai].x, a.z - BASES[ai].z) - Math.hypot(b.x - BASES[ai].x, b.z - BASES[ai].z))[0];
+    if (F) {
+      const p = new V3(F.x, 0, F.z), sp = frontSpot(ai), sq = Math.min(5, 1 + Math.floor(OFF.n / 2) + (k > 1 ? 1 : 0)), tk = Math.min(4, 1 + Math.floor(OFF.n / 3) + (k > 2 ? 1 : 0));
+      for (let i = 0; i < sq; i++) deliver(i % 3 === 2 ? 'atteam' : 'squad', ai, new V3(p.x + rnd(-70, 70), 0, p.z + rnd(-70, 70)));
+      for (let i = 0; i < tk; i++) deliver(['mbt', 'heavy', 'light', 'aa'][i % 4], ai, new V3(sp.x + rnd(-40, 40), 0, sp.z + rnd(-40, 40)));
+      if (OFF.n % 2 === 0) deliver('sf', ai, new V3(p.x + rnd(-40, 40), 0, p.z + rnd(-40, 40)));
+      if (OFF.n >= 3 && Math.random() < .5) deliver(Math.random() < .5 ? 'gbomber' : 'bomber', ai, p);
+      INTEL.focus = F; INTEL.focusT = 70;
+      addFeed(null, null, `⚔ VIJANDELIJK OFFENSIEF ${OFF.n} op ${F.L} ${F.name}! ${sq} groepen soldaten en ${tk} tanks`); Snd.burst(null, { f: 500, q: 2, dur: .5, vol: .4, rng: 50 });
+    }
+  }
+  // owning every point only wins if you hold them all for 45 seconds
+  for (const t of [0, 1]) {
+    if (POINTS.every(p => p.owner === t)) { const was = OFF.allT[t]; OFF.allT[t] += dt; if (was === 0) addFeed(null, null, `${TEAMNAME[t]} bezit alle ${POINTS.length} punten · nog 45 s vasthouden om te winnen`); if (OFF.allT[t] >= 45) { ECO.tickets[1 - t] = 0; } }
+    else OFF.allT[t] = 0;
+  }
+  if (ECO.tickets[0] <= 0 || ECO.tickets[1] <= 0) endGame(ECO.tickets[CMD.team] > 0);
+};
+// defending: the enemy holds its own half too, and attacks with more money
+const _beginGame3 = beginGame;
+beginGame = function () {
+  _beginGame3();
+  if (!ECO.on) return;
+  const me = CMD.team, foe = 1 - me, bm = BASES[me], bf = BASES[foe];
+  if (SET.role === 'verdedigen') for (const p of POINTS) { const dm = Math.hypot(p.x - bm.x, p.z - bm.z), df = Math.hypot(p.x - bf.x, p.z - bf.z); if (df < dm - 60) { p.owner = foe; p.prog = foe ? 1 : -1; p.lastOwner = p.owner; paintPoint(p); } }
+  ECO.money[foe] = Math.max(ECO.money[foe], 1800 + (DIFFI[SET.diff] || 1) * 900);
+  OFF.t = SET.role === 'verdedigen' ? 120 : 170; OFF.n = 0; OFF.allT = [0, 0];
+};
+
+// ---------------- bodycams of your special forces ----------------
+const BC = { cam: new THREE.PerspectiveCamera(92, 1.6, .15, 2500), on: false, idx: 0, t: 0, rt: null, buf: null, w: 256, h: 160, rec: 0 };
+scene.add(BC.cam);
+{
+  const st = document.createElement('style');
+  st.textContent = `#bodycam{position:fixed;z-index:8;left:calc(12px + env(safe-area-inset-left,0px));top:calc(132px + env(safe-area-inset-top,0px));width:256px;border:1px solid #e2543c;background:#000;box-shadow:0 0 14px rgba(0,0,0,.6)}
+#bodycam .cvw{position:relative} #bodycam canvas{display:block;width:100%;height:auto;filter:contrast(1.25) saturate(.55) brightness(1.08)}
+#bodycam .ov{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6));font:600 10px var(--mono);color:#fff;text-shadow:0 0 3px #000}
+#bodycam .ov .tl{position:absolute;left:6px;top:4px} #bodycam .ov .tl b{color:#ff3b2a} #bodycam .ov .tr{position:absolute;right:6px;top:4px} #bodycam .ov .bl{position:absolute;left:6px;bottom:4px}
+#bodycam .btns{display:flex;gap:4px;padding:4px;background:rgba(20,6,5,.9)} #bodycam .btns button{flex:1;appearance:none;cursor:pointer;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;font:600 11px var(--display);padding:4px 0}
+body.touch #bodycam{width:200px} body.possess #bodycam{top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:auto;right:calc(12px + env(safe-area-inset-right,0px));width:180px}
+#hostBar.side{left:calc(12px + env(safe-area-inset-left,0px));top:calc(132px + env(safe-area-inset-top,0px));transform:none;flex-direction:column;align-items:stretch;gap:6px;width:200px;padding:8px}
+#hostBar.side #hbTxt{display:block;font-size:12px;line-height:1.3} #hostBar.side button{padding:5px 6px}
+#hostBar.mini{left:calc(12px + env(safe-area-inset-left,0px));top:calc(132px + env(safe-area-inset-top,0px));transform:none;padding:5px 9px;cursor:pointer}
+#hostBar.mini>*:not(#hbT):not(.hbIcon){display:none!important}
+#hostBar .hbTools{display:flex;gap:4px} #hostBar .hbTools button{padding:4px 7px}
+#hostBar.side ~ #bodycam,#hostBar.full ~ #bodycam{}`;
+  document.head.appendChild(st);
+  const bar = document.getElementById('hostBar');
+  bar.insertAdjacentHTML('afterbegin', '<span class="hbIcon" hidden>🚨</span>');
+  const tools = document.createElement('span'); tools.className = 'hbTools';
+  tools.innerHTML = '<button id="hbCam" title="Bodycam">📹</button><button id="hbSide" title="Naar de zijkant">⇤</button><button id="hbMin" title="Wegklikken">✕</button>';
+  bar.appendChild(tools);
+  const bc = document.createElement('div'); bc.id = 'bodycam'; bc.hidden = true;
+  bc.innerHTML = '<div class="cvw"><canvas width="256" height="160"></canvas><div class="ov"><span class="tl"><b>● REC</b> <span id="bcName"></span></span><span class="tr" id="bcTime"></span><span class="bl" id="bcInfo"></span></div></div><div class="btns"><button id="bcPrev">◀</button><button id="bcCtl" title="Bestuur deze soldaat">🎮</button><button id="bcNext">▶</button><button id="bcOff">✕</button></div>';
+  document.body.appendChild(bc);
+  BC.cv = bc.querySelector('canvas'); BC.ctx = BC.cv.getContext('2d'); BC.img = BC.ctx.createImageData(BC.w, BC.h);
+  let mode = 'full'; try { mode = localStorage.getItem('hostBarMode') || 'full'; } catch (e) { }
+  const setMode = m => { mode = m; bar.classList.remove('full', 'side', 'mini'); bar.classList.add(m); bar.querySelector('.hbIcon').hidden = m !== 'mini'; document.getElementById('hbSide').textContent = m === 'side' ? '⇥' : '⇤'; document.getElementById('hbSide').title = m === 'side' ? 'Terug naar boven' : 'Naar de zijkant'; try { localStorage.setItem('hostBarMode', m); } catch (e) { } placeCam(); };
+  BC.setMode = setMode; setMode(mode);
+  document.getElementById('hbSide').onclick = e => { e.stopPropagation(); setMode(mode === 'side' ? 'full' : 'side'); };
+  document.getElementById('hbMin').onclick = e => { e.stopPropagation(); setMode('mini'); };
+  bar.addEventListener('click', () => { if (mode === 'mini') setMode('side'); });
+  document.getElementById('hbCam').onclick = e => { e.stopPropagation(); BC.on = !BC.on; if (BC.on && !bcList().length) { flashTip('Nog geen special forces ter plaatse · stuur er eerst'); } };
+  document.getElementById('bcOff').onclick = () => { BC.on = false; };
+  document.getElementById('bcPrev').onclick = () => { BC.idx--; };
+  document.getElementById('bcNext').onclick = () => { BC.idx++; };
+  document.getElementById('bcCtl').onclick = () => { const u = bcUnit(); if (!u) return; if (state === 'possess') unpossess(); possess(u); };
+  function placeCam() { const r = bar.getBoundingClientRect(), side = mode === 'side' || mode === 'mini'; bc.style.top = side && !bar.hidden ? Math.round(r.bottom + 8) + 'px' : ''; }
+  BC.placeCam = placeCam;
+}
+function bcList() { const S = HSTG.active; return units.filter(u => u.alive && u.team === CMD.team && u.sf && (!S || u.rescue === S || Math.hypot(u.pos.x - S.H.x, u.pos.z - S.H.z) < 300) && u !== PZ.unit).sort((a, b) => a.id - b.id); }
+function bcUnit() { const l = bcList(); if (!l.length) return null; BC.idx = ((BC.idx % l.length) + l.length) % l.length; return l[BC.idx]; }
+let unitIdSeq = 0; // stable ids for ordering
+Object.defineProperty(Unit.prototype, 'id', { get() { if (this._id === undefined) this._id = ++unitIdSeq; return this._id; } });
+function updateBodycam(dt) {
+  const el = document.getElementById('bodycam'), S = HSTG.active;
+  if (S && !BC.auto && bcList().length) { BC.auto = true; BC.on = true; addFeed(null, null, '📹 Bodycam van je special forces staat aan · ◀ ▶ wissel van soldaat'); }
+  if (!S) BC.auto = false;
+  const u = BC.on && state !== 'arty' ? bcUnit() : null;
+  el.hidden = !u; if (!u) return;
+  BC.placeCam();
+  BC.t -= dt; BC.rec += dt; if (BC.t > 0) return; BC.t = .09;
+  // head position, looking where the soldier looks (at the enemy he fights, or where he walks)
+  const eye = u.eye().add(new V3(Math.sin(u.yaw) * .35, Math.sin(performance.now() / 160) * .03, Math.cos(u.yaw) * .35));
+  let look = eye.clone().add(new V3(Math.sin(u.yaw), -.05, Math.cos(u.yaw)));
+  const t = u.target && u.target.alive && u.canSee ? u.target : null; if (t) look = t.center().clone();
+  else if (u.vel && Math.hypot(u.vel.x, u.vel.z) > .5) look = eye.clone().add(new V3(u.vel.x, -.3, u.vel.z).normalize());
+  BC.cam.position.copy(eye); BC.cam.up.set(0, 1, 0); BC.cam.lookAt(look); BC.cam.rotateZ(Math.sin(performance.now() / 230) * .015);
+  if (!BC.rt) { BC.rt = new THREE.WebGLRenderTarget(BC.w, BC.h); BC.rt.texture.encoding = renderer.outputEncoding; BC.buf = new Uint8Array(BC.w * BC.h * 4); }
+  BC.cam.aspect = BC.w / BC.h; BC.cam.updateProjectionMatrix();
+  const hidden = u.group.visible; u.group.visible = false; const cv = COCKPIT.visible; COCKPIT.visible = false;
+  const roofs = HOSP.map(H => H.roof.visible); HOSP.forEach(H => H.roof.visible = true);
+  renderer.setRenderTarget(BC.rt); renderer.render(scene, BC.cam); renderer.readRenderTargetPixels(BC.rt, 0, 0, BC.w, BC.h, BC.buf); renderer.setRenderTarget(null);
+  HOSP.forEach((H, i) => H.roof.visible = roofs[i]); u.group.visible = hidden; COCKPIT.visible = cv;
+  const d = BC.img.data, W = BC.w * 4; for (let y = 0; y < BC.h; y++) d.set(BC.buf.subarray((BC.h - 1 - y) * W, (BC.h - y) * W), y * W);
+  BC.ctx.putImageData(BC.img, 0, 0);
+  const l = bcList(); document.getElementById('bcName').textContent = `BODYCAM SF-${BC.idx + 1}/${l.length}`;
+  const s = Math.floor(BC.rec); document.getElementById('bcTime').textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  document.getElementById('bcInfo').textContent = `${Math.round(u.hp)} HP${S ? ' · ' + ({ out: 'buiten', lobby: 'inkomhal', c0: 'gang', cL: 'gang', cR: 'gang', A: 'kamer 1', B: 'kamer 2', C: 'kamer 3', D: 'kamer 4', E: 'kamer 5' }[roomOf(S.H, u.pos)] || '') : ''}${t ? ' · CONTACT' : ''}`;
+}
+const _updateWaves8 = updateWaves;
+updateWaves = function (dt) { _updateWaves8(dt); updateBodycam(dt); };
+// the bar also lists the bodycam state
+const _showHB = showHostageBar;
+showHostageBar = function () { _showHB(); BC.setMode(document.getElementById('hostBar').classList.contains('mini') ? 'mini' : document.getElementById('hostBar').classList.contains('side') ? 'side' : 'full'); };
+const _hideHB = hideHostageBar;
+hideHostageBar = function () { _hideHB(); BC.on = false; };
+
 </script>
 
 </html>
