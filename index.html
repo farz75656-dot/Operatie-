@@ -415,7 +415,7 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       <div class="lbl" style="margin-top:4px">Bevoorrading · tik op een eigen punt · onderweg kan de vijand het aanvallen</div>
       <div class="trow trow5"><button class="tb" data-tool="supLand"></button><button class="tb" data-tool="supSea"></button><button class="tb" data-tool="supAir"></button><button class="tb" data-tool="milconvoy"></button></div>
       <div class="lbl" style="margin-top:4px">Raketwerpers · rijden zelf naar de plek</div>
-      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button><button class="tb" data-tool="abmtruck"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button><button class="tb" data-tool="abmtruck"></button><button class="tb x" data-tool="mslswarm"></button></div>
       <div class="lbl" style="margin-top:4px">Vloot · tik op zee</div>
       <div class="trow trow5"><button class="tb" data-tool="destroyer"></button><button class="tb" data-tool="sub"></button><button class="tb" data-tool="carrier"></button><button class="tb" data-tool="battleship"></button></div>
       <div class="lbl" style="margin-top:4px">Bouwen · muren staan dwars op je kijkrichting</div>
@@ -4712,7 +4712,7 @@ const SHIP = {
   sub: { hp: 1900, len: 52, beam: 7, speed: 11, turn: .14, name: 'Kernonderzeeër' }
 };
 Object.assign(COST, { destroyer: 650, sub: 950, carrier: 1600, nukebomber: 2200, gbomber: 700, transport: 420, gcruise: 220 });
-Object.assign(KINDS, { destroyer: { label: 'Torpedobootjager', sub: 'kanonnen · raketten' }, sub: { label: 'Onderzeeër', sub: 'torpedo · kernraket' }, carrier: { label: 'Vliegdekschip', sub: 'eigen jagers' }, nukebomber: { label: 'Kernbommenwerper', sub: '1 kernbom' }, gbomber: { label: 'Precisiebommer', sub: 'geleide bommen' }, transport: { label: 'Transportvliegtuig', sub: '10 parachutisten' }, gcruise: { label: 'Kruisraket', sub: 'zelf besturen' } });
+Object.assign(KINDS, { destroyer: { label: 'Torpedobootjager', sub: 'kanonnen · raketten' }, sub: { label: 'Onderzeeër', sub: 'torpedo · kernraket' }, carrier: { label: 'Vliegdekschip', sub: 'eigen jagers' }, nukebomber: { label: 'Kernbommenwerper', sub: '1 kernbom' }, gbomber: { label: 'Precisiebommer', sub: 'geleide bommen' }, transport: { label: 'Transportvliegtuig', sub: '10 parachutisten' }, gcruise: { label: 'Kruisraket', sub: 'vliegt zelf naar het doel' } });
 Object.assign(UNAME, { destroyer: ['torpedobootjager', 'torpedobootjagers'], carrier: ['vliegdekschip', 'vliegdekschepen'], sub: ['kernonderzeeër', 'kernonderzeeërs'], nukebomber: ['kernbommenwerper', 'kernbommenwerpers'], gbomber: ['precisiebommenwerper', 'precisiebommenwerpers'], transport: ['transportvliegtuig', 'transportvliegtuigen'], gcruise: ['kruisraket', 'kruisraketten'] });
 function hullGeo(len, beam, height, bowLen) {
   const h = len / 2, b = beam / 2, pts = [[-b * .85, -h], [b * .85, -h], [b, -h * .3], [b, h - bowLen], [b * .45, h - bowLen * .25], [0, h], [-b * .45, h - bowLen * .25], [-b, h - bowLen], [-b, -h * .3]];
@@ -4921,14 +4921,14 @@ deliver = function (kind, team, p) {
     const j = makeBomber(team, bt, 0, 0, 0, 0, true); j.driver = 'ai'; j.home = new V3(p.x, 0, p.z); j.order = { type: 'move', p: new V3(p.x, 0, p.z) }; launchFromAirfield(j);
     addFeed(null, null, `${TEAMNAME[team]} ${UNAME[kind][0]} stijgt op`); return;
   }
-  if (kind === 'gcruise') { const silo = units.find(u => u.alive && u.variant === 'silo' && u.team === team) || { pos: new V3(BASES[team].x, 0, BASES[team].z), groundY: getH(BASES[team].x, BASES[team].z), team }; launchCruise(silo, p, team === CMD.team); return; }
+  if (kind === 'gcruise') { const silo = units.find(u => u.alive && u.variant === 'silo' && u.team === team) || { pos: new V3(BASES[team].x, 0, BASES[team].z), groundY: getH(BASES[team].x, BASES[team].z), team }; launchCruise(silo, p, false); return; }
   _deliver2(kind, team, p);
 };
 // silo cruise missiles fly themselves; you can follow them (and the nukes)
 const _launchCruise = launchCruise;
 launchCruise = function (silo, target, guided) {
   const d = _launchCruise(silo, target, guided); d.live = true;
-  if (!guided && silo.team === CMD.team) { FOL.pr = d; FOL.t = 0; FOL.hit = null; FOL.kind = 'KRUISRAKET'; FOL.big = true; FOL.always = true; FOL.cam.position.copy(d.pos); }
+  if (!guided && silo.team === CMD.team && !(typeof NO_FOL !== 'undefined' && NO_FOL)) { FOL.pr = d; FOL.t = 0; FOL.hit = null; FOL.kind = 'KRUISRAKET'; FOL.big = true; FOL.always = true; FOL.cam.position.copy(d.pos); }
   return d;
 };
 const _boom = Drone.prototype.boom;
@@ -7115,6 +7115,103 @@ updatePossess = dt => {
 };
 const _unpossess5 = unpossess;
 unpossess = () => { const u = PZ.unit; if (u && u.group) u.group.visible = true; VM.visible = false; document.body.classList.remove('fpcam'); if (!BCW.unit) document.getElementById('bcFrame').hidden = true; _unpossess5(); };
+
+// ================= MISSILE SWARM · CRUISE MISSILES FLY THEMSELVES · LAUNCHER TRUCKS FIRE WHERE YOU TAP =================
+let NO_FOL = false;
+Object.assign(COST, { mslswarm: 1300 });
+KINDS.mslswarm = { label: 'Raketzwerm', sub: '20 kruisraketten' };
+UNAME.mslswarm = ['raketzwerm', 'raketzwermen'];
+// ---- a swarm of 20 cruise missiles spread over everything around the spot ----
+function missileSwarm(team, p) {
+  const foes = units.filter(u => u.alive && !u.hidden && !u.noTarget && u.team !== team && !isAirT(u) && u.type !== 'drone' && Math.hypot(u.pos.x - p.x, u.pos.z - p.z) < 260)
+    .sort((a, b) => Math.hypot(a.pos.x - p.x, a.pos.z - p.z) - Math.hypot(b.pos.x - p.x, b.pos.z - p.z)).slice(0, 12);
+  const silo = units.find(u => u.alive && u.variant === 'silo' && u.team === team), b = BASES[team];
+  for (let i = 0; i < 20; i++) setTimeout(() => {
+    if (ECO.over) return;
+    const t = foes.length ? foes[i % foes.length] : null, q = t && t.alive ? t.pos.clone().add(new V3(rnd(-6, 6), 0, rnd(-6, 6))) : new V3(p.x + rnd(-70, 70), 0, p.z + rnd(-70, 70));
+    const L = silo || { pos: new V3(b.x + rnd(-30, 30), 0, b.z + (team ? 50 : -50)), groundY: getH(b.x, b.z), team };
+    const fake = { pos: L.pos.clone().add(new V3(rnd(-6, 6), 0, rnd(-6, 6))), groundY: L.groundY, team };
+    NO_FOL = i > 0; try { const d = launchCruise(fake, q, false); if (d && t) d.target = t; } finally { NO_FOL = false; }
+  }, i * 260);
+  addFeed(null, null, team === CMD.team ? `🚀 Raketzwerm: 20 kruisraketten op ${foes.length ? foes.length + ' doelen' : 'het gebied'}` : '⚠ VIJANDELIJKE RAKETZWERM onderweg!');
+  if (team !== CMD.team) { radarNote(`📡 RADAR: 20 vijandelijke kruisraketten op weg naar ${placeName(p)}`, p); siren(); }
+}
+const _deliver6 = deliver;
+deliver = function (kind, team, p) { if (kind === 'mslswarm') return missileSwarm(team, p); return _deliver6(kind, team, p); };
+const _placeAt10 = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'mslswarm') { const { team } = tool; if (!pay('mslswarm', team)) return; missileSwarm(team, p); markers.push({ p: p.clone(), t: 0, col: '#e2543c' }); setTool(null); return; }
+  _placeAt10(p);
+};
+const _aiChoose5 = aiChoose;
+let aiMslT = 300;
+aiChoose = function (ai) { const k = _aiChoose5(ai); if (aiMslT <= 0 && Math.random() < .15) { aiMslT = 360; return 'mslswarm'; } return k; };
+
+// ---- launcher trucks: tap a spot (or an enemy) and they fire there ----
+let TRUCKMODE = 'fire';
+const isLauncher = u => u && u.alive && u.truck && (u.variant === 'mlrs' || u.variant === 'shahed');
+const _issueMove5 = issueMove;
+issueMove = function (p, run) {
+  const tr = [...sel].filter(isLauncher);
+  if (tr.length && TRUCKMODE === 'fire') {
+    for (const u of tr) { u.fireAt = p.clone(); u.order = null; u.target = null; const far = Math.hypot(p.x - u.pos.x, p.z - u.pos.z) > u.V.rng; if (u === tr[0]) addFeed(null, null, far ? `🎯 ${UNAME[u.variant][tr.length > 1 ? 1 : 0]} ${tr.length > 1 ? 'rijden' : 'rijdt'} eerst dichterbij en ${tr.length > 1 ? 'vuren' : 'vuurt'} dan op die plek` : `🎯 ${tr.length > 1 ? tr.length + ' raketwerpers vuren' : UNAME[u.variant][0] + ' vuurt'} op die plek`); }
+    markers.push({ p: p.clone(), t: 0, col: '#e2543c' });
+    const rest = [...sel].filter(u => !isLauncher(u)); if (rest.length) { const keep = new Set(sel); sel.clear(); rest.forEach(u => sel.add(u)); _issueMove5(p, run); sel.clear(); keep.forEach(u => sel.add(u)); }
+    return;
+  }
+  for (const u of tr) u.fireAt = null;
+  _issueMove5(p, run);
+};
+const _issueAttack4 = issueAttack;
+issueAttack = function (u) { for (const s of sel) if (isLauncher(s)) s.fireAt = null; if (u && [...sel].some(isLauncher)) addFeed(null, null, `🎯 Raketwerper valt ${u.label().toLowerCase()} aan`); _issueAttack4(u); };
+const _truckThink = Truck.prototype.think;
+Truck.prototype.think = function (dt) {
+  const F = this.fireAt; if (!F || this.variant === 'tel' || this.variant === 'abmtruck') return _truckThink.call(this, dt);
+  const I = this.in, d = Math.hypot(F.x - this.pos.x, F.z - this.pos.z), rng = this.V.rng * .95;
+  if (d > rng) { const k = (d - rng * .85) / d; this.order = { type: 'move', p: new V3(this.pos.x + (F.x - this.pos.x) * k, 0, this.pos.z + (F.z - this.pos.z) * k) }; this.target = null; return _truckThink.call(this, dt); }
+  this.order = null; I.thr = 0; I.steer = 0; I.mg = false;
+  I.aimYaw = Math.atan2(F.x - this.pos.x, F.z - this.pos.z); I.aimPitch = this.variant === 'mlrs' ? .62 : .35;
+  const err = Math.abs(angDiff(this.yaw + this.turretYaw, I.aimYaw));
+  I.fire = !this.salvo && this.reload <= 0 && err < .1 && Math.abs(this.speed) < 1.2 && Math.abs(this.gunPitch - I.aimPitch) < .08;
+  if (this.reload > 0 && !this.salvo && !this.toldReload) { this.toldReload = true; if (this.team === CMD.team) addFeed(null, null, `Raketwerper herlaadt nog ${Math.ceil(this.reload)} s`); }
+};
+const _truckFire = Truck.prototype.fireCannon;
+Truck.prototype.fireCannon = function () {
+  const F = this.fireAt; if (!F || this.variant === 'tel') return _truckFire.call(this);
+  const q = new V3(F.x, Math.max(getH(F.x, F.z), WATER), F.z);
+  this.salvo = { n: this.V.salvo, t: 0, p: q }; this.reload = rnd(this.V.reload[0], this.V.reload[1]); this.fireAt = null; this.toldReload = false;
+  if (this.team === CMD.team) addFeed(null, null, `🚀 ${UNAME[this.variant][0]} vuurt een salvo af`);
+};
+// selection panel: fire mode or drive mode for launcher trucks
+{
+  const box = document.getElementById('selExtra2');
+  const row = document.createElement('div'); row.className = 'acts'; row.id = 'selTruck'; row.hidden = true;
+  row.innerHTML = '<button class="act" id="tmFire">🎯 Vuurmodus</button><button class="act" id="tmDrive">🚚 Rijmodus</button>';
+  box.parentNode.insertBefore(row, box.nextSibling);
+  const paint = () => { document.getElementById('tmFire').classList.toggle('on', TRUCKMODE === 'fire'); document.getElementById('tmDrive').classList.toggle('on', TRUCKMODE === 'drive'); };
+  document.getElementById('tmFire').onclick = () => { TRUCKMODE = 'fire'; paint(); flashTip('Tik op een plek of een vijand: de raketwerper vuurt daarop'); };
+  document.getElementById('tmDrive').onclick = () => { TRUCKMODE = 'drive'; paint(); flashTip('Tik op een plek: de raketwerper rijdt erheen'); };
+  paint();
+  const st = document.createElement('style'); st.textContent = '#selTruck .act.on{background:rgba(233,185,73,.35);border-color:var(--amber);color:#fff}'; document.head.appendChild(st);
+}
+const _updSel6 = updateSelPanel;
+updateSelPanel = function () {
+  _updSel6();
+  const tr = [...sel].filter(isLauncher); document.getElementById('selTruck').hidden = !tr.length;
+  if (tr.length) document.getElementById('selList').innerHTML += `<br><span style="color:var(--amber)">${TRUCKMODE === 'fire' ? 'Tik op een plek of vijand om te vuren' : 'Tik op een plek om te rijden'}</span>`;
+};
+// show the planned fire missions
+const _drawOverlay9 = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlay9(dt); if (state !== 'play' || BCW.unit) return;
+  for (const u of units) { if (!isLauncher(u) || u.team !== CMD.team || !u.fireAt) continue; const s = project(new V3(u.fireAt.x, Math.max(getH(u.fireAt.x, u.fireAt.z), WATER), u.fireAt.z)); if (!s) continue; oc.strokeStyle = '#ff3b2a'; oc.lineWidth = 2; oc.beginPath(); oc.arc(s[0], s[1], 14, 0, TAU); oc.moveTo(s[0] - 20, s[1]); oc.lineTo(s[0] + 20, s[1]); oc.moveTo(s[0], s[1] - 20); oc.lineTo(s[0], s[1] + 20); oc.stroke(); }
+};
+const _updateWaves10 = updateWaves;
+updateWaves = function (dt) { _updateWaves10(dt); aiMslT -= dt; };
+
+// missiles of one swarm don't blow each other up
+const _dDamage2 = Drone.prototype.damage;
+Drone.prototype.damage = function (n, src, kind, p) { if (this.variant === 'cruise' && src && src.team === this.team && src.type === 'drone') return; return _dDamage2.call(this, n, src, kind, p); };
 
 </script>
 
