@@ -6986,6 +6986,136 @@ beginGame = function () {
   addFeed(null, null, '🛡 Verdedigingsbudget: 3× startgeld, 70% meer inkomen en verdediging 35% goedkoper');
 };
 
+// ================= WIN BY TAKING EVERY POINT · BODYCAM: WATCH OR CONTROL IN FIRST PERSON =================
+// ---------------- you only win by owning all points ----------------
+const WIN = { t: 0, noTk: false };
+const _ue3 = updateEconomy;
+updateEconomy = function (dt) {
+  if (!ECO.on || ECO.over) return _ue3(dt);
+  const me = CMD.team, foe = 1 - me;
+  // the enemy never runs out of tickets: he keeps fighting until you hold every point
+  if (ECO.tickets[foe] < 5) { ECO.tickets[foe] = 5; if (!WIN.noTk) { WIN.noTk = true; addFeed(null, null, 'De vijand heeft bijna geen tickets meer · verover ALLE punten om te winnen'); } }
+  const all = POINTS.every(p => p.owner === me);
+  if (all) { if (WIN.t === 0) addFeed(null, null, `🏁 Je hebt alle ${POINTS.length} punten! Nog 8 s vasthouden…`); WIN.t += dt; if (WIN.t >= 8) { endGame(true); return; } } else WIN.t = 0;
+  if (all) OFF.allT[me] = Math.max(1, Math.min(OFF.allT[me], 30));   // keep the old 45 s rule from ending it on tickets
+  _ue3(dt);
+  if (all) OFF.allT[me] = Math.min(OFF.allT[me], 30);
+};
+const _setupBattle7 = setupBattle;
+setupBattle = function (battle) { _setupBattle7(battle); WIN.t = 0; WIN.noTk = false; };
+
+// ---------------- first-person bodycam ----------------
+const VM = new THREE.Group(); camera.add(VM); VM.visible = false;
+{
+  const dk = mat(0x1d1e1c), md = mat(0x3a3b36), tan = mat(0x6b6450);
+  mesh(new THREE.BoxGeometry(.07, .1, .48), dk, 0, 0, -.1, VM); mesh(new THREE.BoxGeometry(.06, .14, .07), md, 0, -.1, -.05, VM); mesh(new THREE.BoxGeometry(.05, .13, .2), tan, 0, -.06, .2, VM);
+  mesh(new THREE.CylinderGeometry(.016, .016, .34, 8).rotateX(Math.PI / 2), dk, 0, .015, -.5, VM); mesh(new THREE.BoxGeometry(.04, .05, .14), dk, 0, .08, -.06, VM);
+  mesh(new THREE.BoxGeometry(.09, .06, .24), mat(0x4f5b38), .02, -.07, -.28, VM); mesh(new THREE.BoxGeometry(.08, .08, .1), mat(0xc9a27e), .05, -.1, -.33, VM);
+  VM.scale.setScalar(2.3); VM.position.set(.5, -.46, -1.3); VM.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 10; o.material = o.material.clone(); o.material.depthTest = false; } });
+}
+PZ.fp = true;
+{
+  const st = document.createElement('style');
+  st.textContent = `#bcFrame{position:fixed;inset:0;z-index:4;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.12) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.55));font:600 12px var(--mono);color:#fff;text-shadow:0 0 3px #000}
+#bcFrame .tl{position:absolute;left:50%;transform:translateX(-50%);top:calc(84px + env(safe-area-inset-top,0px));white-space:nowrap;background:rgba(0,0,0,.35);padding:2px 8px} #bcFrame .tl b{color:#ff3b2a}
+#bcFrame .tr{position:absolute;left:50%;transform:translateX(-50%);top:calc(106px + env(safe-area-inset-top,0px))}
+#bcWatchBar{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;background:rgba(14,17,11,.8);border:1px solid var(--line);padding:6px}
+#bcWatchBar button{appearance:none;cursor:pointer;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.25);color:var(--ink);font:600 13px var(--display);padding:8px 11px}
+#bcWatchBar button.main{background:var(--amber);color:#14170f;border-color:var(--amber)}
+#bcWatchBar .info{align-self:center;font:600 11px var(--mono);color:var(--dim);padding:0 6px;max-width:160px}
+body.bcwatch #bar,body.bcwatch #side,body.bcwatch #tools,body.bcwatch #placeBar,body.bcwatch #pts,body.bcwatch #mapbox,body.bcwatch #bodycam,body.bcwatch #reqBtn{display:none!important}
+body.possess.pzS.fpcam #pzCross{opacity:.85}`;
+  document.head.appendChild(st);
+  const fr = document.createElement('div'); fr.id = 'bcFrame'; fr.hidden = true; fr.innerHTML = '<span class="tl"><b>● REC</b> <span id="bcfName"></span></span><span class="tr" id="bcfTime"></span>'; document.body.appendChild(fr);
+  const wb = document.createElement('div'); wb.id = 'bcWatchBar'; wb.hidden = true;
+  wb.innerHTML = '<button id="bwPrev">◀</button><span class="info" id="bwInfo"></span><button id="bwNext">▶</button><button class="main" id="bwCtl">🎮 Besturen</button><button id="bwExit">✕ Stop</button>';
+  document.body.appendChild(wb);
+  // possess HUD: switch first/third person, and "watch" (let the soldier fight on his own)
+  const pb = document.createElement('button'); pb.className = 'pzb so'; pb.id = 'pzFp'; pb.textContent = '3E PERS';
+  const pw = document.createElement('button'); pw.className = 'pzb so'; pw.id = 'pzWatch'; pw.textContent = '👁 KIJK';
+  const ref = pzEl('pzSwitch') || pzEl('pzJump'); ref.parentNode.insertBefore(pb, ref); ref.parentNode.insertBefore(pw, ref);
+  pb.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); PZ.fp = !PZ.fp; pb.textContent = PZ.fp ? '3E PERS' : '1E PERS'; });
+  pw.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); const u = PZ.unit; if (!u || u.type !== 'soldier') return; unpossess(); startWatch(u); });
+  addEventListener('keydown', e => { if (!e.repeat && e.code === 'KeyV' && state === 'possess' && PZ.unit && PZ.unit.type === 'soldier') { PZ.fp = !PZ.fp; pb.textContent = PZ.fp ? '3E PERS' : '1E PERS'; } });
+  pzEl('pzSoldier').insertAdjacentHTML('beforeend', ' · <b>V</b> 1e/3e persoon');
+  document.getElementById('bwPrev').onclick = () => cycleWatch(-1);
+  document.getElementById('bwNext').onclick = () => cycleWatch(1);
+  document.getElementById('bwExit').onclick = () => stopWatch();
+  document.getElementById('bwCtl').onclick = () => { const u = BCW.unit; stopWatch(); if (u && u.alive) possess(u); };
+  // selection panel: watch through the bodycam of a selected soldier
+  const box2 = document.getElementById('selExtra2'); box2.insertAdjacentHTML('beforeend', '<button class="act" id="bWatch">👁 Kijk mee</button><button class="act" id="bFp">🎮 1e persoon</button>');
+  document.getElementById('bWatch').onclick = () => { const u = [...sel].find(s => s.type === 'soldier' && s.alive); if (u) startWatch(u); };
+  document.getElementById('bFp').onclick = () => { const u = [...sel].find(s => s.type === 'soldier' && s.alive); if (u) { PZ.fp = true; possess(u); } };
+  // the small bodycam panel can go full screen
+  const bcb = document.querySelector('#bodycam .btns'); if (bcb) { const b = document.createElement('button'); b.textContent = '👁'; b.title = 'Groot meekijken'; b.onclick = () => { const u = bcUnit(); if (u) startWatch(u); }; bcb.insertBefore(b, bcb.lastChild); }
+  // hostage bar: "Bekijk" now looks through a bodycam when special forces are there
+  const hl = document.getElementById('hbLook'); if (hl) { const old = hl.onclick; hl.onclick = e => { const S = HSTG.active, sf = S && units.filter(u => u.alive && u.team === CMD.team && u.rescue === S); if (sf && sf.length) { e.stopPropagation(); if (state === 'possess') unpossess(); startWatch(sf[0]); } else old(e); }; }
+}
+// ---- watch mode: the RTS keeps running, the camera rides on a soldier's helmet ----
+const BCW = { unit: null, t: 0, look: new V3(), saved: null };
+function watchList() {
+  const S = HSTG.active, mine = units.filter(u => u.alive && u.team === CMD.team && u.type === 'soldier' && !u.captive && !u.jailed);
+  return mine.sort((a, b) => (b.sf ? 1 : 0) - (a.sf ? 1 : 0) || (S ? a.pos.distanceTo(new V3(S.H.x, 0, S.H.z)) - b.pos.distanceTo(new V3(S.H.x, 0, S.H.z)) : 0));
+}
+function startWatch(u) {
+  if (!u || !u.alive) return; if (state === 'possess') unpossess();
+  if (!BCW.unit) BCW.saved = { x: cam.x, z: cam.z, D: cam.D, yaw: cam.yaw };
+  if (BCW.unit && BCW.unit !== u && BCW.unit.group) BCW.unit.group.visible = true;
+  BCW.unit = u; BCW.t = 0; BCW.look.copy(u.eye().add(new V3(Math.sin(u.yaw), 0, Math.cos(u.yaw))));
+  document.body.classList.add('bcwatch'); document.getElementById('bcFrame').hidden = false; document.getElementById('bcWatchBar').hidden = false;
+  setSel([], false); setTool(null); toggleTools(false);
+}
+function stopWatch() {
+  if (BCW.unit && BCW.unit.group) BCW.unit.group.visible = true;
+  BCW.unit = null; document.body.classList.remove('bcwatch'); document.getElementById('bcFrame').hidden = true; document.getElementById('bcWatchBar').hidden = true;
+  if (BCW.saved) { cam.x = BCW.saved.x; cam.z = BCW.saved.z; cam.D = cam.Dt = BCW.saved.D; cam.yaw = BCW.saved.yaw; }
+  if (Math.abs(camera.fov - 55) > .1) { camera.fov = 55; camera.updateProjectionMatrix(); }
+}
+function cycleWatch(d) { const l = watchList(); if (!l.length) { stopWatch(); return; } let i = l.indexOf(BCW.unit); i = ((i + d) % l.length + l.length) % l.length; startWatch(l[i]); }
+const _updateCamera4 = updateCamera;
+updateCamera = function (dt) {
+  _updateCamera4(dt);
+  const u = BCW.unit; if (!u) return;
+  if (state !== 'play') { stopWatch(); return; }
+  if (!u.alive || u.removed) { const l = watchList(); if (l.length) { addFeed(null, null, 'Bodycam verloren · overgeschakeld naar de volgende soldaat'); startWatch(l[0]); } else stopWatch(); return; }
+  BCW.t += dt; u.group.visible = false;
+  const eye = u.eye().add(new V3(Math.sin(u.yaw) * .3, Math.abs(Math.sin(BCW.t * 6.5)) * .035 * Math.min(1, Math.hypot(u.vel.x, u.vel.z) / 3), Math.cos(u.yaw) * .3));
+  const t = u.target && u.target.alive && u.canSee ? u.target : null;
+  let want = t ? t.center().clone() : Math.hypot(u.vel.x, u.vel.z) > .5 ? eye.clone().add(new V3(u.vel.x, -.4, u.vel.z).normalize().multiplyScalar(10)) : eye.clone().add(new V3(Math.sin(u.yaw) * 10, -.6, Math.cos(u.yaw) * 10));
+  BCW.look.lerp(want, 1 - Math.exp(-dt * 5));
+  camera.position.copy(eye); camera.up.set(0, 1, 0); camera.lookAt(BCW.look); camera.rotateZ(Math.sin(BCW.t * 2.3) * .012);
+  if (Math.abs(camera.fov - 88) > .1) { camera.fov = 88; camera.updateProjectionMatrix(); }
+  scene.fog.near = 200 * WX.fog; scene.fog.far = 1400 * WX.fog;
+  Snd.ear = camera.position.clone(); sun.target.position.copy(u.pos); sun.position.copy(u.pos).addScaledVector(SUN_DIR, 700);
+  const s = Math.floor(BCW.t); document.getElementById('bcfName').textContent = `BODYCAM · ${u.label().replace(/^Blauw |^Rood /, '').toUpperCase()} · ${Math.round(u.hp)} HP${t ? ' · CONTACT' : ''}`;
+  document.getElementById('bcfTime').textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const l = watchList(); document.getElementById('bwInfo').textContent = `${l.indexOf(u) + 1}/${l.length} · alleen kijken`;
+};
+// in watch mode the RTS clicks and markers are off
+const _drawOverlay8 = drawOverlay;
+drawOverlay = function (dt) { if (BCW.unit && state === 'play') { oc.clearRect(0, 0, innerWidth, innerHeight); return; } _drawOverlay8(dt); };
+for (const ev of ['mousedown', 'touchstart', 'wheel', 'contextmenu', 'dblclick']) addEventListener(ev, e => { if (BCW.unit && e.target === canvas) { e.stopImmediatePropagation(); if (e.cancelable) e.preventDefault(); } }, { capture: true, passive: false });
+addEventListener('keydown', e => { if (BCW.unit && e.code === 'Escape') stopWatch(); }, true);
+// ---- controlling a soldier: first person through his bodycam ----
+const _updatePossess6 = updatePossess;
+updatePossess = dt => {
+  _updatePossess6(dt);
+  const u = PZ.unit, fp = !!(u && u.type === 'soldier' && u.alive && !u.removed && PZ.fp && state === 'possess');
+  document.body.classList.toggle('fpcam', fp); document.getElementById('bcFrame').hidden = !fp && !BCW.unit;
+  if (u && u.group) u.group.visible = !fp;
+  VM.visible = fp && !(PZ.ads && u.role === 'sniper');
+  if (!fp) return;
+  const L = pzLook(), eye = u.eye(), sp = Math.hypot(u.vel.x, u.vel.z); PZ.bob = (PZ.bob || 0) + dt * sp * 1.9;
+  camera.position.copy(eye).addScaledVector(new V3(L.x, 0, L.z).normalize(), .18).add(new V3(0, Math.abs(Math.sin(PZ.bob)) * .04, 0));
+  camera.lookAt(camera.position.clone().add(L));
+  VM.position.set(PZ.ads ? 0 : .5, (PZ.ads ? -.3 : -.46) + Math.sin(PZ.bob * 2) * .02, -1.3 + (PZ.kick || 0) * .08); VM.rotation.set((PZ.kick || 0) * .05, 0, Math.sin(PZ.bob) * .02);
+  Snd.ear = camera.position.clone();
+  const s = Math.floor(performance.now() / 1000); document.getElementById('bcfName').textContent = `BODYCAM · JIJ · ${u.label().replace(/^Blauw |^Rood /, '').toUpperCase()} · ${Math.round(u.hp)} HP`;
+  document.getElementById('bcfTime').textContent = `${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
+const _unpossess5 = unpossess;
+unpossess = () => { const u = PZ.unit; if (u && u.group) u.group.visible = true; VM.visible = false; document.body.classList.remove('fpcam'); if (!BCW.unit) document.getElementById('bcFrame').hidden = true; _unpossess5(); };
+
 </script>
 
 </html>
