@@ -6972,6 +6972,20 @@ launch = function (type, pos, vel, owner, target) {
   return pr;
 };
 
+// ================= DEFENDER'S BUDGET =================
+const DEF_KINDS = ['sandbag', 'hedgehog', 'bunker', 'ubunker', 'sam', 'gunpad', 'tower', 'abm', 'abmtruck', 'aa', 'medic', 'repair', 'camp', 'barracks'];
+const _income10 = income;
+income = function (t) { const v = _income10(t); return t === CMD.team && SET.role === 'verdedigen' ? v * 1.7 : v; };
+const _costMul2 = costMul;
+costMul = function (kind, team) { const m = _costMul2(kind, team); return team === CMD.team && SET.role === 'verdedigen' && DEF_KINDS.includes(kind) ? m * .65 : m; };
+const _beginGame4 = beginGame;
+beginGame = function () {
+  _beginGame4();
+  if (!ECO.on || SET.role !== 'verdedigen') return;
+  ECO.money[CMD.team] = Math.max(ECO.money[CMD.team], SET.money * 3); refreshTools(true);
+  addFeed(null, null, '🛡 Verdedigingsbudget: 3× startgeld, 70% meer inkomen en verdediging 35% goedkoper');
+};
+
 </script>
 
 </html>
