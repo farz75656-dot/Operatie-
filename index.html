@@ -411,15 +411,15 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       </div>
       <button class="act" id="btnArtyCtl" style="margin-top:4px;color:var(--amber);border-color:rgba(233,185,73,.5)">🎯 Artillerie zelf richten <span class="num k">K</span></button>
       <div class="lbl" style="margin-top:4px">Bommenwerpers</div>
-      <div class="trow trow5"><button class="tb" data-tool="nukebomber"></button><button class="tb" data-tool="gbomber"></button><button class="tb" data-tool="transport"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="nukebomber"></button><button class="tb" data-tool="gbomber"></button><button class="tb" data-tool="transport"></button><button class="tb x" data-tool="airstrike"></button></div>
       <div class="lbl" style="margin-top:4px">Bevoorrading · tik op een eigen punt · onderweg kan de vijand het aanvallen</div>
-      <div class="trow trow5"><button class="tb" data-tool="supLand"></button><button class="tb" data-tool="supSea"></button><button class="tb" data-tool="supAir"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="supLand"></button><button class="tb" data-tool="supSea"></button><button class="tb" data-tool="supAir"></button><button class="tb" data-tool="milconvoy"></button></div>
       <div class="lbl" style="margin-top:4px">Raketwerpers · rijden zelf naar de plek</div>
-      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button><button class="tb" data-tool="abmtruck"></button></div>
       <div class="lbl" style="margin-top:4px">Vloot · tik op zee</div>
       <div class="trow trow5"><button class="tb" data-tool="destroyer"></button><button class="tb" data-tool="sub"></button><button class="tb" data-tool="carrier"></button><button class="tb" data-tool="battleship"></button></div>
       <div class="lbl" style="margin-top:4px">Bouwen · muren staan dwars op je kijkrichting</div>
-      <div class="trow trow5"><button class="tb b5" data-tool="sandbag"></button><button class="tb b5" data-tool="hedgehog"></button><button class="tb b5" data-tool="bunker"></button><button class="tb b5" data-tool="barracks"></button><button class="tb b5" data-tool="camp"></button><button class="tb b5" data-tool="medic"></button><button class="tb b5" data-tool="repair"></button><button class="tb b5" data-tool="prison"></button><button class="tb b5" data-tool="ubunker"></button><button class="tb b5" data-tool="sam"></button><button class="tb b5" data-tool="gunpad"></button><button class="tb b5" data-tool="tower"></button><button class="tb b5" data-tool="evac"></button></div>
+      <div class="trow trow5"><button class="tb b5" data-tool="sandbag"></button><button class="tb b5" data-tool="hedgehog"></button><button class="tb b5" data-tool="bunker"></button><button class="tb b5" data-tool="barracks"></button><button class="tb b5" data-tool="camp"></button><button class="tb b5" data-tool="medic"></button><button class="tb b5" data-tool="repair"></button><button class="tb b5" data-tool="prison"></button><button class="tb b5" data-tool="ubunker"></button><button class="tb b5" data-tool="sam"></button><button class="tb b5" data-tool="gunpad"></button><button class="tb b5" data-tool="tower"></button><button class="tb b5" data-tool="evac"></button><button class="tb b5" data-tool="abm"></button><button class="tb b5" data-tool="rebuild"></button></div>
       <div class="lbl" style="margin-top:4px">Drones</div>
       <div class="trow trow5"><button class="tb" data-tool="reaper"></button><button class="tb" data-tool="kamikaze"></button><button class="tb" data-tool="gcruise"></button><button class="tb x" data-tool="swarm"></button></div>
       <div id="tip">Klik op de kaart of de minikaart · Shift = meerdere · Esc = annuleren</div>
@@ -1857,7 +1857,7 @@ class Jet extends Unit {
     let tp = null;
     if (this.bombs > 0) {
       if (o && o.type === 'attack') tp = o.u.pos; else if (o && o.type === 'move') tp = o.p;
-      else if (!cmd) { if (this.thinkT <= 0) { this.thinkT = 2.5; const t = findTarget(this, 2600, { tank: .5, soldier: 1, jet: 99, heli: 99 }); this.btarget = t && !isAirT(t) ? t : null; } tp = this.btarget && this.btarget.alive ? this.btarget.pos : null; }
+      else { if (this.thinkT <= 0) { this.thinkT = 2.5; const t = findTarget(this, 2600, { tank: .5, struct: .8, soldier: 1, jet: 99, heli: 99, drone: 99 }); this.btarget = t && !isAirT(t) && t.type !== 'drone' && (!cmd || Math.hypot(t.pos.x - this.home.x, t.pos.z - this.home.z) < 900) ? t : null; } tp = this.btarget && this.btarget.alive ? this.btarget.pos : null; }
     }
     const f = this.forward(), fh = new V3(f.x, 0, f.z).normalize(); let D;
     if (this.egress > 0) { this.egress -= dt; D = new V3(fh.x, .05, fh.z); }
@@ -1887,7 +1887,7 @@ class Jet extends Unit {
     if (this.thinkT <= 0) {
       this.thinkT = rnd(1, 1.6);
       if (o && o.type === 'attack') this.target = o.u;
-      else { const t = findTarget(this, 2400, { jet: .25, heli: .35, tank: .7, soldier: 1.4 }); this.target = t && (!cmd || t.type === 'jet' || Math.hypot(t.pos.x - this.home.x, t.pos.z - this.home.z) < 700) ? t : null; }
+      else { const t = findTarget(this, 2400, { jet: .25, heli: .35, tank: .7, soldier: 1.4 }); this.target = t && (!cmd || t.type === 'jet' || Math.hypot(t.pos.x - this.home.x, t.pos.z - this.home.z) < 1500) ? t : null; }
     }
     const t = this.target && this.target.alive && !this.target.hidden ? this.target : null, f = this.forward(); let D, wantGun = false, wantMsl = false;
     const agl = this.agl(); I.thr = .85;
@@ -6722,6 +6722,255 @@ const _showHB = showHostageBar;
 showHostageBar = function () { _showHB(); BC.setMode(document.getElementById('hostBar').classList.contains('mini') ? 'mini' : document.getElementById('hostBar').classList.contains('side') ? 'side' : 'full'); };
 const _hideHB = hideHostageBar;
 hideHostageBar = function () { _hideHB(); BC.on = false; };
+
+// ================= MISSILE DEFENCE · REBUILDING CITIES · MILITARY CONVOYS · AIRSTRIKES WITH FIGHTER COVER =================
+// ---------------- interceptors: a fixed missile-defence site and a mobile interceptor truck ----------------
+Object.assign(SDEF, { abm: { hp: 1600, w: 10, d: 8, h: 2.4, box: 'all', label: 'Raketschild', sub: 'onderschept ICBM’s' } });
+Object.assign(COST, { abm: 1100, abmtruck: 900, rebuild: 0, milconvoy: 1400, airstrike: 420 });
+Object.assign(KINDS, { abm: { label: 'Raketschild', sub: 'onderschept ICBM’s' }, abmtruck: { label: 'Interceptortruck', sub: 'mobiel raketschild' }, rebuild: { label: '🏗 Herbouw stad', sub: 'tik op een stad' }, milconvoy: { label: 'Militair konvooi', sub: 'tanks · humvees · raketten' }, airstrike: { label: 'Luchtaanval', sub: 'bommenwerper + jager' } });
+Object.assign(UNAME, { abm: ['raketschild', 'raketschilden'], abmtruck: ['interceptortruck', 'interceptortrucks'], humvee: ['humvee', 'humvees'] });
+const _buildModel3 = buildModel;
+buildModel = function (kind, team, g) {
+  if (kind !== 'abm') return _buildModel3(kind, team, g);
+  const conc = mat(0x8f8c84), tc = mat(team ? 0x8a7d5a : 0x55603f), dk = mat(0x2a2a27);
+  mesh(new THREE.BoxGeometry(10, .5, 8), conc, 0, .25, 0, g);
+  for (const s of [-1, 1]) { const l = new THREE.Group(); l.position.set(s * 2.6, .5, 0); g.add(l); mesh(new THREE.BoxGeometry(2.6, .8, 3.4), tc, 0, .4, 0, l); for (let k = 0; k < 4; k++) { const c = mesh(new THREE.CylinderGeometry(.42, .42, 5.2, 10), mat(0xd8d6cc), (k % 2 - .5) * .9, 3, (Math.floor(k / 2) - .5) * .9, l); c.rotation.x = -.25; } }
+  const r = new THREE.Group(); r.position.set(0, .5, -3.4); g.add(r); mesh(new THREE.BoxGeometry(3.4, 2.8, .3), mat(0x3d4247), 0, 2, 0, r).rotation.x = -.35; mesh(new THREE.BoxGeometry(1.2, 1, 1), dk, 0, .5, .4, r);
+};
+const ABM = { list: [] };   // interceptor missiles in flight
+function abmLaunchers(team) { return units.filter(u => u.alive && u.team === team && ((u.variant === 'abm' && u.buildT >= 1) || (u.variant === 'abmtruck' && Math.abs(u.speed) < 1.5))); }
+function updateMissileDefence(dt) {
+  for (const L of units) {
+    if (!L.alive || (L.variant !== 'abm' && L.variant !== 'abmtruck')) continue;
+    if (L.ammo === undefined) { L.ammoMax = L.variant === 'abm' ? 4 : 2; L.ammo = L.ammoMax; L.reloadT = 0; L.cdT = 0; }
+    if (L.ammo < L.ammoMax) { L.reloadT += dt; if (L.reloadT > 28) { L.reloadT = 0; L.ammo++; } }
+    L.cdT -= dt;
+  }
+  // engage incoming ICBMs while they come down
+  for (const S of STRIKES) {
+    if (S.u < .5 || S.engaged >= 2) continue;
+    for (const L of abmLaunchers(1 - S.team)) {
+      const R = L.variant === 'abm' ? 2600 : 1900; if (L.ammo <= 0 || L.cdT > 0 || Math.hypot(S.t.x - L.pos.x, S.t.z - L.pos.z) > R) continue;
+      if (ABM.list.some(a => a.S === S && a.L === L)) continue;
+      L.ammo--; L.cdT = 2.5; S.engaged = (S.engaged || 0) + 1;
+      const from = L.pos.clone().add(new V3(0, 4, 0)), m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .35, 4.5, 8).rotateX(Math.PI / 2), mat(0xe8e6dc)); m.position.copy(from); scene.add(m);
+      ABM.list.push({ S, L, m, pos: from.clone(), t: 0, team: L.team, pk: L.team === CMD.team ? .78 : .62 });
+      for (let i = 0; i < 24; i++) spawnP(from, { tex: smokeTex, must: true, color: 0xe6e2d8, op: .85, size: rnd(3, 6), grow: 2.5, life: rnd(3, 6), vel: new V3(rnd(-8, 8), rnd(0, 6), rnd(-8, 8)), drag: 1 });
+      Snd.burst(from, { f: 400, q: .6, dur: 2.5, vol: 1, thump: .5, tf: 60, rng: 3000 });
+      if (L.team === CMD.team) addFeed(null, null, `🛡 ${L.variant === 'abm' ? 'Raketschild' : 'Interceptortruck'} vuurt een interceptor af!`); else addFeed(null, null, '⚠ De vijand probeert je raket te onderscheppen');
+      break;
+    }
+  }
+  // the interceptors fly to the warhead
+  for (let i = ABM.list.length - 1; i >= 0; i--) {
+    const A = ABM.list[i], S = A.S; A.t += dt;
+    if (!STRIKES.includes(S)) { scene.remove(A.m); ABM.list.splice(i, 1); continue; }
+    const to = S.pos.clone().sub(A.pos), d = to.length(), sp = 260 + A.t * 380;
+    A.pos.addScaledVector(to.normalize(), Math.min(d, sp * dt)); A.m.position.copy(A.pos); A.m.lookAt(S.pos);
+    spawnP(A.pos, { tex: smokeTex, must: true, color: 0xf0eee8, op: .7, size: 2.5, grow: 3, life: 6, vel: new V3(), drag: .3 }); spawnP(A.pos, { add: true, must: true, color: 0xffd27a, size: 3, grow: 0, life: .06 });
+    if (d < 25 || A.t > 14) {
+      scene.remove(A.m); ABM.list.splice(i, 1);
+      if (A.t <= 14 && Math.random() < A.pk) {
+        const p = S.pos.clone(); explosion(p, 5, { r: 30, air: true }); for (let k = 0; k < 40; k++) spawnP(p, { add: true, must: true, color: 0xfff1c4, col2: 0xff6a20, size: rnd(20, 45), grow: 1.2, life: rnd(1, 2.4), vel: new V3(rnd(-40, 40), rnd(-40, 40), rnd(-40, 40)), drag: 1 });
+        for (let k = 0; k < 18; k++) spawnP(p, { add: true, must: true, color: 0xffb04a, size: 3, grow: 0, life: rnd(2, 4), vel: new V3(rnd(-60, 60), rnd(-20, 30), rnd(-60, 60)), grav: 20 });
+        scene.remove(S.mesh); STRIKES.splice(STRIKES.indexOf(S), 1); if (FOL.pr === S) { FOL.kind = 'RAKET'; FOL.hit = S.pos.clone(); FOL.t = 1; }
+        addFeed(null, null, A.team === CMD.team ? `✅ ${S.conv ? 'ICBM' : '☢ KERN-ICBM'} ONDERSCHEPT!` : `❌ Je ${S.conv ? 'ICBM' : 'kern-ICBM'} is onderschept`); shake = Math.min(2, shake + .5);
+      } else { explosion(A.pos.clone(), 1.6, { air: true }); addFeed(null, null, A.team === CMD.team ? '⚠ Interceptor mist het doel!' : 'De vijandelijke interceptor mist!'); }
+    }
+  }
+  // also knock down incoming cruise missiles and Shaheds near a site
+  for (const L of units) {
+    if (!L.alive || (L.variant !== 'abm' && L.variant !== 'abmtruck') || (L.variant === 'abm' && L.buildT < 1)) continue;
+    L.cmCd = (L.cmCd || 0) - dt; if (L.cmCd > 0) continue;
+    const m = units.find(u => u.alive && u.type === 'drone' && u.team !== L.team && (u.variant === 'cruise' || u.variant === 'shahed136') && u.pos.distanceTo(L.pos) < 1100);
+    if (!m) { L.cmCd = .5; continue; } L.cmCd = 3; const from = L.pos.clone().add(new V3(0, 4, 0));
+    launch('missile', from, m.pos.clone().sub(from).normalize().multiplyScalar(90).add(new V3(0, 40, 0)), L, m); Snd.shot(from, 'rocket');
+  }
+}
+// mobile interceptor truck: a Truck with a vertical launcher
+class ABMTruck extends Truck {
+  constructor(team, x, z, yaw) {
+    super(team, x, z, yaw, 'tel'); this.variant = 'abmtruck'; this.V = Object.assign({}, TRV.tel, { hp: 700, maxF: 15, maxP: 1.2 }); this.hp = this.maxHp = 700; this.cd = { cruise: 1e9, icbm: 1e9 };
+    if (this.missile) { this.missile.clear(); for (let k = 0; k < 2; k++) mesh(new THREE.CylinderGeometry(.55, .55, 7, 10).rotateX(Math.PI / 2), mat(0xe8e6dc), (k - .5) * 1.3, .9, 4.2, this.missile); }
+  }
+  think(dt) { this.pending = null; const was = this.variant; this.variant = 'tel'; try { super.think(dt); } finally { this.variant = was; } if (Math.abs(this.speed) < 1 && !this.order) this.in.aimPitch = 1.1; }
+  update(dt) { this.pending = null; const was = this.variant; this.variant = 'tel'; try { super.update(dt); } finally { this.variant = was; } if (this.missile) this.missile.visible = this.ammo === undefined || this.ammo > 0; }
+}
+const _launchICBM5 = launchICBM;
+launchICBM = function (silo, target, conv) { if (silo && silo.variant === 'abmtruck') return null; return _launchICBM5(silo, target, conv); };
+
+// ---------------- rebuilding a destroyed city ----------------
+CITIES.forEach(C => { if (!C.mesh) return; const g = C.mesh.geometry; C.origPos = g.attributes.position.array.slice(); C.origCol = g.attributes.color.array.slice(); });
+const REBUILD = [];
+function startRebuild(p) {
+  const C = cityOf(p, 40); if (!C || !C.lots) { flashTip('Tik op een stad om ze te herbouwen'); return false; }
+  const dmg = C.lots.filter(b => b.stage > 0); if (!dmg.length) { flashTip('In deze stad is niets kapot'); return false; }
+  if (REBUILD.some(R => R.C === C)) { flashTip('Deze stad wordt al herbouwd'); return false; }
+  const cost = Math.max(100, dmg.length * 35); if (ECO.on && ECO.money[CMD.team] < cost) { flashTip(`Herbouwen kost ◆ ${cost}`); return false; }
+  if (ECO.on) ECO.money[CMD.team] -= cost;
+  REBUILD.push({ C, lots: dmg, t: 0, T: Math.min(40, 16 + dmg.length * .4) });
+  addFeed(null, null, `🏗 ${dmg.length} gebouwen in ${C.town ? C.town.name : 'de Metropool'} worden herbouwd · ◆ ${cost}`); return true;
+}
+function updateRebuild(dt) {
+  for (let i = REBUILD.length - 1; i >= 0; i--) {
+    const R = REBUILD[i], C = R.C; R.t += dt; const f = Math.min(1, R.t / R.T), pos = C.mesh.geometry.attributes.position, col = C.mesh.geometry.attributes.color, O = C.origPos, OC = C.origCol;
+    for (const b of R.lots) {
+      for (let v = b.v0; v < b.vEnd; v++) { const oy = O[v * 3 + 1], cy = pos.getY(v), want = b.y0 + (oy - b.y0) * Math.min(1, f * 1.15); pos.setXYZ(v, O[v * 3], Math.max(cy, Math.min(oy, want)), O[v * 3 + 2]); col.setXYZ(v, lerp(col.getX(v), OC[v * 3], dt * 2), lerp(col.getY(v), OC[v * 3 + 1], dt * 2), lerp(col.getZ(v), OC[v * 3 + 2], dt * 2)); }
+      b.top = Math.max(b.top, b.y0 + b.h0 * f);
+      if (Math.random() < dt * 3) spawnP(new V3(rnd(b.minX, b.maxX), b.top + 1, rnd(b.minZ, b.maxZ)), { tex: smokeTex, color: 0xc9c3b4, op: .45, size: 4, grow: 1.5, life: 2.5, vel: new V3(0, 1.5, 0), drag: 1 });
+    }
+    pos.needsUpdate = col.needsUpdate = true;
+    if (f >= 1) {
+      for (const b of R.lots) { for (let v = b.v0; v < b.vEnd; v++) { pos.setXYZ(v, O[v * 3], O[v * 3 + 1], O[v * 3 + 2]); col.setXYZ(v, OC[v * 3], OC[v * 3 + 1], OC[v * 3 + 2]); } b.stage = 0; b.hp = b.hpMax; b.top = b.y0 + b.h0; }
+      pos.needsUpdate = col.needsUpdate = true; REBUILD.splice(i, 1);
+      CIV.max = Math.max(CIV.max, CIV.list.length + R.lots.length * 2);
+      addFeed(null, null, `🏙 ${C.town ? C.town.name : 'De Metropool'} is herbouwd · de burgers komen terug`);
+    }
+  }
+}
+
+// ---------------- military convoys with escorts ----------------
+class Humvee extends Tank {
+  constructor(team, x, z, yaw) {
+    super(team, x, z, yaw, 'light');
+    this.V = { hp: 360, maxF: 22, s: 1, gl: 1, shell: 'lshell', reload: [1.3, 1.9], mz: 1, maxP: .35, turn: 1.25, rng: 480 }; this.variant = 'humvee'; this.hp = this.maxHp = 360; this.radius = 2.6; this.blastMul = .7;
+    const body = this.body; while (body.children.length) body.remove(body.children[0]);
+    const hm = mat(team ? 0x9a865c : 0x5b6440), dk = mat(0x1b1b1b), gl = mat(0x22303a);
+    mesh(new THREE.BoxGeometry(2.3, .9, 4.8), hm, 0, 1.15, 0, body); mesh(new THREE.BoxGeometry(2.2, .8, 2.4), hm, 0, 2, -.2, body); mesh(new THREE.BoxGeometry(2.1, .6, .06), gl, 0, 2.05, 1.02, body);
+    mesh(new THREE.BoxGeometry(2.3, .3, 1.3), hm, 0, 1.75, 1.8, body); mesh(new THREE.BoxGeometry(1.4, .3, .1), dk, 0, 1.2, 2.42, body);
+    for (const z of [-1.6, 1.6]) for (const s of [-1, 1]) mesh(new THREE.CylinderGeometry(.5, .5, .45, 12).rotateZ(Math.PI / 2), dk, s * 1.15, .55, z, body);
+    const tur = this.turret = new THREE.Group(); tur.position.set(0, 2.4, -.4); body.add(tur); mesh(new THREE.CylinderGeometry(.6, .6, .35, 10), hm, 0, .2, 0, tur); mesh(new THREE.BoxGeometry(1, .5, .12), hm, 0, .55, .45, tur);
+    const gun = this.gun = new THREE.Group(); gun.position.set(0, .55, 2.05); tur.add(gun); mesh(new THREE.BoxGeometry(.25, .25, .7), dk, 0, 0, -1.7, gun); mesh(new THREE.CylinderGeometry(.06, .06, 1.2, 6).rotateX(Math.PI / 2), dk, 0, 0, -1, gun);
+    const um = new THREE.MeshLambertMaterial({ vertexColors: true }); this.mats = [um];
+    collapse(gun, null, 'hvg' + team, um); collapse(tur, [gun], 'hvt' + team, um); collapse(body, [tur], 'hvb' + team, um);
+    this.hsLocal = [new V3(0, 1.4, 1.2), new V3(0, 1.4, -1.2)]; this._hs = this.hsLocal.map(() => ({ c: new V3(), r: 1.7 }));
+    this.driver = 'ai';
+  }
+  muzzlePos() { return this.gun.localToWorld(new V3(0, 0, -.3)); }
+}
+const MILC = [];
+function sendMilConvoy(team, dest) {
+  const b = BASES[team], dir = team ? 1 : -1, yaw = Math.atan2(dest.x - b.x, dest.z - (b.z + dir * 100)), list = [];
+  const order = ['humvee', 'mbt', 'mlrs', 'aa', 'supply', 'heavy', 'humvee'];
+  order.forEach((k, i) => {
+    const x = b.x + rnd(-3, 3), z = b.z + dir * (100 + i * 14); let u;
+    if (k === 'humvee') u = new Humvee(team, x, z, yaw); else if (k === 'mlrs') u = new Truck(team, x, z, yaw, 'mlrs'); else if (k === 'supply') { u = new Convoy(team, 'tanker', x, z, dest.clone()); u.bonus = 150; } else { u = new Tank(team, x, z, yaw, k); u.driver = 'ai'; }
+    u.milc = true; list.push(u);
+  });
+  const C = { team, dest: dest.clone(), list, t: 0, done: false };
+  MILC.push(C); addRoute(team, 'land', [new V3(b.x, 0, b.z + dir * 100), dest.clone()], list);
+  // a fighter flies cover over the column
+  const j = coverFighter(team, list[0].pos, 90); C.cover = j;
+  if (team === CMD.team) addFeed(null, null, `🪖 Militair konvooi vertrekt met ${list.length} voertuigen · een straaljager geeft dekking`);
+  else radarNote('📡 RADAR: vijandelijk militair konvooi onderweg', dest);
+  return C;
+}
+function updateMilConvoys(dt) {
+  for (let i = MILC.length - 1; i >= 0; i--) {
+    const C = MILC[i]; C.t += dt; const alive = C.list.filter(u => u.alive && !u.removed && u.type !== 'convoy');
+    if (!alive.length || C.t > 600) { MILC.splice(i, 1); continue; }
+    C.tick = (C.tick || 0) - dt; if (C.tick > 0) continue; C.tick = .5;
+    const lead = alive[0], dl = Math.hypot(C.dest.x - lead.pos.x, C.dest.z - lead.pos.z);
+    if (C.cover && C.cover.alive) C.cover.home = lead.pos.clone();
+    if (!C.done && dl < 30) {
+      C.done = true; alive.forEach((u, k) => { const a = k / alive.length * TAU; u.order = { type: 'move', p: new V3(C.dest.x + Math.cos(a) * 30, 0, C.dest.z + Math.sin(a) * 30) }; });
+      if (C.team === CMD.team) addFeed(null, null, '🪖 Militair konvooi is aangekomen'); continue;
+    }
+    if (C.done) continue;
+    lead.order = { type: 'move', p: C.dest.clone() };
+    for (let k = 1; k < alive.length; k++) {
+      const pv = alive[k - 1], f = pv.forward ? pv.forward() : new V3(0, 0, 1), spot = pv.pos.clone().addScaledVector(f, -13), d = Math.hypot(spot.x - alive[k].pos.x, spot.z - alive[k].pos.z);
+      alive[k].order = d > 5 ? { type: 'move', p: new V3(spot.x, 0, spot.z) } : null;
+    }
+    // the leader waits for the tail
+    const tail = alive[alive.length - 1]; if (alive.length > 1 && lead.pos.distanceTo(tail.pos) > 26 * alive.length) lead.order = null;
+  }
+}
+
+// ---------------- airstrike: tap a spot, a bomber bombs it while a fighter flies cover ----------------
+function coverFighter(team, at, secs) {
+  const sz = team ? -WORLD - 120 : WORLD + 120, sx = clamp(at.x * .5, -WORLD * .8, WORLD * .8);
+  const j = new Jet(team, sx, Math.max(getH(sx, sz), WATER) + 320, sz, Math.atan2(at.x - sx, at.z - sz), false); j.driver = 'ai'; j.speed = 190;
+  j.home = new V3(at.x, 0, at.z); j.order = { type: 'move', p: new V3(at.x, 0, at.z) }; j.coverT = secs; return j;
+}
+function airstrike(team, p) {
+  const sz = team ? -WORLD - 150 : WORLD + 150, sx = clamp(p.x * .5, -WORLD * .8, WORLD * .8);
+  const b = new Jet(team, sx, Math.max(getH(sx, sz), WATER, getH(p.x, p.z)) + 300, sz, Math.atan2(p.x - sx, p.z - sz), false, 'bomber');
+  b.driver = 'ai'; b.speed = 150; b.home = new V3(p.x, 0, p.z); b.order = { type: 'move', p: new V3(p.x, 0, p.z) }; b.strike = true; b.strikeT = new V3(p.x, 0, p.z);
+  const f = coverFighter(team, p, 80);
+  addRoute(team, 'air', [new V3(sx, 0, sz), new V3(p.x, 0, p.z)], [b, f]);
+  if (team === CMD.team) addFeed(null, null, '✈ Luchtaanval onderweg · bommenwerper met een jager als dekking'); else radarNote('📡 RADAR: vijandelijke luchtaanval onderweg', p);
+}
+const _jetUpd3 = Jet.prototype.update;
+Jet.prototype.update = function (dt) {
+  _jetUpd3.call(this, dt); if (!this.alive || this.removed) return;
+  if (this.strike) { if (this.bombs <= 0 || this.leaveT || this.strikeDone) { this.leaveT = (this.leaveT || 0) + dt; if (this.leaveT > 3) this.order = { type: 'move', p: new V3(this.pos.x + this.forward().x * 3000, 0, this.pos.z + this.forward().z * 3000) }; if (this.leaveT > 26) this.remove(); } }
+  if (this.coverT !== undefined) { this.coverT -= dt; if (this.coverT <= 0) { this.order = { type: 'move', p: new V3(this.pos.x + this.forward().x * 3000, 0, this.pos.z + this.forward().z * 3000) }; if (this.coverT < -26) this.remove(); } else if (this.home) this.order = { type: 'move', p: this.home.clone() }; }
+};
+// hint when you select bombers: just tap where they should bomb
+const _updSel5 = updateSelPanel;
+updateSelPanel = function () { _updSel5(); if ([...sel].some(u => u.type === 'jet' && u.variant === 'bomber')) document.getElementById('selList').innerHTML += '<br><span style="color:var(--amber)">Tik op de kaart: de bommenwerper bombardeert die plek</span>'; };
+
+// ---------------- wiring ----------------
+const _deliver5 = deliver;
+deliver = function (kind, team, p) {
+  if (kind === 'abmtruck') { const b = BASES[team], dir = team ? 1 : -1; const t = new ABMTruck(team, b.x + rnd(-30, 30), b.z + dir * 100, team ? 0 : Math.PI); if (team === CMD.team) t.order = { type: 'move', p: new V3(p.x, 0, p.z) }; else t.order = { type: 'move', p: new V3(b.x + rnd(-80, 80), 0, b.z + dir * rnd(150, 260)) }; return t; }
+  if (kind === 'milconvoy') return sendMilConvoy(team, new V3(p.x, 0, p.z));
+  if (kind === 'airstrike') return airstrike(team, p);
+  return _deliver5(kind, team, p);
+};
+const _placeAt9 = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'rebuild') { if (startRebuild(p)) setTool(null); return; }
+  if (tool && (tool.kind === 'abmtruck' || tool.kind === 'milconvoy' || tool.kind === 'airstrike')) { const { kind, team } = tool; if (!pay(kind, team)) return; deliver(kind, team, p); markers.push({ p: p.clone(), t: 0, col: team ? '#e2543c' : '#6fb2dc' }); setTool(null); return; }
+  _placeAt9(p);
+};
+const _aiChoose4 = aiChoose;
+aiChoose = function (ai) { const k = _aiChoose4(ai); if (Math.random() < .07) return ['milconvoy', 'airstrike', 'airstrike', 'abmtruck'][(Math.random() * 4) | 0]; return k; };
+const _setupBattle6 = setupBattle;
+setupBattle = function (battle) {
+  _setupBattle6(battle);
+  BASES.forEach((b, t) => { const s = new Struct(t, 'abm', b.x + 60, b.z + (t ? 40 : -40), 0); s.buildT = .999; });
+  MILC.length = 0; REBUILD.length = 0;
+};
+const _updateWaves9 = updateWaves;
+updateWaves = function (dt) { _updateWaves9(dt); updateMissileDefence(dt); updateRebuild(dt); updateMilConvoys(dt); };
+const _drawMinimap7 = drawMinimap;
+drawMinimap = function () {
+  _drawMinimap7(); const k = 392 / (2 * WORLD);
+  for (const L of units) { if (!L.alive || L.team !== CMD.team || (L.variant !== 'abm' && L.variant !== 'abmtruck')) continue; mmc.strokeStyle = 'rgba(111,178,220,.35)'; mmc.lineWidth = 2; mmc.beginPath(); mmc.arc((L.pos.x + WORLD) * k, (L.pos.z + WORLD) * k, (L.variant === 'abm' ? 2600 : 1900) * k, 0, TAU); mmc.stroke(); }
+};
+
+// airstrike bombers fly their own bombing run: line up, release when the predicted impact hits the target, come around if they miss
+const _thinkB = Jet.prototype.thinkBomber;
+Jet.prototype.thinkBomber = function (dt) {
+  if (!this.strike) return _thinkB.call(this, dt);
+  const I = this.in; I.thr = .85; I.gun = I.msl = false; I.bomb = false;
+  const f = this.forward(), fh = new V3(f.x, 0, f.z).normalize(), T = this.strikeT; let D;
+  if (!T || this.bombs <= 0 || this.strikeDone) D = new V3(fh.x, .08, fh.z);
+  else {
+    const gh = Math.max(getH(T.x, T.z), WATER), dx = T.x - this.pos.x, dz = T.z - this.pos.z, hd = Math.hypot(dx, dz) || 1;
+    if (this.egress > 0) { this.egress -= dt; D = new V3(this.egDir.x, .05, this.egDir.z); }
+    else D = new V3(dx / hd, clamp((gh + 280 - this.pos.y) / 400, -.25, .25), dz / hd).normalize();
+    this.group.updateMatrixWorld(); const pb = predictBomb(this);
+    if (pb && !(this.egress > 0)) {
+      const ix = pb.p.x - T.x, iz = pb.p.z - T.z, along = ix * fh.x + iz * fh.z, lat = Math.abs(ix * fh.z - iz * fh.x);
+      if (along > -170 && along < 60 && lat < 120 && hd < 2500) { I.bomb = true; this.dropping = true; }
+      else if (along >= 60 && along < 900 && (dx * fh.x + dz * fh.z) < 200) { if (this.dropping) { this.strikeDone = true; if (this.team === CMD.team) addFeed(null, null, '💥 Bommen op het doel · de bommenwerper keert terug'); } else { this.egress = 9; this.egDir = fh.clone(); } }
+    }
+  }
+  const agl = this.agl(), ahead = this.pos.clone().addScaledVector(f, Math.max(150, this.speed * 3.5));
+  if (Math.min(agl, ahead.y - Math.max(getH(ahead.x, ahead.z), WATER)) < 140) { D = new V3(f.x, 1.2, f.z).normalize(); I.thr = 1; I.bomb = false; }
+  this.steerTo(D, dt);
+};
+
+// the bombs of an airstrike steer onto the spot you tapped
+const _launch4 = launch;
+launch = function (type, pos, vel, owner, target) {
+  const pr = _launch4(type, pos, vel, owner, target);
+  if (type === 'bomb' && owner && owner.strike && owner.strikeT && pr) { const T = owner.strikeT; pr.guide = new V3(T.x + rnd(-24, 24), Math.max(getH(T.x, T.z), WATER), T.z + rnd(-24, 24)); }
+  return pr;
+};
 
 </script>
 
