@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#0d100c">
+<meta name="theme-color" content="#0d100c">
 <title>Operatie Staal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -2737,7 +2738,7 @@ function autoQuality(raw) {
   if ((state !== 'play' && state !== 'possess') || paused || document.hidden || QUALITY.noAuto) return;
   if (perf.fps < 42) {
     if (QUALITY.shadows) { QUALITY.shadows = false; sun.castShadow = false; }
-    else if (QUALITY.pr > .55) { QUALITY.pr = Math.max(.55, QUALITY.pr - .15); renderer.setPixelRatio(QUALITY.pr); resize(); }
+    else if (QUALITY.pr > 1.01) { QUALITY.pr = Math.max(1, QUALITY.pr - .15); renderer.setPixelRatio(QUALITY.pr); resize(); }
   } else if (perf.fps > 58 && QUALITY.pr < (QUALITY.cap || 1) - .01) { QUALITY.pr += .1; renderer.setPixelRatio(QUALITY.pr); resize(); }
 }
 function frame(now) {
@@ -3188,7 +3189,7 @@ function refreshSettings() {
 }
 function beginGame() {
   const D = DIFF[SET.diff]; SET.aiSkill = D.skill; SET.aiIncome = D.income;
-  if (SET.gfx === 'laag') { QUALITY.pr = QUALITY.cap = .75; QUALITY.shadows = false; sun.castShadow = false; renderer.setPixelRatio(QUALITY.pr); resize(); }
+  if (SET.gfx === 'laag') { QUALITY.pr = QUALITY.cap = Math.max(1, Math.min(window.devicePixelRatio || 1, 1.5)); QUALITY.shadows = false; sun.castShadow = false; renderer.setPixelRatio(QUALITY.pr); resize(); }
   if (SET.gfx === 'hoog') { QUALITY.pr = QUALITY.cap = Math.min(window.devicePixelRatio || 1, 2); QUALITY.noAuto = true; sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.setPixelRatio(QUALITY.pr); resize(); }
   setTimeOfDay(SET.tod); setupWeather(SET.weather === 'neerslag');
   start(SET.mode === 'battle');
@@ -4798,7 +4799,7 @@ class Ship extends Unit {
     if (this.variant !== 'sub') {
       // anti-air guns
       if (this.aaCd <= 0) {
-        let air = null, bd = 950; for (const u of units) { if (!u.alive || u.team !== foe || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(P); if (d < bd) { bd = d; air = u; } }
+        let air = null, bd = 950; for (const u of units) { if (!u.alive || u.team !== foe || u.noTarget || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(P); if (d < bd) { bd = d; air = u; } }
         if (air) { this.aaCd = .09; const from = this.group.localToWorld(new V3(rnd(-3, 3), this.variant === 'carrier' ? 9 : 6, rnd(-10, 10))), lead = air.center().clone().addScaledVector(air.velocity(), bd / 900); fireBullet(this, from, lead.sub(from).normalize(), { dmg: 30, range: 1100, spread: .014, ap: .05, air: 1, tracer: true, from, tcol: 0xffe08a }); if (Math.random() < .3) Snd.shot(from, 'cannon30'); } else this.aaCd = .5;
       }
     }
@@ -5624,7 +5625,7 @@ function updatePerks(dt) {
     if (p.perk === 'reinforce') { p.reT -= dt; if (p.reT <= 0) { p.reT = 90; deliver('squad', p.owner, new V3(p.x + rnd(-20, 20), 0, p.z + rnd(-20, 20))); if (p.owner === CMD.team) addFeed(null, null, `🪖 Gratis versterking voor ${p.L} ${p.name}`); } }
     if (p.perk === 'aa' && p.aaGun) {
       p.aaCd -= dt; if (p.aaCd > 0) continue; let air = null, bd = 650;
-      for (const u of units) { if (!u.alive || u.team === p.owner || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(p.aaPos); if (d < bd) { bd = d; air = u; } }
+      for (const u of units) { if (!u.alive || u.team === p.owner || u.noTarget || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(p.aaPos); if (d < bd) { bd = d; air = u; } }
       if (!air) { p.aaCd = .4; continue; }
       p.aaCd = .1; const lead = air.center().clone().addScaledVector(air.velocity(), bd / 900), dir = lead.sub(p.aaPos).normalize();
       p.aaGun.rotation.set(-Math.asin(clamp(dir.y, -1, 1)), Math.atan2(dir.x, dir.z), 0, 'YXZ');
@@ -6062,7 +6063,7 @@ Struct.prototype.update = function (dt) {
     if (!t) { this.wCd = .6; return; } this.wCd = 2.6;
     const dir = t.center().clone().add(new V3(0, .3, 0)).sub(top).normalize(); fireBullet(this, top, dir, { dmg: 130, range: 600, spread: .004, tracer: true, from: top }); Snd.shot(top, 'cannon30'); return;
   }
-  let air = null, bd = v === 'sam' ? 1500 : 850; for (const u of units) { if (!u.alive || u.team === this.team || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(P); if (d < bd) { bd = d; air = u; } }
+  let air = null, bd = v === 'sam' ? 1500 : 850; for (const u of units) { if (!u.alive || u.team === this.team || u.noTarget || !(isAirT(u) || u.type === 'drone')) continue; const d = u.pos.distanceTo(P); if (d < bd) { bd = d; air = u; } }
   if (!air) { this.wCd = .5; return; }
   if (v === 'sam') { this.wCd = 4.5; const h = new V3(air.pos.x - P.x, 0, air.pos.z - P.z).normalize(); launch('missile', top, new V3(h.x * .6, 1, h.z * .6).normalize().multiplyScalar(80), this, air); for (let i = 0; i < 12; i++) spawnP(top, { tex: smokeTex, color: 0xdedad2, op: .7, size: rnd(2, 3.5), grow: 2.5, life: rnd(2, 3.5), vel: new V3(rnd(-4, 4), rnd(0, 4), rnd(-4, 4)), drag: 1.4 }); Snd.shot(top, 'rocket'); }
   else { this.wCd = .09; const lead = air.center().clone().addScaledVector(air.velocity(), bd / 900), dir = lead.sub(top).normalize(); fireBullet(this, top, dir, { dmg: 34, range: 950, spread: .012, ap: .05, air: 1, tracer: true, from: top, tcol: 0xffe08a }); if (Math.random() < .3) Snd.shot(top, 'cannon30'); }
@@ -7266,13 +7267,8 @@ renderMain = function (dt) {
     const dx = u.pos.x - cp.x, dz = u.pos.z - cp.z, dy = u.pos.y - cp.y, L = lim * mul;
     u.group.visible = dx * dx + dy * dy + dz * dz < L * L;
   }
-  // very slow machine: drop the resolution further than the normal auto setting does
-  if (!QUALITY.noAuto && typeof perf !== 'undefined' && perf.fps && perf.fps < 26 && (state === 'play' || state === 'possess')) {
-    PERF2.t -= dt; if (PERF2.t <= 0) { PERF2.t = 2; QUALITY.low = true; if (QUALITY.pr > .42) { QUALITY.pr = Math.max(.42, QUALITY.pr - .08); renderer.setPixelRatio(QUALITY.pr); resize(); } }
-  }
   return _renderMain5(dt);
 };
-const PERF2 = { t: 2 };
 // ---- 3. fewer effect particles and civilians on low settings ----
 const _spawnP2 = spawnP;
 spawnP = function (p, o) { if (QUALITY.low && !o.must && Math.random() < .55) return; return _spawnP2(p, o); };
@@ -7409,6 +7405,497 @@ drawOverlay = function (dt) {
 const _mmTs = drawMinimap;
 drawMinimap = function () { _mmTs(); const S = TSAR.flying; if (!S) return; const k = 392 / (2 * WORLD); mmc.strokeStyle = '#ff2814'; mmc.lineWidth = 4; mmc.setLineDash([8, 5]); mmc.beginPath(); mmc.arc((S.t.x + WORLD) * k, (S.t.z + WORLD) * k, TSAR.R * k, 0, TAU); mmc.stroke(); mmc.setLineDash([]); };
 
-</script>
+// ================= CITY EVACUATION: helicopters, army trucks, flights and ferries =================
+Object.assign(COST, { evacH: 250, evacT: 150 });
+UNAME.evacH = ['evacuatie met helikopters', 'evacuaties']; UNAME.evacT = ['evacuatie met legertrucks', 'evacuaties'];
+if (KINDS.evac) KINDS.evac.sub = 'helis · trucks · vlucht · boot';
+CVD.evtruck = { hp: 520, L: 8, pay: 0, sp: 15, name: ['evacuatietruck', 'evacuatietrucks'] }; UNAME.evtruck = CVD.evtruck.name;
+const EVM = { list: [], seq: 0, camp: [null, null], st: {}, campSaved: [0, 0], min: false, sig: '' };
+const EVK = new Set(['board', 'gate']);
+const cityName = C => C.town ? C.town.name : 'de Metropool';
+const ownL = (L, team) => { if (!ECO.on) return true; const p = POINTS.find(q => q.L === L); return !!(p && p.owner === team); };
+const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+function walkTo(c, tx, tz, sp, dt) {
+  const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz); if (d < .4) return true;
+  const st = Math.min(d, sp * dt); c.x += dx / d * st; c.z += dz / d * st; c.yaw = Math.atan2(dx, dz); c.ph += dt * sp * 2.6; return d - st < .4;
+}
+// ---------- the reception camp behind your base ----------
+function ensureCamp(team) {
+  if (EVM.camp[team]) return EVM.camp[team];
+  const b = BASES[team], s = team ? -1 : 1, P = { x: b.x, z: b.z + s * 150, s, team }; P.y = getH(P.x, P.z);
+  const g = new THREE.Group(); scene.add(g); const tent = mat(0x6b7350), white = mat(0xe8e6dc), red = mat(0xc62828), dk = mat(0x3a3d40);
+  const at = (x, z) => getH(P.x + x, P.z + z);
+  for (let i = 0; i < 8; i++) {
+    const x = -42 + (i % 4) * 15, z = i < 4 ? -13 : 13, wt = i === 1 || i === 6;
+    mesh(new THREE.CylinderGeometry(3.6, 3.6, 10, 3).rotateX(-Math.PI / 2), wt ? white : tent, P.x + x, at(x, z) + 1.6, P.z + z, g);
+    if (wt) for (const sx of [-1, 1]) { mesh(new THREE.BoxGeometry(.1, .5, 1.7), red, P.x + x + sx * 2.1, at(x, z) + 2.2, P.z + z, g); mesh(new THREE.BoxGeometry(.1, 1.7, .5), red, P.x + x + sx * 2.1, at(x, z) + 2.2, P.z + z, g); }
+  }
+  for (let k = 0; k < 3; k++) { const x = 48 + k * 24; mesh(new THREE.BoxGeometry(15, .14, 15), dk, P.x + x, at(x, 0) + .07, P.z, g); mesh(new THREE.BoxGeometry(1, .06, 7), white, P.x + x - 2.2, at(x, 0) + .16, P.z, g); mesh(new THREE.BoxGeometry(1, .06, 7), white, P.x + x + 2.2, at(x, 0) + .16, P.z, g); mesh(new THREE.BoxGeometry(3.4, .06, 1), white, P.x + x, at(x, 0) + .16, P.z, g); }
+  mesh(new THREE.CylinderGeometry(.08, .1, 9, 6), mat(0xcfcfcf), P.x - 6, at(-6, 0) + 4.5, P.z, g);
+  mesh(new THREE.BoxGeometry(.05, 1.6, 2.6), white, P.x - 6, at(-6, 0) + 8, P.z + 1.35, g); mesh(new THREE.BoxGeometry(.07, .4, 1.4), red, P.x - 6, at(-6, 0) + 8, P.z + 1.35, g); mesh(new THREE.BoxGeometry(.07, 1.2, .4), red, P.x - 6, at(-6, 0) + 8, P.z + 1.35, g);
+  P.pad = k => ({ x: P.x + 48 + (k % 3) * 24, z: P.z + Math.floor(k / 3) * 22 * s }); P.tspot = k => ({ x: P.x - 14 + (k % 4) * 9, z: P.z - s * 34 });
+  return (EVM.camp[team] = P);
+}
+// ---------- destinations ----------
+function baseStation(team) {
+  const key = 'base' + team; if (EVM.st[key]) return EVM.st[key];
+  const P = ensureCamp(team);
+  return (EVM.st[key] = { kind: 'base', key, name: 'het opvangkamp', icon: '🏕', team, x: P.x, z: P.z, truck: k => P.tspot(k), heli: k => P.pad(k), gate: [], pax: 0, paxM: [], state: 'board' });
+}
+function airStation(A) {
+  const key = 'air' + A.L; if (EVM.st[key]) return EVM.st[key];
+  const s = A.z > 0 ? 1 : -1, wl = (x, z) => ({ x: A.x + x, z: A.z + z * s });
+  const S = { kind: 'air', key, A, s, name: A.name, icon: '✈', ...wl(0, -150), wl, truck: k => wl(36 + (k % 4) * 9, -150), heli: k => wl(48 + (k % 3) * 24, -118), wait: wl(26, -176), door: A.civil ? wl(2.6, -180) : wl(2, -208), gate: [], pax: 0, paxM: [], flyM: [], state: 'board', idle: 0, relT: 0, cap: 140 };
+  S.walk = () => [{ x: S.wait.x + rnd(-6, 6), z: S.wait.z + rnd(-4, 4) }];
+  if (!A.civil) { const p = buildCargoPlane(0); p.scale.setScalar(1.15); S.plane = p; S.F = null; placeMilPlane(S); }
+  return (EVM.st[key] = S);
+}
+function placeMilPlane(S) {
+  const A = S.A, F = S.F || { z: -190, y: 0, v: 0 };
+  S.plane.position.set(A.x, A.y + 2.9 + F.y, A.z + F.z * S.s); S.plane.rotation.set(F.v > 62 ? -Math.min(.22, (F.v - 62) * .012) : 0, S.s > 0 ? 0 : Math.PI, 0, 'YXZ');
+}
+function seaStation(H) {
+  const key = 'sea' + H.L; if (EVM.st[key]) return EVM.st[key];
+  const wl = (x, z) => ({ x: H.x + x, z: H.z + z });
+  const S = { kind: 'sea', key, H, name: H.name, icon: '🚢', ...wl(60, 0), wl, truck: k => wl(-32, -12 + (k % 4) * 8), heli: k => [wl(32, -62), wl(32, 62), wl(-6, -92)][k % 3], wait: wl(30, -24), door: wl(50, -25), gate: [], pax: 0, paxM: [], flyM: [], state: 'board', idle: 0, relT: 0, cap: 220, fx: 0, fv: 0 };
+  S.walk = from => { const w = { x: S.wait.x + rnd(-5, 5), z: S.wait.z + rnd(-2.5, 2.5) }; if (from.x < H.x - 16) return [wl(-14, -24), w]; if (from.z < H.z - 80) return [wl(-13, -80), wl(-13, -24), w]; return [w]; };
+  // the ferry
+  const g = new THREE.Group(), wh = mat(0xf2f1ec), bl = mat(0x1f4f8f), dk = mat(0x22303a);
+  mesh(new THREE.BoxGeometry(14, 8, 80), wh, 0, -.5, 0, g); mesh(new THREE.ConeGeometry(7, 12, 4, 1).rotateX(Math.PI / 2).rotateZ(Math.PI / 4), wh, 0, -.5, 46, g);
+  mesh(new THREE.BoxGeometry(14.2, 1, 80.2), bl, 0, 1.4, 0, g); mesh(new THREE.BoxGeometry(14.2, 1.2, 80.2), mat(0x7a2a22), 0, -3.6, 0, g);
+  mesh(new THREE.BoxGeometry(12.6, 3.6, 56), wh, 0, 5.3, -4, g); mesh(new THREE.BoxGeometry(12.8, .9, 54), dk, 0, 5.6, -4, g);
+  mesh(new THREE.BoxGeometry(11, 3.2, 38), wh, 0, 8.7, -6, g); mesh(new THREE.BoxGeometry(11.2, .8, 36), dk, 0, 9, -6, g);
+  mesh(new THREE.BoxGeometry(10, 2.6, 8), wh, 0, 11.6, 10, g); mesh(new THREE.BoxGeometry(10.2, .9, 8.2), dk, 0, 11.9, 10.2, g);
+  for (const z of [-14, -22]) { mesh(new THREE.CylinderGeometry(1.5, 1.8, 5, 10), bl, 0, 12.6, z, g); mesh(new THREE.CylinderGeometry(1.55, 1.55, .8, 10), mat(0x1b1b1b), 0, 15.2, z, g); }
+  for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(1.5, 1.2, 5), mat(0xe8742a), sx * 6.9, 7.6, -26 + i * 9, g);
+  collapse(g, null, 'evFerry'); g.rotation.y = Math.PI / 2; scene.add(g); S.ferry = g;
+  const gw = mesh(new THREE.BoxGeometry(24, .35, 2.2), mat(0x9a9a92), H.x + 62, (H.y + .5 + WATER + 3.5) / 2, H.z - 25); gw.rotation.z = Math.atan2(WATER + 3.5 - H.y - .5, 24); scene.add(gw); S.gangway = gw;
+  placeFerry(S);
+  return (EVM.st[key] = S);
+}
+function placeFerry(S) { const H = S.H; S.ferry.position.set(H.x + 115 + S.fx, WATER, H.z - 25); S.ferry.visible = S.state !== 'gone'; S.gangway.visible = S.state === 'board'; }
+function getStation(key, team) {
+  if (key === 'base') return baseStation(team);
+  const [k, L] = key.split(':');
+  if (k === 'air') return airStation(AIRDEFS.find(a => a.L === L));
+  return seaStation(PORTDEFS.find(h => h.L === L));
+}
+const stationReady = S => S.kind === 'base' || (S.state === 'board' && !(S.kind === 'air' && S.A.civil && S.A.fly));
+// ---------- routes for the trucks: around cities and bases instead of through them ----------
+function segHitsRect(ax, az, bx, bz, R) {
+  let t0 = 0, t1 = 1; const dx = bx - ax, dz = bz - az, p = [-dx, dx, -dz, dz], q = [ax - R.x0, R.x1 - ax, az - R.z0, R.z1 - az];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) { if (q[i] < 0) return false; continue; }
+    const t = q[i] / p[i]; if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t0 < t1;
+}
+function obstacles() {
+  const out = CITIES.map(C => ({ x0: C.x0 - 26, x1: C.x1 + 26, z0: C.z0 - 26, z1: C.z1 + 26 }));
+  BASES.forEach(b => out.push({ x0: b.x - 104, x1: b.x + 104, z0: b.z - 104, z1: b.z + 104 }));
+  return out;
+}
+function routeAround(a, b, depth = 0) {
+  const inR = (p, R) => p.x > R.x0 && p.x < R.x1 && p.z > R.z0 && p.z < R.z1;
+  if (depth < 5) for (const R of obstacles()) {
+    if (inR(a, R) || inR(b, R) || !segHitsRect(a.x, a.z, b.x, b.z, R)) continue;
+    const e = 12, cs = [{ x: R.x0 - e, z: R.z0 - e }, { x: R.x1 + e, z: R.z0 - e }, { x: R.x1 + e, z: R.z1 + e }, { x: R.x0 - e, z: R.z1 + e }];
+    const ok = (P, Q) => !segHitsRect(P.x, P.z, Q.x, Q.z, R); let best = null, bl = 1e9;
+    for (let i = 0; i < 4; i++) {
+      const c = cs[i]; if (!ok(a, c)) continue;
+      if (ok(c, b)) { const L = d2(a, c) + d2(c, b); if (L < bl) { bl = L; best = [c]; } }
+      for (const j of [(i + 1) % 4, (i + 3) % 4]) { const c2 = cs[j]; if (ok(c2, b)) { const L = d2(a, c) + d2(c, c2) + d2(c2, b); if (L < bl) { bl = L; best = [c, c2]; } } }
+    }
+    if (!best) continue;
+    const pts = [a, ...best, b], out = [];
+    for (let i = 1; i < pts.length; i++) out.push(...routeAround(pts[i - 1], pts[i], depth + 1));
+    return out;
+  }
+  return [new V3(b.x, 0, b.z)];
+}
+// ---------- the gathering point at the edge of the city ----------
+function pickSetup(M) {
+  const C = M.C, cx = (C.x0 + C.x1) / 2, cz = (C.z0 + C.z1) / 2, tx = M.S.x - cx, tz = M.S.z - cz;
+  const sides = [{ k: 'x1', o: [1, 0], E: [C.x1, cz] }, { k: 'x0', o: [-1, 0], E: [C.x0, cz] }, { k: 'z1', o: [0, 1], E: [cx, C.z1] }, { k: 'z0', o: [0, -1], E: [cx, C.z0] }];
+  // prefer the side that faces the destination and has the fewest enemies nearby
+  const tl = Math.hypot(tx, tz) || 1, foes = units.filter(u => u.alive && u.team !== M.team && u.team !== undefined && u.type !== 'struct' && u.type !== 'convoy');
+  for (const s of sides) { const px = s.E[0] + s.o[0] * 40, pz = s.E[1] + s.o[1] * 40; s.sc = (s.o[0] * tx + s.o[1] * tz) / tl * 100 - foes.filter(u => (u.pos.x - px) ** 2 + (u.pos.z - pz) ** 2 < 300 * 300).length * 22; }
+  sides.sort((A, B) => B.sc - A.sc);
+  const dry = (x, z) => getH(x, z) > WATER + 1.2 && !CITIES.some(D => D !== C && x > D.x0 - 8 && x < D.x1 + 8 && z > D.z0 - 8 && z < D.z1 + 8);
+  let sd = sides.find(s => [[30, 0], [50, 0], [50, 30], [50, -30], [30, 22], [30, -22]].every(([a, l]) => dry(s.E[0] + s.o[0] * a - s.o[1] * l, s.E[1] + s.o[1] * a + s.o[0] * l))) || sides[0];
+  M.side = sd.k; M.E = { x: sd.E[0], z: sd.E[1] }; M.o = { x: sd.o[0], z: sd.o[1] }; M.l = { x: -sd.o[1], z: sd.o[0] };
+}
+const atPick = (M, a, l) => ({ x: M.E.x + M.o.x * a + M.l.x * l, z: M.E.z + M.o.z * a + M.l.z * l });
+const crowdSpot = M => atPick(M, 13 + rnd(-4, 6), rnd(-17, 17));
+const truckSlot = (M, k) => atPick(M, 31 + Math.floor(k / 4) * 12, ((k % 4) - 1.5) * 12);
+const heliSlot = (M, k) => atPick(M, 52 + Math.floor(k / 3) * 26, ((k % 3) - 1) * 28);
+function pathOut(c, M) {
+  const C = M.C, P = [], tx = C.X[c.ti] + c.sx * 6.8, tz = C.Z[c.tj] + c.sz * 6.8; P.push({ x: tx, z: tz });
+  if (M.side === 'x1') P.push({ x: C.x1 + 9, z: tz }); else if (M.side === 'x0') P.push({ x: C.x0 - 9, z: tz });
+  else if (M.side === 'z1') P.push({ x: tx, z: C.z1 + 9 }); else P.push({ x: tx, z: C.z0 - 9 });
+  P.push(crowdSpot(M)); return P;
+}
+// ---------- vehicles ----------
+function doorOf(V) {
+  const f = V.forward();
+  if (V.type === 'heli') return { x: V.pos.x + f.z * 3, z: V.pos.z - f.x * 3 };
+  return { x: V.pos.x - f.x * (V.D.L / 2 + 1.3), z: V.pos.z - f.z * (V.D.L / 2 + 1.3) };
+}
+function evLoad(V, dt) {
+  const M = V.M; let mine = 0, walking = 0; const waiting = [];
+  for (const c of M.civs) { if (c.tgt === V) mine++; else if (!c.tgt) { if (c.path.length) walking++; else waiting.push(c); } }
+  let need = V.cap - V.load - mine;
+  if (need > 0 && waiting.length) {
+    const dp = doorOf(V); waiting.sort((a, b) => (a.x - dp.x) ** 2 + (a.z - dp.z) ** 2 - ((b.x - dp.x) ** 2 + (b.z - dp.z) ** 2));
+    for (const c of waiting) { if (need <= 0) break; c.tgt = V; need--; mine++; }
+  }
+  const idle = SIMT - V.lastB;
+  if (V.load >= V.cap && !mine) return 'go';
+  if (V.load > 0 && !mine && !waiting.length && (!walking || idle > 12)) return 'go';
+  if (V.load > 0 && idle > 45) return 'go';
+  if (!V.load && !mine && !M.civs.length) return 'home';
+  return null;
+}
+function evUnload(V, dt) {
+  V.unT -= dt;
+  if (V.unT <= 0 && V.load > 0) { V.unT = .22; V.load--; V.unN = (V.unN || 0) + 1; deliverOne(V.M, V.evS, doorOf(V)); }
+  if (V.load > 0 || V.unT > 0) return false;
+  const n = V.unN || 0; V.unN = 0;
+  if (n && V.evS.kind === 'base' && V.team === CMD.team) addFeed(null, null, `🏕 ${n} burgers uit ${V.M.name} veilig in het opvangkamp${ECO.on ? ` · +◆ ${n * 4}` : ''}`);
+  return true;
+}
+function saveN(M, n) { M.saved += n; CIV.saved += n; if (ECO.on) ECO.money[M.team] += 4 * n; }
+function deliverOne(M, S, p) {
+  if (S.kind === 'base') {
+    saveN(M, 1); EVM.campSaved[M.team]++;
+    if (CIV.list.filter(c => c.camp === M.team && c.alive).length < 45) { const P = ensureCamp(M.team), c = spawnCiv('village', P.x, P.z); c.x = p.x; c.z = p.z; c.camp = M.team; CIV.list.push(c); }
+    return;
+  }
+  const c = { kind: 'gate', S, M, x: p.x + rnd(-.6, .6), z: p.z + rnd(-.6, .6), spd: 1.2, spd2: rnd(2.6, 3.4), flee: 0, alive: true, deadT: 0, yaw: 0, ph: rnd(0, 6), path: S.walk(p), at: false, board: false };
+  CIV.list.push(c); S.gate.push(c);
+}
+class EvTruck extends Convoy {
+  constructor(M, k) {
+    const P = ensureCamp(M.team), st = P.tspot(k), slot = truckSlot(M, k);
+    super(M.team, 'evtruck', st.x, st.z, new V3(slot.x, 0, slot.z));
+    this.tarp = new THREE.MeshLambertMaterial({ color: 0x5d6844 });
+    mesh(new THREE.BoxGeometry(2.5, 2.3, 5.2), this.tarp, 0, 2.45, -1.3, this.group);
+    for (const sx of [-1, 1]) { mesh(new THREE.BoxGeometry(.06, .45, 1.5), mat(0xc62828), sx * 1.27, 2.6, -1.3, this.group); mesh(new THREE.BoxGeometry(.06, 1.5, .45), mat(0xc62828), sx * 1.27, 2.6, -1.3, this.group); mesh(new THREE.BoxGeometry(.04, 1.9, 1.9), mat(0xf2f1ec), sx * 1.26, 2.6, -1.3, this.group); }
+    this.noTarget = true; this.M = M; this.k = k; this.evS = M.S; this.load = 0; this.cap = 18; this.lastB = SIMT; this.unT = 0; this.evPhase = 'go'; this.hp = this.maxHp = 520;
+    this.setRoute(slot);
+  }
+  setRoute(to) { this.wps = routeAround({ x: this.pos.x, z: this.pos.z }, to); this.dest = this.wps[0]; this.stuck = 0; }
+  update(dt) {
+    if (!this.alive) return super.update(dt);
+    const p = this.pos; let d = Math.hypot(this.dest.x - p.x, this.dest.z - p.z);
+    while (d < 15 && this.wps.length > 1) { this.wps.shift(); this.dest = this.wps[0]; d = Math.hypot(this.dest.x - p.x, this.dest.z - p.z); }
+    const moving = this.evPhase === 'go' || this.evPhase === 'drop' || this.evPhase === 'home';
+    if (moving && d >= 15) return super.update(dt);
+    this.speed = 0; p.y = lerp(p.y, Math.max(getH(p.x, p.z), WATER - 1), Math.min(1, dt * 10));
+    const M = this.M;
+    if (this.evPhase === 'go') { this.evPhase = 'load'; this.lastB = SIMT; }
+    else if (this.evPhase === 'drop') { this.evPhase = 'unload'; this.unT = .6; }
+    else if (this.evPhase === 'home') { this.alive = false; this.remove(); return; }
+    if (this.evPhase === 'load') {
+      const r = evLoad(this, dt);
+      if (r === 'go') { this.evPhase = 'drop'; this.setRoute(this.evS.truck(this.k)); }
+      else if (r === 'home') { this.evPhase = 'home'; this.setRoute(ensureCamp(this.team).tspot(this.k)); }
+    } else if (this.evPhase === 'unload') {
+      if (evUnload(this, dt)) {
+        if (M.civs.length) { this.evPhase = 'go'; this.setRoute(truckSlot(M, this.k)); }
+        else { this.evPhase = 'home'; const P = ensureCamp(this.team).tspot(this.k); if (d2(P, this.pos) < 20) { this.alive = false; this.remove(); return; } this.setRoute(P); }
+      }
+    }
+  }
+  die(src) {
+    super.die(src); this.tarp.color.setRGB(.22, .2, .18);
+    if (this.load) { this.M.lost += this.load; if (this.team === CMD.team) addFeed(null, null, `💀 ${this.load} burgers kwamen om in de evacuatietruck`); this.load = 0; }
+  }
+}
+function spawnEvHeli(M, k) {
+  const P = ensureCamp(M.team), pad = P.pad(k), slot = heliSlot(M, k);
+  const h = new Heli(M.team, new V3(slot.x, 0, slot.z), []);
+  h.hp = h.maxHp = 650; h.noTarget = true; h.M = M; h.k = k; h.evS = M.S; h.load = 0; h.cap = 12; h.lastB = SIMT; h.unT = 0; h.evPhase = 'go';
+  h.pos.set(pad.x, Math.max(getH(pad.x, pad.z), WATER) + 22, pad.z); h.start = new V3(pad.x, 0, pad.z + P.s * 900); h.yaw = Math.atan2(slot.x - pad.x, slot.z - pad.z);
+  return h;
+}
+const _heliUpd9 = Heli.prototype.update;
+Heli.prototype.update = function (dt) {
+  if (!this.M || !this.alive || this.isPlayerUnit()) return _heliUpd9.call(this, dt);
+  if (this.state === 'unload') this.t = 0;
+  _heliUpd9.call(this, dt);
+  if (!this.alive || this.removed) return;
+  if (this.state === 'out' && this.evPhase !== 'home') this.state = 'in';
+  if (this.state !== 'unload') return;
+  const M = this.M;
+  if (this.evPhase === 'go') { this.evPhase = 'load'; this.lastB = SIMT; }
+  else if (this.evPhase === 'drop') { this.evPhase = 'unload'; this.unT = .8; }
+  if (this.evPhase === 'load') {
+    const r = evLoad(this, dt);
+    if (r === 'go') { const q = this.evS.heli(this.k); this.dest.set(q.x, 0, q.z); this.evPhase = 'drop'; this.state = 'up'; }
+    else if (r === 'home') { this.evPhase = 'home'; this.state = 'up'; }
+  } else if (this.evPhase === 'unload') {
+    if (evUnload(this, dt)) {
+      if (M.civs.length) { const q = heliSlot(M, this.k); this.dest.set(q.x, 0, q.z); this.evPhase = 'go'; this.state = 'up'; }
+      else { this.evPhase = 'home'; this.state = 'up'; }
+    }
+  }
+};
+const _heliDie9 = Heli.prototype.die;
+Heli.prototype.die = function (src) {
+  _heliDie9.call(this, src);
+  if (this.M && this.load) { this.M.lost += this.load; if (this.team === CMD.team) addFeed(null, null, `💀 Blackhawk neergeschoten · ${this.load} burgers aan boord kwamen om`); this.load = 0; }
+};
+function sendVehicles(M) {
+  const k0 = M.veh.length;
+  if (M.how === 'heli') for (let k = 0; k < 3; k++) M.veh.push(spawnEvHeli(M, k0 + k));
+  else for (let k = 0; k < 4; k++) M.veh.push(new EvTruck(M, k0 + k));
+}
+// ---------- starting an evacuation ----------
+function startEvac(C, how, to, team) {
+  const S = getStation(to, team), civs = CIV.list.filter(c => c.alive && c.kind === 'city' && c.city === C);
+  if (!civs.length) { flashTip('Hier zijn geen burgers meer'); return null; }
+  const M = { id: ++EVM.seq, C, how, S, team, name: cityName(C), total: civs.length, saved: 0, lost: 0, civs: [], veh: [], done: false, doneT: 0 };
+  pickSetup(M);
+  for (const c of civs) { c.kind = 'board'; c.M = M; c.tgt = null; c.spd2 = rnd(2.7, 3.5); c.flee = 0; c.path = pathOut(c, M); M.civs.push(c); }
+  CIV.max -= civs.length; C.evacuated = true;
+  sendVehicles(M); EVM.list.push(M); EVM.min = false; EVM.sig = '';
+  const P = atPick(M, 14, 0); markers.push({ p: new V3(P.x, getH(P.x, P.z), P.z), t: 0, col: '#9cc46b' });
+  addFeed(null, null, `${how === 'heli' ? '🚁 3 Blackhawks' : '🚚 4 legertrucks'} evacueren ${civs.length} burgers uit ${M.name} naar ${S.kind === 'base' ? 'het opvangkamp' : S.name}`);
+  return M;
+}
+// people do not move back into a city that was evacuated
+const _spawnCiv9 = spawnCiv;
+spawnCiv = function (kind, ox, oz) {
+  let c = _spawnCiv9(kind, ox, oz);
+  for (let i = 0; i < 6 && kind === 'city' && c.city && c.city.evacuated; i++) c = _spawnCiv9(kind, ox, oz);
+  return c;
+};
+const _evacuate9 = evacuate;
+evacuate = function (p) { const C = cityOf(p, 40); if (C) C.evacuated = true; return _evacuate9(p); };
+// ---------- per frame ----------
+function stepEvacCivs(dt) {
+  for (const M of EVM.list) {
+    for (let i = M.civs.length - 1; i >= 0; i--) {
+      const c = M.civs[i];
+      if (!c.alive || c.kind !== 'board') { if (!c.alive) { M.lost++; c.kind = 'dead'; } M.civs.splice(i, 1); continue; }
+      if (c.tgt) {
+        const V = c.tgt;
+        if (!V.alive || V.removed || V.evPhase !== 'load') { c.tgt = null; c.path = [crowdSpot(M)]; }
+        else {
+          const dp = doorOf(V);
+          if (walkTo(c, dp.x, dp.z, c.spd2 * 1.15, dt)) { const k = CIV.list.indexOf(c); if (k >= 0) CIV.list.splice(k, 1); M.civs.splice(i, 1); V.load++; V.lastB = SIMT; }
+          continue;
+        }
+      }
+      if (c.path.length) { let sp = c.spd2; for (const D of DANGER) if ((D.x - c.x) ** 2 + (D.z - c.z) ** 2 < D.r * D.r) { sp *= 1.6; break; } if (walkTo(c, c.path[0].x, c.path[0].z, sp, dt)) c.path.shift(); }
+      else {
+        // shooting or explosions nearby: the waiting crowd scatters away from it instead of standing in a bunch
+        c.scT = (c.scT || 0) - dt; let D = null; if (c.scT <= 0) for (const q of DANGER) if ((q.x - c.x) ** 2 + (q.z - c.z) ** 2 < q.r * q.r) { D = q; break; }
+        if (D) {
+          const ax = c.x - D.x, az = c.z - D.z, L = Math.hypot(ax, az) || 1, k = Math.min(45, D.r - L + 12); let tx = c.x + ax / L * k + rnd(-6, 6), tz = c.z + az / L * k + rnd(-6, 6);
+          const C = M.C; if (tx > C.x0 - 6 && tx < C.x1 + 6 && tz > C.z0 - 6 && tz < C.z1 + 6) { const P = atPick(M, 10 + rnd(0, 20), rnd(-30, 30)); tx = P.x; tz = P.z; }
+          if (getH(tx, tz) > WATER + .5) { c.path = [{ x: tx, z: tz }]; c.scT = 5; c.spd2 = Math.max(c.spd2, 4.2); }
+        } else { const P = atPick(M, 31, 0); c.yaw += angDiff(c.yaw, Math.atan2(P.x - c.x, P.z - c.z)) * Math.min(1, dt * 3); }
+      }
+    }
+  }
+}
+function stepStation(S, dt) {
+  if (S.kind === 'base') return;
+  for (let i = S.gate.length - 1; i >= 0; i--) {
+    const c = S.gate[i];
+    if (!c.alive) { c.M.lost++; c.kind = 'dead'; S.gate.splice(i, 1); continue; }
+    if (c.board) { if (walkTo(c, S.door.x, S.door.z, c.spd2, dt)) { const k = CIV.list.indexOf(c); if (k >= 0) CIV.list.splice(k, 1); S.gate.splice(i, 1); S.pax++; S.paxM.push(c.M); S.idle = 0; } continue; }
+    if (c.path.length) { if (walkTo(c, c.path[0].x, c.path[0].z, c.spd2, dt)) c.path.shift(); }
+    else { c.at = true; c.yaw += angDiff(c.yaw, Math.atan2(S.door.x - c.x, S.door.z - c.z)) * Math.min(1, dt * 3); }
+  }
+  const ready = stationReady(S);
+  if (ready) {
+    S.idle += dt; S.relT -= dt;
+    if (S.relT <= 0) { const w = S.gate.find(c => c.at && !c.board); if (w) { w.board = true; S.relT = .3; } }
+    const incoming = EVM.list.some(M => M.veh.some(v => v.alive && !v.removed && v.evS === S && v.load > 0 && (v.evPhase === 'drop' || v.evPhase === 'unload')));
+    if (S.pax > 0 && (S.pax >= S.cap || (S.idle > 8 && !S.gate.length && !incoming) || S.idle > 60)) departStation(S);
+  }
+  if (S.kind === 'air' && S.A.civil) {
+    const A = S.A;
+    if (S.state === 'board' && !A.fly && (S.pax > 0 || S.gate.length || EVM.list.some(M => M.S === S && !M.done))) A.jetT = Math.max(A.jetT, 2);
+    if (S.state === 'away') { if (A.fly) S.seen = true; else if (S.seen) arrivedSafe(S); }
+  } else if (S.kind === 'air') {
+    if (S.state === 'away') {
+      const F = S.F; F.v = Math.min(95, F.v + 9 * dt); F.z += F.v * dt; if (F.v > 62) F.y += (F.v - 55) * .22 * dt;
+      if (F.z > 2600) { S.F = null; arrivedSafe(S); }
+      placeMilPlane(S);
+    }
+  } else if (S.kind === 'sea') {
+    if (S.state === 'away') {
+      S.fv = Math.min(22, S.fv + 1.1 * dt); S.fx += S.fv * dt;
+      if (Math.random() < dt * 8) spawnP(new V3(S.H.x + 115 + S.fx - 42, WATER + .3, S.H.z - 25 + rnd(-6, 6)), { tex: smokeTex, color: 0xf2f4f5, op: .55, size: 3, grow: 3, life: 3, vel: new V3(0, .2, 0), drag: 1 });
+      if (S.H.x + 115 + S.fx > WORLD + 160) { arrivedSafe(S); S.state = 'gone'; S.t = 4; }
+    } else if (S.state === 'gone') { S.t -= dt; if (S.t <= 0) { S.state = 'back'; S.fx = 420; } }
+    else if (S.state === 'back') { S.fx -= clamp(S.fx * .09, 2.5, 20) * dt; if (S.fx <= 0) { S.fx = 0; S.state = 'board'; S.idle = 0; } }
+    placeFerry(S);
+  }
+}
+function departStation(S) {
+  S.state = 'away'; S.flyM = S.paxM; S.flyN = S.pax; S.pax = 0; S.paxM = []; S.seen = false;
+  if (S.kind === 'air') { if (S.A.civil) S.A.jetT = 0; else S.F = { z: -190, y: 0, v: 0 }; Snd.burst(new V3(S.x, S.A.y, S.z), { f: 170, type: 'lowpass', dur: 4, vol: .7, thump: .2, tf: 40, brown: true, rng: 2200 }); }
+  else { S.fv = 0; Snd.burst(new V3(S.H.x + 115, WATER, S.H.z), { f: 90, type: 'lowpass', dur: 2.2, vol: .8, thump: .1, tf: 30, brown: false, rng: 2500 }); }
+  if (S.flyM.some(M => M.team === CMD.team)) addFeed(null, null, S.kind === 'air' ? `✈ Evacuatievlucht vertrekt uit ${S.name} met ${S.flyN} burgers` : `🚢 Veerboot vertrekt uit ${S.name} met ${S.flyN} burgers`);
+}
+function arrivedSafe(S) {
+  const by = new Map(); for (const M of S.flyM) by.set(M, (by.get(M) || 0) + 1);
+  for (const [M, n] of by) saveN(M, n);
+  if (S.flyN && S.flyM.some(M => M.team === CMD.team)) addFeed(null, null, `✅ ${S.flyN} burgers veilig weg${S.kind === 'air' ? 'gevlogen' : 'gevaren'}${ECO.on ? ` · +◆ ${S.flyN * 4}` : ''}`);
+  S.flyM = []; S.flyN = 0; if (S.kind === 'air') S.state = 'board'; S.idle = 0;
+}
+function updateEvac(dt) {
+  if (!EVM.list.length && !Object.keys(EVM.st).length) return;
+  stepEvacCivs(dt);
+  for (const k in EVM.st) stepStation(EVM.st[k], dt);
+  for (let i = EVM.list.length - 1; i >= 0; i--) {
+    const M = EVM.list[i];
+    if (!M.done && M.team === CMD.team && M.civs.length) {
+      M.warnT = (M.warnT || 0) - dt; const P = atPick(M, 20, 0);
+      if (M.warnT <= 0 && DANGER.some(q => (q.x - P.x) ** 2 + (q.z - P.z) ** 2 < (q.r + 30) ** 2) && units.some(u => u.alive && u.team !== M.team && u.team !== undefined && u.type !== 'struct' && (u.pos.x - P.x) ** 2 + (u.pos.z - P.z) ** 2 < 260 * 260)) { M.warnT = 25; addFeed(null, null, `⚠ Gevechten bij het verzamelpunt van ${M.name}! Stuur troepen om de burgers te beschermen`); }
+    }
+    if (!M.done) {
+      const inVeh = M.veh.reduce((a, v) => a + (v.alive && !v.removed ? v.load : 0), 0), S = M.S;
+      const atSt = S.gate.filter(c => c.M === M).length + S.paxM.filter(x => x === M).length + (S.flyM || []).filter(x => x === M).length;
+      if (!M.civs.length && !inVeh && !atSt) { M.done = true; if (M.team === CMD.team) addFeed(null, null, `✅ ${M.name} is geëvacueerd · ${M.saved} gered${M.lost ? ` · ${M.lost} omgekomen` : ''}`); }
+    } else if ((M.doneT += dt) > 30) EVM.list.splice(i, 1);
+  }
+  updateEvacBox(dt);
+}
+const _updateWaves12 = updateWaves;
+updateWaves = function (dt) { _updateWaves12(dt); updateEvac(dt); };
+// my walkers are moved here, not by the normal civilian wandering
+const _stepCivs9 = stepCivs;
+stepCivs = function (dt) {
+  if (!CIV.list.some(c => EVK.has(c.kind))) return _stepCivs9(dt);
+  const mine = CIV.list.filter(c => EVK.has(c.kind)); CIV.list = CIV.list.filter(c => !EVK.has(c.kind));
+  try { _stepCivs9(dt); } finally { CIV.list.push(...mine); }
+};
+// ---------- the choice panel ----------
+function askEvac(C, p) {
+  const old = document.getElementById('evAsk'); if (old) old.remove();
+  const team = CMD.team, n = CIV.list.filter(c => c.alive && c.kind === 'city' && c.city === C).length, name = cityName(C);
+  const busy = EVM.list.find(M => M.C === C && !M.done);
+  const tos = [{ k: 'base', t: '🏕 Opvangkamp', s: 'achter je basis', ok: true }];
+  AIRDEFS.forEach(A => tos.push({ k: 'air:' + A.L, t: `✈ ${A.name}`, s: ownL(A.L, team) ? (A.civil ? 'lijnvliegtuig' : 'transportvliegtuig') : 'niet van jou', ok: ownL(A.L, team) }));
+  PORTDEFS.forEach(H => tos.push({ k: 'sea:' + H.L, t: `🚢 ${H.name}`, s: ownL(H.L, team) ? 'veerboot' : 'niet van jou', ok: ownL(H.L, team) }));
+  const sel = { how: EVM.how || 'heli', to: tos.some(o => o.k === EVM.to && o.ok) ? EVM.to : 'base' };
+  const d = document.createElement('div'); d.id = 'evAsk';
+  d.innerHTML = `<div><h3>🏙 EVACUATIE · ${name.toUpperCase()}</h3><p class="sub">${busy ? 'Deze stad wordt al geëvacueerd.' : n ? `<b>${n}</b> burgers in de stad.` : 'Hier zijn geen burgers meer.'}</p>
+<div class="lb">VERVOER</div><div class="row" id="evHow">
+<button class="opt" data-how="heli">🚁 Blackhawks<small>3 helis · 12 per vlucht · ◆ ${COST.evacH}</small></button>
+<button class="opt" data-how="truck">🚚 Legertrucks<small>4 trucks · 18 per rit · ◆ ${COST.evacT}</small></button>
+<button class="opt" data-how="foot">🚶 Te voet<small>gratis · traag</small></button></div>
+<div id="evToWrap"><div class="lb">NAAR</div><div class="row" id="evTo">${tos.map(o => `<button class="opt" data-to="${o.k}" ${o.ok ? '' : 'disabled'}>${o.t}<small>${o.s}</small></button>`).join('')}</div></div>
+<p class="note" id="evNote"></p><div class="go"><button class="main" id="evGo">START EVACUATIE</button><button id="evNo">Sluit</button></div></div>`;
+  document.body.appendChild(d);
+  const note = () => {
+    d.querySelectorAll('[data-how]').forEach(b => b.classList.toggle('on', b.dataset.how === sel.how));
+    d.querySelectorAll('[data-to]').forEach(b => b.classList.toggle('on', b.dataset.to === sel.to));
+    d.querySelector('#evToWrap').hidden = sel.how === 'foot';
+    const o = tos.find(t => t.k === sel.to), dest = sel.to === 'base' ? 'het opvangkamp achter je basis' : o.t.slice(2);
+    const end = sel.to === 'base' ? '' : sel.to.startsWith('air') ? ' Daar stappen ze op een vliegtuig dat met ze wegvliegt.' : ' Daar stappen ze op de veerboot die met ze wegvaart.';
+    d.querySelector('#evNote').textContent = sel.how === 'foot' ? 'De burgers lopen zelf de stad uit naar een veilige plek. Gratis, maar traag en ze zijn onbeschermd onderweg.'
+      : `${sel.how === 'heli' ? '3 Blackhawks landen' : '4 legertrucks rijden naar'} bij het verzamelpunt aan de rand van ${name}. De burgers lopen daarheen, stappen in en worden naar ${dest} gebracht.${end} ${sel.how === 'heli' ? 'Ze vliegen' : 'Ze rijden'} heen en weer tot iedereen weg is. Rood kruis: de vijand mikt er niet op, maar kruisvuur kan ze raken.`;
+    d.querySelector('#evGo').disabled = !n || !!busy;
+  };
+  d.querySelectorAll('[data-how]').forEach(b => b.onclick = () => { sel.how = b.dataset.how; note(); });
+  d.querySelectorAll('[data-to]').forEach(b => b.onclick = () => { if (!b.disabled) { sel.to = b.dataset.to; note(); } });
+  d.querySelector('#evNo').onclick = () => d.remove();
+  d.querySelector('#evGo').onclick = () => {
+    EVM.how = sel.how; EVM.to = sel.to;
+    if (sel.how === 'foot') { d.remove(); evacuate(p); return; }
+    if (!pay(sel.how === 'heli' ? 'evacH' : 'evacT', team)) return;
+    d.remove(); startEvac(C, sel.how, sel.to, team);
+  };
+  note();
+}
+const _placeAt12 = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'evac') { const C = cityOf(p, 40); if (!C) { flashTip('Tik op een stad om de burgers te evacueren'); return; } setTool(null); askEvac(C, p.clone()); return; }
+  _placeAt12(p);
+};
+// ---------- status box, labels, minimap ----------
+{
+  const st = document.createElement('style');
+  st.textContent = `#evAsk{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(4,10,4,.55)}
+#evAsk>div{width:min(470px,calc(100vw - 20px));max-height:calc(100vh - 20px);overflow:auto;box-sizing:border-box;background:#101a10;border:2px solid #9cc46b;padding:14px 16px;font:500 14px/1.4 var(--display);color:#e4f0d6;box-shadow:0 0 30px rgba(156,196,107,.3)}
+#evAsk h3{margin:0 0 2px;color:#b9e38a;letter-spacing:.05em} #evAsk .sub{margin:0;color:#c9d6bb}
+#evAsk .lb{margin:12px 0 5px;font:700 11px var(--mono);letter-spacing:.14em;color:#9cc46b}
+#evAsk .row{display:flex;gap:6px;flex-wrap:wrap}
+#evAsk .opt{appearance:none;cursor:pointer;font:700 13px var(--display);padding:8px 10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.05);color:#fff;text-align:left;flex:1 1 30%;min-width:120px}
+#evAsk .opt.on{background:rgba(156,196,107,.3);border-color:#b9e38a}
+#evAsk .opt:disabled{opacity:.35;cursor:not-allowed}
+#evAsk .opt small{display:block;font:500 11px var(--display);color:#c9d6bb;margin-top:2px}
+#evAsk .note{margin:12px 0 0;font:500 13px/1.4 var(--display);color:#c9d6bb}
+@media (max-height:520px){#evAsk>div{padding:10px 12px}#evAsk .opt{padding:5px 8px}#evAsk .opt small{font-size:10px}#evAsk .lb{margin:7px 0 4px}#evAsk .note{font-size:12px;margin-top:7px}#evAsk h3{font-size:16px}#evAsk .go{bottom:-10px}}
+#evAsk .go{display:flex;gap:8px;margin-top:10px;position:sticky;bottom:-14px;background:#101a10;padding:8px 0 2px}
+#evAsk .go button{appearance:none;cursor:pointer;font:700 14px var(--display);padding:10px 14px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff}
+#evAsk .go .main{background:#3f6b22;border-color:#9cc46b;flex:1} #evAsk .go .main:disabled{opacity:.4}
+#evacBox{background:var(--panel);border-left:2px solid #9cc46b;padding:6px 8px;font:500 12px/1.35 var(--display);color:#e4f0d6;pointer-events:auto}
+#evacBox .hd{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:#b9e38a;cursor:pointer;letter-spacing:.05em}
+#evacBox .ev{margin-top:7px} #evacBox .ev b{color:#fff} #evacBox .t{display:flex;justify-content:space-between;align-items:flex-start;gap:6px} #evacBox .v{white-space:nowrap}
+#evacBox .bar{display:block;height:5px;background:rgba(255,255,255,.12);margin:3px 0} #evacBox .bar i{display:block;height:100%;background:#9cc46b}
+#evacBox button{appearance:none;cursor:pointer;font:700 11px var(--display);padding:2px 6px;margin-left:4px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff}`;
+  document.head.appendChild(st);
+  const box = document.createElement('div'); box.id = 'evacBox'; box.hidden = true; (document.getElementById('side') || document.body).appendChild(box);
+  box.addEventListener('click', e => {
+    const m = e.target.closest('[data-more]');
+    if (m) { const M = EVM.list.find(x => x.id === +m.dataset.more); if (M && !M.done && pay(M.how === 'heli' ? 'evacH' : 'evacT', M.team)) { sendVehicles(M); addFeed(null, null, `${M.how === 'heli' ? '🚁 Extra Blackhawks' : '🚚 Extra legertrucks'} onderweg naar ${M.name}`); EVM.sig = ''; } return; }
+    if (e.target.closest('.hd')) { EVM.min = !EVM.min; EVM.sig = ''; }
+  });
+  EVM.box = box;
+}
+function updateEvacBox(dt) {
+  EVM.boxT = (EVM.boxT || 0) - dt; if (EVM.boxT > 0) return; EVM.boxT = .5;
+  const box = EVM.box, mine = EVM.list.filter(M => M.team === CMD.team);
+  if (!mine.length) { if (!box.hidden) box.hidden = true; return; }
+  const rows = mine.map(M => {
+    const alive = M.veh.filter(v => v.alive && !v.removed).length, pct = Math.round(M.saved / Math.max(1, M.total) * 100);
+    const wait = M.civs.filter(c => !c.path.length).length, walk = M.civs.length - wait, ride = M.veh.reduce((a, v) => a + (v.alive && !v.removed ? v.load : 0), 0), st = M.S.gate.filter(c => c.M === M).length + M.S.paxM.filter(x => x === M).length;
+    const info = M.done ? 'klaar' : [walk && `${walk} lopen`, wait && `${wait} wachten`, ride && `${ride} onderweg`, st && `${st} bij ${M.S.icon}`].filter(Boolean).join(' · ');
+    const warn = !M.done && !alive && M.civs.length ? ' · ⚠ geen voertuigen meer' : '';
+    return `<div class="ev"><div class="t"><span><b>${M.name}</b> → ${M.S.icon} ${M.S.kind === 'base' ? 'opvangkamp' : M.S.name}</span><span class="v">${M.how === 'heli' ? '🚁' : '🚚'}×${alive}${M.done ? '' : `<button data-more="${M.id}" title="stuur extra voertuigen">＋</button>`}</span></div><span class="bar"><i style="width:${pct}%"></i></span>${M.saved}/${M.total} gered${M.lost ? ` · ${M.lost} dood` : ''}${info ? ' · ' + info : ''}${warn}</div>`;
+  });
+  const html = `<div class="hd"><span>🚨 EVACUATIES (${mine.filter(M => !M.done).length})</span><span>${EVM.min ? '▸' : '▾'}</span></div>${EVM.min ? '' : rows.join('')}`;
+  if (html !== EVM.sig) { EVM.sig = html; box.innerHTML = html; }
+  box.hidden = false;
+}
+const _drawOverlay12 = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlay12(dt);
+  if (state !== 'play' || (typeof BCW !== 'undefined' && BCW.unit) || (!EVM.list.length && !EVM.camp[CMD.team])) return;
+  const cp = camera.position, txt = (x, y, z, s, col, maxD) => { const P = new V3(x, y, z); if (P.distanceTo(cp) > maxD) return; const q = project(P); if (!q) return; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(s, q[0], q[1]); oc.fillStyle = col; oc.fillText(s, q[0], q[1]); };
+  for (const M of EVM.list) {
+    if (M.done || M.team !== CMD.team) continue;
+    const P = atPick(M, 14, 0), wait = M.civs.filter(c => !c.path.length && !c.tgt).length;
+    txt(P.x, getH(P.x, P.z) + 9, P.z, `🚩 VERZAMELPUNT · ${wait} wachten · ${M.civs.length - wait} onderweg`, '#b9e38a', 2400);
+    for (const v of M.veh) if (v.alive && !v.removed) txt(v.pos.x, v.pos.y + (v.type === 'heli' ? 6 : 6.5), v.pos.z, `${v.type === 'heli' ? '🚁' : '🚚'} ${v.load}/${v.cap}`, '#e4f0d6', 1300);
+  }
+  for (const k in EVM.st) {
+    const S = EVM.st[k]; if (S.kind === 'base') { if (S.team === CMD.team) txt(S.x, getH(S.x, S.z) + 12, S.z, `🏕 OPVANGKAMP · ${EVM.campSaved[S.team]} opgevangen`, '#b9e38a', 2000); continue; }
+    if (!S.gate.length && !S.pax && S.state === 'board') continue;
+    const y = S.kind === 'air' ? S.A.y : S.H.y, wt = S.gate.length, msg = S.state === 'board' ? `${S.icon} ${S.pax} aan boord · ${wt} wachten` : S.kind === 'air' ? `${S.icon} vlucht onderweg · ${wt} wachten op de volgende` : `${S.icon} veerboot onderweg · ${wt} wachten`;
+    txt(S.wait.x, y + 10, S.wait.z, msg, '#b9e38a', 2400);
+  }
+};
+const _mmEv = drawMinimap;
+drawMinimap = function () {
+  _mmEv(); if (!EVM.list.length) return; const k = 392 / (2 * WORLD), toS = (x, z) => [(x + WORLD) * k, (z + WORLD) * k];
+  mmc.save(); mmc.strokeStyle = '#9cc46b'; mmc.lineWidth = 2; mmc.setLineDash([5, 4]);
+  for (const M of EVM.list) { if (M.done || M.team !== CMD.team) continue; const a = toS(M.E.x, M.E.z), b = toS(M.S.x, M.S.z); mmc.beginPath(); mmc.moveTo(a[0], a[1]); mmc.lineTo(b[0], b[1]); mmc.stroke(); mmc.fillStyle = '#9cc46b'; mmc.beginPath(); mmc.arc(a[0], a[1], 4, 0, TAU); mmc.fill(); }
+  mmc.restore();
+};
+const _setupBattle12 = setupBattle;
+setupBattle = function (battle) {
+  EVM.list.forEach(M => M.veh.forEach(v => { if (!v.removed) v.remove(); })); EVM.list.length = 0; CITIES.forEach(C => C.evacuated = false);
+  for (const k in EVM.st) { const S = EVM.st[k]; S.gate = []; S.pax = 0; S.paxM = []; S.flyM = []; S.state = 'board'; if (S.kind === 'sea') { S.fx = 0; placeFerry(S); } if (S.plane) { S.F = null; placeMilPlane(S); } }
+  return _setupBattle12(battle);
+};
 
-</html>
+</script>
