@@ -415,7 +415,7 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       <div class="lbl" style="margin-top:4px">Bevoorrading · tik op een eigen punt · onderweg kan de vijand het aanvallen</div>
       <div class="trow trow5"><button class="tb" data-tool="supLand"></button><button class="tb" data-tool="supSea"></button><button class="tb" data-tool="supAir"></button><button class="tb" data-tool="milconvoy"></button></div>
       <div class="lbl" style="margin-top:4px">Raketwerpers · rijden zelf naar de plek</div>
-      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button><button class="tb" data-tool="abmtruck"></button><button class="tb x" data-tool="mslswarm"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="mlrs"></button><button class="tb" data-tool="shahed"></button><button class="tb" data-tool="tel"></button><button class="tb" data-tool="abmtruck"></button><button class="tb x" data-tool="mslswarm"></button><button class="tb x" data-tool="tsar"></button></div>
       <div class="lbl" style="margin-top:4px">Vloot · tik op zee</div>
       <div class="trow trow5"><button class="tb" data-tool="destroyer"></button><button class="tb" data-tool="sub"></button><button class="tb" data-tool="carrier"></button><button class="tb" data-tool="battleship"></button></div>
       <div class="lbl" style="margin-top:4px">Bouwen · muren staan dwars op je kijkrichting</div>
@@ -7285,6 +7285,129 @@ civsInRadius = function (p, r, team) {
   const hs = CIV.list.filter(c => c.kind === 'hostage' && c.alive); hs.forEach(c => c.alive = false);
   try { _civsIn2(p, r, team); } finally { hs.forEach(c => { c.alive = true; }); }
 };
+
+// ================= TSAR BOMBA: THE BIGGEST NUKE, LAUNCHED FROM THE SEA =================
+Object.assign(COST, { tsar: 20000 });
+KINDS.tsar = { label: '☢ TSAR BOMBA', sub: 'vernietigt alles' };
+UNAME.tsar = ['Tsar Bomba', 'Tsar Bomba’s'];
+const TSAR = { R: 2600, fx: [], noTickets: false, flying: null };
+const _ticketLoss2 = ticketLoss;
+ticketLoss = function (u) { if (TSAR.noTickets) return; return _ticketLoss2(u); };
+// ---- confirmation ----
+function askTsar(p, team) {
+  if (document.getElementById('tsarAsk')) return;
+  const d = document.createElement('div'); d.id = 'tsarAsk';
+  d.innerHTML = `<div><h3>☢ TSAR BOMBA LANCEREN?</h3><p>De grootste kernbom ooit. Een raket stijgt op uit de zee en vernietigt <b>alles</b> binnen ${(TSAR.R / 1000).toFixed(1)} km van het doel: vijanden, <b>je eigen leger</b>, steden, bossen en burgers. Daarna is het gebied jarenlang radioactief.</p><div class="row"><button class="main" id="tsGo">☢ LANCEER</button><button id="tsNo">Annuleer</button></div></div>`;
+  document.body.appendChild(d);
+  d.querySelector('#tsNo').onclick = () => d.remove();
+  d.querySelector('#tsGo').onclick = () => { d.remove(); if (!pay('tsar', team)) return; launchTsar(team, p); setTool(null); };
+}
+{
+  const st = document.createElement('style');
+  st.textContent = `#tsarAsk{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(20,2,0,.7)}
+#tsarAsk>div{max-width:min(420px,calc(100vw - 32px));background:#1a0b08;border:2px solid #e2543c;padding:16px 18px;font:500 14px/1.45 var(--display);color:#ffd9d2;box-shadow:0 0 40px rgba(226,84,60,.5)}
+#tsarAsk h3{margin:0 0 8px;color:#ff6a4a;letter-spacing:.06em} #tsarAsk .row{display:flex;gap:8px;margin-top:12px}
+#tsarAsk button{appearance:none;cursor:pointer;font:700 14px var(--display);padding:10px 14px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);color:#fff}
+#tsarAsk button.main{background:#c62828;border-color:#ff6a4a}
+#tsarBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(120px + env(safe-area-inset-top,0px));z-index:9;background:rgba(80,8,4,.9);border:1px solid #ff6a4a;padding:7px 14px;font:700 14px var(--display);color:#fff;letter-spacing:.05em;animation:tsb 1s infinite}
+@keyframes tsb{50%{background:rgba(160,20,8,.95)}}`;
+  document.head.appendChild(st);
+  const b = document.createElement('div'); b.id = 'tsarBar'; b.hidden = true; document.body.appendChild(b);
+}
+// ---- launch: the missile breaks out of the sea ----
+function launchTsar(team, target) {
+  const z = (team ? -1 : 1) * WORLD * .3, sp = seaSpot(SEA_X, z), fake = { pos: new V3(sp.x, WATER, sp.z), groundY: WATER - 2, team, variant: 'tsar' };
+  for (let i = 0; i < 60; i++) spawnP(new V3(sp.x + rnd(-20, 20), WATER, sp.z + rnd(-20, 20)), { tex: smokeTex, must: true, color: 0xf2f6f7, op: .85, size: rnd(10, 22), grow: 2, life: rnd(4, 8), vel: new V3(rnd(-10, 10), rnd(10, 45), rnd(-10, 10)), drag: .8, grav: -6 });
+  const af = addFeed, sr = siren; addFeed = () => { }; siren = () => { };
+  let S; try { S = _launchICBM5Safe(fake, target); } finally { addFeed = af; siren = sr; }
+  if (!S) return;
+  S.tsar = true; S.engaged = 99; S.T = 34; S.ctrl.y += 2500; S.mesh.scale.set(3, 3, 3.2); S.mesh.material = mat(0x2b2f2a);
+  if (FOL.pr === S) { FOL.kind = 'TSAR'; FOL.big = true; FOL.always = true; }
+  TSAR.flying = S; document.getElementById('tsarBar').hidden = false;
+  addFeed(null, null, team === CMD.team ? '☢☢☢ TSAR BOMBA steekt uit de zee op! Iedereen in de buurt van het doel is verloren' : '⚠⚠⚠ VIJANDELIJKE TSAR BOMBA GELANCEERD!'); siren(); setTimeout(siren, 9000);
+  Snd.burst(fake.pos, { f: 140, type: 'lowpass', dur: 6, vol: 1.6, thump: 1.5, tf: 30, brown: true, rng: 8000 });
+}
+function _launchICBM5Safe(silo, target) { return launchICBM(silo, target, false); }
+// ---- impact ----
+function tsarAt(p, team) {
+  const g = Math.max(getH(p.x, p.z), WATER); p = new V3(p.x, g, p.z); const R = TSAR.R;
+  const fl = document.getElementById('nukeFlash'); fl.style.transition = 'none'; fl.style.opacity = 1; setTimeout(() => { fl.style.transition = 'opacity 9s ease-out'; fl.style.opacity = 0; }, 900);
+  // everything dies: units (both sides), civilians, buildings, forests
+  TSAR.noTickets = true;
+  try {
+    for (const u of units.slice()) { if (!u.alive) continue; const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z); if (d < R) u.damage(1e7, null, 'nuke', p); }
+    civsInRadius(p, R, team);
+    if (typeof damageBuildings === 'function') damageBuildings(p, R, 1e9);
+    TREES.forEach((t, i) => { const dx = t.x - p.x, dz = t.z - p.z; if (dx * dx + dz * dz < R * R) knockTree(t, i, dx || .1, dz || .1); });
+  } finally { TSAR.noTickets = false; }
+  POINTS.forEach(q => { if (Math.hypot(q.x - p.x, q.z - p.z) < R) { q.owner = -1; q.prog = 0; q.lastOwner = -1; paintPoint(q); } });
+  RADS.push({ p: p.clone(), r: R * .75, t: 300 });
+  scorch(p, 420);
+  // the usual nuclear blast as a core, plus a giant fireball, cap and shock waves on top
+  const n0 = NUKEFX.length; nukeAt(p, team);
+  const fire = new THREE.Mesh(_nkSphere, new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  const cap = new THREE.Mesh(_nkSphere, new THREE.MeshLambertMaterial({ color: 0x7e6250, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  const stem = new THREE.Mesh(_nkStem, new THREE.MeshLambertMaterial({ color: 0x75604f, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  const skirt = new THREE.Mesh(_nkSphere, new THREE.MeshLambertMaterial({ color: 0xb8aa98, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  [fire, cap, stem, skirt].forEach(m => { m.position.copy(p); m.scale.setScalar(.01); m.renderOrder = 4; scene.add(m); });
+  TSAR.fx.push({ p: p.clone(), t: 0, fire, cap, stem, skirt });
+  for (const [Rr, h] of [[9000, 0], [6000, 300], [4200, 1400], [2800, 2600]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: .85, depthWrite: false, side: THREE.DoubleSide, fog: false })); ring.position.set(p.x, p.y + 2 + h, p.z); scene.add(ring); shockRings.push({ m: ring, t: 0, R: Rr }); }
+  for (let k = 0; k < 160; k++) { const a = rnd(0, TAU); spawnP(p.clone().add(new V3(0, 10, 0)), { tex: smokeTex, must: true, color: 0x9a8a72, op: .9, size: 160, grow: 3, life: rnd(18, 30), vel: new V3(Math.cos(a) * 420, rnd(5, 30), Math.sin(a) * 420), drag: .35 }); }
+  Snd.burst(p, { f: 90, type: 'lowpass', dur: 16, vol: 3, thump: 3.5, tf: 18, brown: true, rng: 20000 });
+  shake = 6; slowMo(3);
+  sun.intensity *= 2.2; setTimeout(() => { sun.intensity /= 2.2; }, 2500);
+  document.getElementById('tsarBar').hidden = true; TSAR.flying = null;
+  addFeed(null, null, `☢☢☢ TSAR BOMBA · 50 megaton · alles binnen ${(R / 1000).toFixed(1)} km is vernietigd`);
+}
+function updateTsarFx(dt) {
+  for (let i = TSAR.fx.length - 1; i >= 0; i--) {
+    const N = TSAR.fx[i]; N.t += dt; const t = N.t, P = N.p;
+    const fr = 950 * (1 - Math.exp(-t * .9)), rise = Math.min(3600, t * t * 22 + t * 60);
+    N.fire.scale.setScalar(Math.max(.01, fr)); N.fire.position.set(P.x, P.y + fr * .5 + rise, P.z);
+    const heat = Math.min(1, t / 10); N.fire.material.color.setRGB(1, lerp(.97, .32, heat), lerp(.85, .05, heat)); N.fire.material.opacity = clamp(1.15 - t / 16, 0, 1);
+    const ct = clamp((t - 3) / 22, 0, 1), cy = P.y + Math.min(4200, 500 + rise);
+    N.cap.position.set(P.x, cy, P.z); N.cap.scale.set(500 + 1500 * ct, 260 + 650 * ct, 500 + 1500 * ct);
+    N.cap.material.opacity = t < 3 ? 0 : t < 9 ? (t - 3) / 6 * .9 : clamp(.9 - (t - 80) / 40, 0, .9);
+    N.stem.position.set(P.x, P.y, P.z); N.stem.scale.set(260 + 260 * ct, Math.max(1, cy - P.y - 150), 260 + 260 * ct);
+    N.stem.material.opacity = t < 2 ? 0 : t < 7 ? (t - 2) / 5 * .6 : clamp(.6 - (t - 75) / 40, 0, .6);
+    N.skirt.position.set(P.x, P.y + 40, P.z); N.skirt.scale.set(400 + 2400 * ct, 120 + 160 * ct, 400 + 2400 * ct);
+    N.skirt.material.opacity = t < 1.5 ? 0 : t < 6 ? (t - 1.5) / 4.5 * .55 : clamp(.55 - (t - 40) / 30, 0, .55);
+    if (t > 130) { [N.fire, N.cap, N.stem, N.skirt].forEach(m => { scene.remove(m); m.material.dispose(); }); TSAR.fx.splice(i, 1); }
+  }
+  const S = TSAR.flying; if (S) { if (!STRIKES.includes(S)) { TSAR.flying = null; document.getElementById('tsarBar').hidden = true; } else document.getElementById('tsarBar').textContent = `☢ TSAR BOMBA · INSLAG OVER ${Math.ceil(S.T * (1 - S.u))} s`; }
+}
+const _updateStrikes3 = updateStrikes;
+updateStrikes = function (dt) {
+  for (let i = STRIKES.length - 1; i >= 0; i--) { const S = STRIKES[i]; if (S.tsar && S.u + dt / S.T >= 1) { S.live = false; scene.remove(S.mesh); STRIKES.splice(i, 1); tsarAt(S.t.clone(), S.team); } }
+  _updateStrikes3(dt);
+};
+// camera: pull very far back to see the whole cloud
+const _updateFollow3 = updateFollow;
+updateFollow = function (dt) {
+  if (FOL.pr && FOL.kind === 'TSAR' && FOL.hit) {
+    if (!FOL.ts) { FOL.ts = 0; FOL.fogSave = [scene.fog.near, scene.fog.far]; } FOL.ts += dt; FOL.t = Math.min(FOL.t, 1);
+    const c = FOL.hit, a = (Math.hypot(c.x, c.z) > 200 ? Math.atan2(-c.z, -c.x) : .7) + FOL.ts * .02, gh = Math.max(getH(c.x, c.z), WATER), Rd = 5200;
+    FOL.cam.position.lerp(new V3(c.x + Math.cos(a) * Rd, gh + 900, c.z + Math.sin(a) * Rd), FOL.ts < .1 ? 1 : 1 - Math.exp(-dt * 1.2));
+    FOL.cam.lookAt(c.x, gh + 1900, c.z); scene.fog.near = 9000; scene.fog.far = 30000;
+    if (FOL.ts > 22) { FOL.pr = null; FOL.big = false; FOL.ts = 0; FOL.always = false; scene.fog.near = FOL.fogSave[0]; scene.fog.far = FOL.fogSave[1]; }
+    return;
+  }
+  return _updateFollow3(dt);
+};
+FOL.cam.far = 40000; FOL.cam.updateProjectionMatrix();
+// wiring
+const _placeAt11 = placeAt;
+placeAt = function (p) { if (tool && tool.kind === 'tsar') { if (ECO.on && ECO.money[tool.team] < COST.tsar) { flashTip(`De Tsar Bomba kost ◆ ${COST.tsar}`); return; } askTsar(p.clone(), tool.team); return; } _placeAt11(p); };
+const _updateWaves11 = updateWaves;
+updateWaves = function (dt) { _updateWaves11(dt); updateTsarFx(dt); };
+const _overlayTs = drawOverlay;
+drawOverlay = function (dt) {
+  _overlayTs(dt); const S = TSAR.flying; if (!S || state !== 'play' || BCW.unit) return;
+  const s = project(S.t); if (!s) return; const r = Math.max(60, TSAR.R * pxScale(S.t));
+  oc.strokeStyle = 'rgba(255,40,20,.9)'; oc.lineWidth = 4; oc.setLineDash([16, 8]); oc.beginPath(); oc.ellipse(s[0], s[1], r, r * .5, 0, 0, TAU); oc.stroke(); oc.setLineDash([]);
+};
+const _mmTs = drawMinimap;
+drawMinimap = function () { _mmTs(); const S = TSAR.flying; if (!S) return; const k = 392 / (2 * WORLD); mmc.strokeStyle = '#ff2814'; mmc.lineWidth = 4; mmc.setLineDash([8, 5]); mmc.beginPath(); mmc.arc((S.t.x + WORLD) * k, (S.t.z + WORLD) * k, TSAR.R * k, 0, TAU); mmc.stroke(); mmc.setLineDash([]); };
 
 </script>
 
