@@ -639,7 +639,7 @@ const smokeTex = canvasTex(128, (g, s) => {
 });
 
 // ---- terrain ----
-const N = MAP.world ? 320 : 256, CELL = 2 * WORLD / N, HGT = new Float32Array((N + 1) * (N + 1));
+const N = (MAP.world ? 320 : 256) - (SET.gfx === 'laag' ? 96 : 0), CELL = 2 * WORLD / N, HGT = new Float32Array((N + 1) * (N + 1));
 function getH(x, z) {
   const gx = clamp((x + WORLD) / CELL, 0, N - 0.001), gz = clamp((z + WORLD) / CELL, 0, N - 0.001);
   const ix = gx | 0, iz = gz | 0, fx = gx - ix, fz = gz - iz, i = iz * (N + 1) + ix;
@@ -7212,6 +7212,79 @@ updateWaves = function (dt) { _updateWaves10(dt); aiMslT -= dt; };
 // missiles of one swarm don't blow each other up
 const _dDamage2 = Drone.prototype.damage;
 Drone.prototype.damage = function (n, src, kind, p) { if (this.variant === 'cruise' && src && src.team === this.team && src.type === 'drone') return; return _dDamage2.call(this, n, src, kind, p); };
+
+// ================= PERFORMANCE: merge scenery, cull far-away small units, lighter effects on weak machines =================
+QUALITY.low = SET.gfx === 'laag';
+// ---- 1. merge all static scenery (hospitals, harbours, airports, flags poles, decor) into a few big meshes ----
+(function mergeStatic() {
+  const excl = new Set([camera]);
+  units.forEach(u => excl.add(u.group));
+  HOSP.forEach(H => excl.add(H.roof));
+  POINTS.forEach(p => { excl.add(p.ring); excl.add(p.flag); if (p.aaGun) excl.add(p.aaGun); if (p.dish) excl.add(p.dish); });
+  FLAGS.forEach(f => excl.add(f)); AIRDEFS.forEach(a => { if (a.jet) excl.add(a.jet); });
+  if (camera.userData.sky) excl.add(camera.userData.sky);
+  if (typeof BATTERIES !== 'undefined') BATTERIES.forEach(gs => gs.forEach(gn => { if (gn.g) excl.add(gn.g); }));
+  const buckets = new Map(), CELL = 500, wp = new V3(), victims = [];
+  const visit = (o, ok) => {
+    if (excl.has(o) || !o.visible) return;
+    if (o.isMesh && !o.isInstancedMesh && ok) {
+      const m = o.material;
+      if (m && !Array.isArray(m) && !m.map && !m.transparent && m.opacity === 1 && (m.type === 'MeshLambertMaterial' || m.type === 'MeshStandardMaterial' || m.type === 'MeshBasicMaterial') && o.geometry && o.geometry.attributes.position && !o.userData.dynamic) {
+        o.updateWorldMatrix(true, false); o.getWorldPosition(wp);
+        const key = (m.type === 'MeshBasicMaterial' ? 'B' : 'L') + (m.side === THREE.DoubleSide ? 'd' : 's') + Math.floor(wp.x / CELL) + ',' + Math.floor(wp.z / CELL) + (o.castShadow ? 'c' : 'n');
+        (buckets.get(key) || buckets.set(key, []).get(key)).push(o); victims.push(o);
+      }
+    }
+    for (const c of o.children.slice()) visit(c, ok);
+  };
+  for (const c of scene.children.slice()) visit(c, true);
+  let made = 0;
+  for (const [key, list] of buckets) {
+    if (list.length < 2) continue;
+    const P = [], Nn = [], C = [], col = new THREE.Color();
+    for (const o of list) {
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (!g.attributes.normal) g.computeVertexNormals();
+      const p = g.attributes.position.array, n = g.attributes.normal.array, vc = o.material.vertexColors && g.attributes.color ? g.attributes.color.array : null; col.copy(o.material.color || new THREE.Color(1, 1, 1));
+      for (let i = 0; i < p.length; i++) { P.push(p[i]); Nn.push(n[i]); }
+      for (let i = 0; i < p.length / 3; i++) { if (vc) C.push(vc[i * 3] * col.r, vc[i * 3 + 1] * col.g, vc[i * 3 + 2] * col.b); else C.push(col.r, col.g, col.b); }
+      g.dispose();
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); geo.computeBoundingSphere();
+    const mt = key[0] === 'B' ? new THREE.MeshBasicMaterial({ vertexColors: true, side: key[1] === 'd' ? THREE.DoubleSide : THREE.FrontSide }) : new THREE.MeshLambertMaterial({ vertexColors: true, side: key[1] === 'd' ? THREE.DoubleSide : THREE.FrontSide });
+    const mm = new THREE.Mesh(geo, mt); mm.castShadow = key.endsWith('c'); mm.receiveShadow = true; scene.add(mm); made++;
+    for (const o of list) if (o.parent) o.parent.remove(o);
+  }
+  window.MERGED = { from: victims.length, into: made };
+})();
+// ---- 2. small units far from the camera are not drawn (they are tiny dots there anyway) ----
+const CULL = { soldier: 700, convoy: 1100, drone: 1300 };
+const _renderMain5 = renderMain;
+renderMain = function (dt) {
+  const cp = camera.position, low = QUALITY.low, mul = low ? .7 : 1;
+  for (const u of units) {
+    const lim = CULL[u.type]; if (!lim || u.hidden || u === PZ.unit || u === BCW.unit || u.swarm) continue;
+    const dx = u.pos.x - cp.x, dz = u.pos.z - cp.z, dy = u.pos.y - cp.y, L = lim * mul;
+    u.group.visible = dx * dx + dy * dy + dz * dz < L * L;
+  }
+  // very slow machine: drop the resolution further than the normal auto setting does
+  if (!QUALITY.noAuto && typeof perf !== 'undefined' && perf.fps && perf.fps < 26 && (state === 'play' || state === 'possess')) {
+    PERF2.t -= dt; if (PERF2.t <= 0) { PERF2.t = 2; QUALITY.low = true; if (QUALITY.pr > .42) { QUALITY.pr = Math.max(.42, QUALITY.pr - .08); renderer.setPixelRatio(QUALITY.pr); resize(); } }
+  }
+  return _renderMain5(dt);
+};
+const PERF2 = { t: 2 };
+// ---- 3. fewer effect particles and civilians on low settings ----
+const _spawnP2 = spawnP;
+spawnP = function (p, o) { if (QUALITY.low && !o.must && Math.random() < .55) return; return _spawnP2(p, o); };
+const _initCiv2 = initCivilians;
+initCivilians = function () { _initCiv2(); if (QUALITY.low) { CIV.list.length = Math.min(CIV.list.length, 170); CIV.max = CIV.list.length; } };
+// hostages only die from heavy explosions (bombs, shells), not from the rockets and grenades of a room-by-room fight
+const _civsIn2 = civsInRadius;
+civsInRadius = function (p, r, team) {
+  if (r >= 25) return _civsIn2(p, r, team);
+  const hs = CIV.list.filter(c => c.kind === 'hostage' && c.alive); hs.forEach(c => c.alive = false);
+  try { _civsIn2(p, r, team); } finally { hs.forEach(c => { c.alive = true; }); }
+};
 
 </script>
 
