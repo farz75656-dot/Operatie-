@@ -8736,12 +8736,12 @@ const OILC = { light: 3, mbt: 4, heavy: 5, aa: 3, fighter: 6, bomber: 6, nukebom
 const _payZ = pay;
 pay = function (kind, team) {
   const o = ZM.on && team === ZM.team ? OILC[kind] : 0;
-  if (o && ZM.res.oil < o) { flashTip(`Niet genoeg olie: ⛽ ${o} nodig, je hebt ${Math.floor(ZM.res.oil)} · je oliepompen leveren 6 per minuut, bevoorradingsteams brengen meer`); return false; }
+  if (o && ZM.res.oil < o) { flashTip(`Niet genoeg olie: ⛽ ${o} nodig, je hebt ${Math.floor(ZM.res.oil)} · je oliepompen leveren 15 per minuut, bevoorradingsteams brengen meer`); return false; }
   const ok = _payZ(kind, team); if (ok && o) ZM.res.oil -= o; return ok;
 };
 function zmEconomySecond() {
   const R = ZM.res, T = ZM.team, sold = units.reduce((a, u) => a + (u.alive && u.team === T && u.type === 'soldier' ? 1 : 0), 0), civ = EVM.st['isle' + T] ? EVM.st['isle' + T].saved : 0;
-  R.food = clamp(R.food + 12 / 60 - (sold * .2 + civ * .08) / 60, 0, 600); R.oil = Math.min(300, R.oil + 6 / 60); R.coal = Math.min(300, R.coal + 6 / 60);
+  R.food = clamp(R.food - (sold * .2 + civ * .08) / 60, 0, 600);   // production comes from the island's farm and mines (every 20 s)
   ZM.need = (sold * .2 + civ * .08);
   if (ZM.cured) return;
   const L = ISL.lab; ZM.stat = L.hp <= 0 ? 'labo vernietigd' : R.med <= 0 ? 'geen medische voorraad · stuur een 🔍 bevoorradingsteam' : R.coal <= 0 ? 'geen kolen voor de stroom' : R.food <= 0 ? 'geen eten · de onderzoekers kunnen niet werken' : ZM.list.some(z => z.alive && z.isle) ? 'zombies op het eiland · onderzoek ligt stil' : '';
@@ -8753,7 +8753,7 @@ function zmEconomySecond() {
   }
 }
 const _incomeZ = income;
-income = function (t) { let v = _incomeZ(t); if (ZM.on) { if (t !== ZM.team) return 0; v *= .22; if (ZM.res.food <= 0) v *= .5; } else if (ECO.on && t === ISL.team) v += 6; return v; };
+income = function (t) { let v = _incomeZ(t); if (ZM.on) { if (t !== ZM.team) return 0; v *= .22; if (ZM.res.food <= 0) v *= .5; } return v; };
 // ---------- supply teams: a Blackhawk drops four soldiers in a city, they search and fly back with what they found ----------
 function startScav(C, team) {
   const pad = ISL.pads[3 + (ZM.scavN++ % 3)], M = { C, S: { x: ISLE.x, z: ISLE.z }, team }; pickSetup(M); const L = atPick(M, 44, rnd(-18, 18));
@@ -8905,7 +8905,7 @@ function updateZmBox(dt) {
 <div>🧪 Geneesmiddel <b>${Math.floor(ZM.cure)}%</b><span class="bar"><i style="width:${ZM.cure}%"></i></span>${ZM.cured ? 'wordt verspreid…' : ZM.stat ? `<span class="w">⚠ ${ZM.stat}</span>` : 'onderzoek loopt'}</div>
 <div class="res"><span class="${R.food < 10 ? 'low' : ''}">🍞 ${f(R.food)}</span><span class="${R.oil < 6 ? 'low' : ''}">⛽ ${f(R.oil)}</span><span class="${R.coal < 5 ? 'low' : ''}">⛏ ${f(R.coal)}</span><span class="${R.med < 3 ? 'low' : ''}">💊 ${f(R.med)}</span></div>
 <div>🧟 <b>${zAlive()}</b> zombies · <b>${ZM.kills}</b> gedood${bad ? ` · ☣ ${bad} punten besmet` : ''}</div>
-<div>🏥 Labo ${Math.max(0, Math.round(L.hp / L.max * 100))}% · eten −${(ZM.need || 0).toFixed(0)}/+12 per min</div>`}`;
+<div>🏥 Labo ${Math.max(0, Math.round(L.hp / L.max * 100))}% · eten +${Math.round((typeof HARV !== 'undefined' && HARV.food || 6) * 3)} / −${(ZM.need || 0).toFixed(0)} per min</div>`}`;
   if (html !== ZM.sig) { ZM.sig = html; ZM.box.innerHTML = html; } ZM.box.hidden = false;
 }
 const _updateEcoHudZ = updateEcoHud;
@@ -9026,12 +9026,13 @@ const flyer = (team, name) => ({ team, type: 'jet', alive: true, hidden: false, 
 function a10Run(team, p) {
   const c = new V3(p.x, Math.max(getH(p.x, p.z), WATER), p.z), sz = team ? -WORLD - 250 : WORLD + 250, sx = clamp(p.x * .6 + rnd(-300, 300), -WORLD * .85, WORLD * .85);
   const pos = new V3(sx, Math.max(c.y + 240, getH(sx, clamp(sz, -WORLD, WORLD)) + 140), sz), g = buildA10(team); g.position.copy(pos);
-  A10S.push({ g, pos, c, team, t: 0, st: 'in', dir: new V3(c.x - sx, 0, c.z - sz).normalize(), cd: 0, n: 0, rk: 4, owner: flyer(team, 'A-10') });
+  A10S.push({ g, pos, c, team, t: 0, st: 'in', ammo: 1150, rkMax: 8, dir: new V3(c.x - sx, 0, c.z - sz).normalize(), cd: 0, n: 0, rk: 4, owner: flyer(team, 'A-10') });
   if (team === CMD.team) addFeed(null, null, '✈ A-10 duikt naar het doel'); else if (typeof radarNote === 'function') radarNote('📡 RADAR: vijandelijke A-10 in aantocht', c);
 }
 function updateA10s(dt) {
   for (let i = A10S.length - 1; i >= 0; i--) {
-    const A = A10S[i], p = A.pos, hd = Math.hypot(A.c.x - p.x, A.c.z - p.z); A.t += dt; A.owner.pos.copy(p);
+    const A = A10S[i]; if (A.player) { if (updateA10Player(A, dt)) { scene.remove(A.g); A10S.splice(i, 1); } continue; }
+    const p = A.pos, hd = Math.hypot(A.c.x - p.x, A.c.z - p.z); A.t += dt; A.owner.pos.copy(p);
     let want;
     if (A.st === 'in') { const gnd = Math.max(getH(p.x, p.z), getH(p.x + A.dir.x * 150, p.z + A.dir.z * 150), WATER); want = hd < 950 ? A.c.clone().add(new V3(0, 6, 0)).sub(p).normalize() : new V3(A.c.x - p.x, (Math.max(A.c.y + 240, gnd + 120) - p.y) * 2, A.c.z - p.z).normalize(); if (hd < 190 || (hd < 600 && p.y < gnd + 40)) A.st = 'out'; }
     else want = new V3(A.dir.x, .32, A.dir.z).normalize();
@@ -9055,21 +9056,21 @@ function updateA10s(dt) {
 // ---------- AC-130 gunship: circles the target for a minute ----------
 function gunship(team, p) {
   const c = new V3(p.x, Math.max(getH(p.x, p.z), WATER), p.z), g = buildCargoPlane(team); g.scale.setScalar(1.25);
-  const a = team ? -Math.PI / 2 : Math.PI / 2, G = { g, c, team, a: a + 1.2, t: -14, cd25: 0, n25: 0, cd40: 1, cd105: 3, imp: [], owner: flyer(team, 'gunship'), foes: [], fT: 0 };
+  const a = team ? -Math.PI / 2 : Math.PI / 2, G = { g, c, team, a: a + 1.2, t: -14, dur: 60, ammo: [1800, 100, 24], cd25: 0, n25: 0, cd40: 1, cd105: 3, imp: [], owner: flyer(team, 'gunship'), foes: [], fT: 0 };
   GUNS.push(G); gunPos(G);
   if (team === CMD.team) addFeed(null, null, '✈ AC-130 gunship onderweg · het cirkelt 60 seconden boven het doel'); else if (typeof radarNote === 'function') radarNote('📡 RADAR: vijandelijk gunship in aantocht', c);
 }
 function gunPos(G) {
-  const R = 330, far = G.t < 0 ? -G.t * 95 : G.t > 60 ? (G.t - 60) * 95 : 0, tang = new V3(-Math.sin(G.a), 0, Math.cos(G.a));
+  const R = 330, far = G.t < 0 ? -G.t * 95 : G.t > G.dur ? (G.t - G.dur) * 95 : 0, tang = new V3(-Math.sin(G.a), 0, Math.cos(G.a));
   const p = new V3(G.c.x + Math.cos(G.a) * R, G.c.y + 285, G.c.z + Math.sin(G.a) * R).addScaledVector(tang, G.t < 0 ? -far : far);
   G.g.position.copy(p); G.g.rotation.set(0, Math.atan2(tang.x, tang.z), far ? 0 : .38, 'YXZ'); G.owner.pos.copy(p); return p;
 }
 function updateGunships(dt) {
   for (let i = GUNS.length - 1; i >= 0; i--) {
-    const G = GUNS[i]; G.t += dt; if (G.t >= 0 && G.t <= 60) G.a += 95 / 330 * dt; const p = gunPos(G);
+    const G = GUNS[i]; G.t += dt; if (G.t >= 0 && G.t <= G.dur) G.a += 95 / 330 * dt; const p = gunPos(G);
     for (let k = G.imp.length - 1; k >= 0; k--) { const I = G.imp[k]; I.t -= dt; if (I.t <= 0) { G.imp.splice(k, 1); explosion(I.p.clone().add(new V3(0, 1, 0)), 2.3, { r: 10 }); applyBlast(I.p, 17, 430, G.owner); } }
-    if (G.t > 80) { scene.remove(G.g); GUNS.splice(i, 1); continue; }
-    if (G.t < 1 || G.t > 60) continue;
+    if (G.t > G.dur + 20) { scene.remove(G.g); GUNS.splice(i, 1); continue; }
+    if (G.t < 1 || G.t > G.dur || G.player) continue;
     G.fT -= dt; if (G.fT <= 0) { G.fT = .5; G.foes = units.filter(u => u.alive && u.team !== G.team && !u.hidden && !isAirT(u) && u.type !== 'drone' && !(u.type === 'struct' && u.noTarget) && Math.hypot(u.pos.x - G.c.x, u.pos.z - G.c.z) < 210); }
     const F = G.foes.filter(u => u.alive); if (!F.length) continue;
     const from = p.clone().add(new V3(0, -2, 0));
@@ -9182,5 +9183,293 @@ body.touch #cashBtn{top:2px;padding:2px 6px;font-size:10px}`;
   document.head.appendChild(st);
   document.addEventListener('click', e => { if (e.target && e.target.id === 'cashBtn') { ECO.money[CMD.team] = 1e14; refreshTools(true); updateEcoHud(); addFeed(null, null, '💰 Je hebt nu ◆ 100 biljoen'); } });
 }
+
+// ================= FOLLOW CAMERA ON/OFF · FLY THE AC-130 AND THE A-10 YOURSELF · ISLAND HARVESTS =================
+// ---------- the follow camera can be switched off ----------
+const FOLLOW = { on: true };
+try { if (localStorage.getItem('os_follow') === '0') FOLLOW.on = false; } catch (e) { }
+function stopFollow() {
+  if ((FOL.nk || FOL.ts) && FOL.fogSave) { scene.fog.near = FOL.fogSave[0]; scene.fog.far = FOL.fogSave[1]; }
+  FOL.pr = null; FOL.big = false; FOL.always = false; FOL.hit = null; FOL.nk = 0; FOL.ts = 0; pipEl.hidden = true;
+}
+const _updFolF = updateFollow;
+updateFollow = function (dt) { if (!FOLLOW.on || CTL.on) { if (FOL.pr) stopFollow(); return; } return _updFolF(dt); };
+function setFollow(on, quiet) {
+  FOLLOW.on = on; try { localStorage.setItem('os_follow', on ? '1' : '0'); } catch (e) { }
+  const b = document.getElementById('btnFollow'); if (b) { b.classList.toggle('off', !on); b.title = on ? 'Volgcamera staat aan (tik = uit)' : 'Volgcamera staat uit (tik = aan)'; }
+  if (!on) stopFollow();
+  if (!quiet) addFeed(null, null, on ? '🎥 Volgcamera AAN · bommen, raketten en kernwapens worden gevolgd' : '🎥 Volgcamera UIT · je blijft in je eigen beeld');
+}
+{
+  const st = document.createElement('style');
+  st.textContent = `.vb.off{opacity:.45;text-decoration:line-through} #pip .pipX{position:absolute;right:4px;top:3px;width:26px;height:26px;display:grid;place-items:center;font:700 15px var(--display);color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);cursor:pointer;pointer-events:auto}
+#pip.big .pipX{width:40px;height:40px;font-size:20px;right:12px;top:calc(12px + env(safe-area-inset-top,0px))}`;
+  document.head.appendChild(st);
+  const vb = document.getElementById('viewBtns');
+  if (vb) { const b = document.createElement('button'); b.className = 'vb'; b.id = 'btnFollow'; b.textContent = '🎥'; b.onclick = e => { e.stopPropagation(); setFollow(!FOLLOW.on); }; vb.appendChild(b); }
+  const x = document.createElement('b'); x.className = 'pipX'; x.textContent = '✕'; x.title = 'Stop met volgen'; pipEl.appendChild(x);
+  x.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stopFollow(); });
+  addEventListener('keydown', e => { if (!e.repeat && e.code === 'KeyO' && !CTL.on) setFollow(!FOLLOW.on); });
+  setFollow(FOLLOW.on, true);
+}
+// ---------- flying the gunship and the A-10 ----------
+const CTL = { on: false, kind: null, obj: null, aim: new V3(), cam: new THREE.PerspectiveCamera(22, 1.6, 1, 9000), fov: 22, w: 0, fire: false, drag: null, hudWasHidden: false, cd: [0, 0, 0], rk: false, msg: '', msgT: 0, keys: {}, sndT: 0 };
+scene.add(CTL.cam);
+const GSW = [{ n: '25 mm', k: '1' }, { n: '40 mm', k: '2' }, { n: '105 mm', k: '3' }];
+{
+  const st = document.createElement('style');
+  st.textContent = `#ctlPad{position:fixed;inset:0;z-index:40;touch-action:none;cursor:crosshair}
+#ctlUI{position:fixed;inset:0;z-index:41;pointer-events:none;font:700 13px var(--display);color:#e8f4e0}
+#ctlUI button{pointer-events:auto;appearance:none;cursor:pointer;font:700 13px var(--display);color:#fff;background:rgba(10,14,8,.6);border:1px solid rgba(255,255,255,.35);padding:9px 12px}
+#ctlUI .tl{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:8px}
+#ctlUI .br{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+#ctlUI .row{display:flex;gap:6px} #ctlUI .w.on{background:rgba(233,185,73,.35);border-color:var(--amber)}
+#ctlUI .fire{width:96px;height:96px;border-radius:50%;background:rgba(198,40,40,.55);border:2px solid #ff6a4a;font-size:15px}
+#ctlUI .fire.down{background:rgba(255,90,60,.85)}
+#ctlUI .help{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:500 12px var(--display);color:rgba(232,244,224,.75);text-align:center;max-width:60vw}
+body.touch #ctlUI .help{display:none}
+#ctlBtn{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom,0px));appearance:none;cursor:pointer;font:700 14px var(--display);color:#fff;background:rgba(40,60,20,.9);border:1px solid #9cc46b;padding:9px 14px;box-shadow:0 2px 14px rgba(0,0,0,.4)}`;
+  document.head.appendChild(st);
+  const pad = document.createElement('div'); pad.id = 'ctlPad'; pad.hidden = true; document.body.appendChild(pad);
+  const ui = document.createElement('div'); ui.id = 'ctlUI'; ui.hidden = true; document.body.appendChild(ui);
+  const cb = document.createElement('button'); cb.id = 'ctlBtn'; cb.hidden = true; document.body.appendChild(cb);
+  cb.onclick = () => { const o = ctlCandidate(); if (o) ctlEnter(o.kind, o.obj); };
+  CTL.pad = pad; CTL.ui = ui; CTL.btn = cb;
+  // pointer: drag moves the aim; on a computer the mouse is captured and simply moves the aim
+  pad.addEventListener('pointerdown', e => {
+    e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (er) { }
+    if (e.pointerType === 'mouse') {
+      if (!document.pointerLockElement && pad.requestPointerLock) { try { const r = pad.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (er) { } }
+      if (e.button === 0) CTL.fire = true; return;
+    }
+    CTL.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  });
+  pad.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse') { if (document.pointerLockElement === pad) ctlMoveAim(e.movementX, e.movementY); else if (e.buttons & 2) ctlMoveAim(e.movementX, e.movementY); return; }
+    const D = CTL.drag; if (!D || D.id !== e.pointerId) return; ctlMoveAim((e.clientX - D.x) * 1.3, (e.clientY - D.y) * 1.3); D.x = e.clientX; D.y = e.clientY;
+  });
+  const up = e => { if (e.pointerType === 'mouse') { if (e.button === 0) CTL.fire = false; return; } if (CTL.drag && CTL.drag.id === e.pointerId) CTL.drag = null; };
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
+  pad.addEventListener('contextmenu', e => e.preventDefault());
+  pad.addEventListener('wheel', e => { e.preventDefault(); ctlZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+  // keyboard while flying: captured before the normal game keys
+  addEventListener('keydown', e => {
+    if (!CTL.on) return; const c = e.code; let used = true;
+    if (c === 'Escape' || c === 'KeyX') ctlExit(true);
+    else if (c === 'Space') CTL.fire = true;
+    else if (c === 'Digit1' || c === 'Digit2' || c === 'Digit3') { if (CTL.kind === 'gunship') CTL.w = +c.slice(-1) - 1; else if (c === 'Digit2') CTL.rk = true; }
+    else if (c === 'KeyR' && CTL.kind === 'a10') CTL.rk = true;
+    else if (c === 'KeyQ' || c === 'Minus' || c === 'NumpadSubtract') ctlZoom(1.15); else if (c === 'KeyE' || c === 'Equal' || c === 'NumpadAdd') ctlZoom(1 / 1.15);
+    else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(c)) CTL.keys[c] = true;
+    else used = false;
+    if (used) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  addEventListener('keyup', e => { if (!CTL.on) return; if (e.code === 'Space') CTL.fire = false; if (CTL.keys[e.code]) { CTL.keys[e.code] = false; e.stopImmediatePropagation(); } }, true);
+  document.addEventListener('pointerlockchange', () => { if (CTL.on && !document.pointerLockElement) CTL.fire = false; });
+}
+function ctlZoom(f) { CTL.fov = clamp(CTL.fov * f, CTL.kind === 'gunship' ? 5 : 30, CTL.kind === 'gunship' ? 48 : 75); }
+function ctlMoveAim(dx, dy) {
+  const camP = CTL.cam.position, d = camP.distanceTo(CTL.aim), k = 2 * d * Math.tan(CTL.fov * Math.PI / 360) / innerHeight;
+  const f = new V3(); CTL.cam.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-4) f.set(0, 0, 1); f.normalize(); const r = new V3(-f.z, 0, f.x);
+  CTL.aim.addScaledVector(r, dx * k).addScaledVector(f, -dy * k * 1.4);
+  ctlClampAim();
+}
+function ctlClampAim() {
+  const a = CTL.aim, o = CTL.obj; if (!o) return;
+  if (CTL.kind === 'gunship') { const dx = a.x - o.c.x, dz = a.z - o.c.z, d = Math.hypot(dx, dz); if (d > 520) { a.x = o.c.x + dx / d * 520; a.z = o.c.z + dz / d * 520; } }
+  a.x = clamp(a.x, -WORLD + 30, XMAX - 30); a.z = clamp(a.z, -WORLD + 30, WORLD - 30); a.y = Math.max(getH(a.x, a.z), WATER);
+}
+function ctlCandidate() {
+  const g = GUNS.find(G => G.team === CMD.team && G.t < G.dur - 2); if (g) return { kind: 'gunship', obj: g };
+  const a = A10S.find(A => A.team === CMD.team && !A.leaving && A.t < 140); if (a) return { kind: 'a10', obj: a };
+  return null;
+}
+function ctlEnter(kind, obj) {
+  if (CTL.on) ctlExit(false); if (state !== 'play') return;
+  CTL.on = true; CTL.kind = kind; CTL.obj = obj; obj.player = true; CTL.fire = false; CTL.rk = false; CTL.drag = null; CTL.keys = {}; CTL.w = 0; CTL.cd = [0, 0, 0];
+  CTL.fov = kind === 'gunship' ? 22 : 60; CTL.aim.copy(obj.c); ctlClampAim();
+  if (kind === 'gunship') { obj.dur = Math.max(obj.dur, 95); CTL.cam.position.copy(obj.g.position); }
+  else { obj.st = obj.st === 'out' ? 'turn' : obj.st; CTL.cam.position.copy(obj.pos).addScaledVector(obj.dir, -40); }
+  stopFollow(); sel.clear();
+  const hud = document.getElementById('hud'); CTL.hudWasHidden = hud.hidden; hud.hidden = true;
+  CTL.pad.hidden = false; CTL.ui.hidden = false; CTL.btn.hidden = true;
+  const tv = document.getElementById('tvScan'); if (tv && kind === 'gunship') tv.style.display = 'block';
+  renderer.domElement.style.filter = kind === 'gunship' ? 'grayscale(1) contrast(1.35) brightness(1.08)' : '';
+  CTL.ui.innerHTML = kind === 'gunship'
+    ? `<div class="tl"><button data-c="exit">✕ Terug</button><button data-c="ai">🤖 AI laten vuren</button></div>
+<div class="br"><div class="row"><button data-c="zo">－</button><button data-c="zi">＋</button></div><div class="row">${GSW.map((w, i) => `<button class="w" data-w="${i}">${w.n}</button>`).join('')}</div><button class="fire" data-c="fire">VUUR</button></div>
+<div class="help">Muis = richten · linkerknop of spatie = vuren · 1 / 2 / 3 = wapen · scrollwiel of Q / E = zoomen · Esc = terug</div>`
+    : `<div class="tl"><button data-c="exit">✕ Terug</button><button data-c="ai">🤖 AI laten vliegen</button></div>
+<div class="br"><button data-c="rk">🚀 Raketten</button><button class="fire" data-c="fire">KANON</button></div>
+<div class="help">Muis = richtpunt · linkerknop of spatie = kanon · R = raketten · de A-10 duikt zelf naar je richtpunt en draait daarna terug · Esc = terug</div>`;
+  CTL.ui.querySelectorAll('[data-w]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); CTL.w = +b.dataset.w; }));
+  CTL.ui.querySelectorAll('[data-c]').forEach(b => {
+    const c = b.dataset.c;
+    if (c === 'fire') { b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); CTL.fire = true; b.classList.add('down'); }); const off = e => { CTL.fire = false; b.classList.remove('down'); }; b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off); }
+    else b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (c === 'exit') ctlExit(true); else if (c === 'ai') ctlExit(true); else if (c === 'zi') ctlZoom(1 / 1.25); else if (c === 'zo') ctlZoom(1.25); else if (c === 'rk') CTL.rk = true; });
+  });
+  if (!IS_TOUCH && CTL.pad.requestPointerLock) { try { const r = CTL.pad.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (e) { } }
+  addFeed(null, null, kind === 'gunship' ? '🎮 Je bestuurt de AC-130 · richt en vuur, het vliegtuig cirkelt vanzelf mee met je richtpunt' : '🎮 Je bestuurt de A-10 · richt op je doel en houd het kanon ingedrukt tijdens de duikvlucht');
+}
+function ctlExit(user) {
+  if (!CTL.on) return; const o = CTL.obj;
+  if (o) { o.player = false; if (CTL.kind === 'gunship') { o.c.copy(CTL.aim); o.fT = 0; } else { o.c.copy(CTL.aim); o.brrt = false; if (o.st === 'turn') o.st = 'in'; if (!o.leaving) o.t = Math.min(o.t, 30); } }
+  CTL.on = false; CTL.obj = null; CTL.fire = false; CTL.drag = null;
+  CTL.pad.hidden = true; CTL.ui.hidden = true; if (!CTL.hudWasHidden) document.getElementById('hud').hidden = false;
+  const tv = document.getElementById('tvScan'); if (tv) tv.style.display = ''; renderer.domElement.style.filter = '';
+  if (document.pointerLockElement) document.exitPointerLock();
+  cam.x = CTL.aim.x; cam.z = CTL.aim.z;
+  if (user && o && ((CTL.kind === 'gunship' && o.t < o.dur) || (CTL.kind === 'a10' && !o.leaving))) addFeed(null, null, '🤖 De AI neemt het over · tik op 🎮 BESTUUR om terug te gaan');
+}
+// ---------- gunship weapons fired by you ----------
+function ctlGunship(dt) {
+  const G = CTL.obj; if (!GUNS.includes(G) || G.t > G.dur) { ctlExit(false); addFeed(null, null, '✈ De AC-130 heeft geen tijd meer en vliegt naar huis'); return; }
+  // the orbit drifts after your aim so you can walk it across the map
+  const dx = CTL.aim.x - G.c.x, dz = CTL.aim.z - G.c.z, d = Math.hypot(dx, dz); if (d > 60) { const s = Math.min(d - 60, 22 * dt); G.c.x += dx / d * s; G.c.z += dz / d * s; G.c.y = Math.max(getH(G.c.x, G.c.z), WATER); }
+  CTL.cd = CTL.cd.map(v => v - dt);
+  if (!CTL.fire || G.t < 0) return;
+  const p = G.g.position, from = p.clone().add(new V3(0, -2, 0)), w = CTL.w, A = CTL.aim, dist = from.distanceTo(A);
+  if (CTL.cd[w] > 0) return;
+  if (G.ammo[w] <= 0) { if (noteOnce('gsAmmo' + w, 4)) CTL.msg = `${GSW[w].n} is leeg · kies een ander wapen`, CTL.msgT = 2; return; }
+  G.ammo[w]--;
+  if (w === 0) { CTL.cd[0] = .065; fireBullet(G.owner, from, A.clone().add(new V3(rnd(-1.4, 1.4), .6, rnd(-1.4, 1.4))).sub(from).normalize(), { dmg: 48, range: 1300, spread: .004, ap: .15, tracer: G.ammo[0] % 2 === 0, from, tcol: 0xffffff }); if (G.ammo[0] % 3 === 0) Snd.shot(A, 'mg'); }
+  else if (w === 1) { CTL.cd[1] = .55; const t = dist / 320, tp = A.clone(); tp.y += .5 * G_ * t * t + 1; launch('shell', from, tp.sub(from).normalize().multiplyScalar(320), G.owner); Snd.shot(A, 'cannon30'); }
+  else { CTL.cd[2] = 3.2; G.imp.push({ p: A.clone(), t: dist / 420 }); tracer(from, A, 0xffffff); Snd.burst(A, { f: 200, type: 'lowpass', dur: 1.2, vol: 1.2, thump: 1, tf: 40, brown: true, rng: 3000 }); }
+}
+const G_ = G;
+// ---------- the A-10 flown by you ----------
+function updateA10Player(A, dt) {
+  const p = A.pos, c = A.c; A.t += dt; A.owner.pos.copy(p);
+  if (CTL.on && CTL.obj === A) c.copy(CTL.aim);
+  const hd = Math.hypot(c.x - p.x, c.z - p.z), gnd = Math.max(getH(p.x, p.z), getH(p.x + A.dir.x * 150, p.z + A.dir.z * 150), WATER), toC = new V3(c.x - p.x, 0, c.z - p.z).normalize(), hdir = new V3(A.dir.x, 0, A.dir.z).normalize(), align = hdir.dot(toC);
+  let want, rate = 1.5;
+  if (A.st === 'in') {
+    want = hd < 950 ? c.clone().add(new V3(0, 6, 0)).sub(p).normalize() : new V3(c.x - p.x, (Math.max(c.y + 240, gnd + 120) - p.y) * 2, c.z - p.z).normalize();
+    if (hd < 160 || (hd < 600 && p.y < gnd + 38) || align < -.2) { A.st = 'out'; A.outT = 0; A.passes = (A.passes || 0) + 1; }
+  } else if (A.st === 'out') { want = new V3(A.dir.x, .4, A.dir.z).normalize(); rate = 1.2; A.outT += dt; if (A.outT > 3.5 && p.y > gnd + 120) A.st = 'turn'; }
+  else { want = new V3(toC.x, (Math.max(c.y + 260, gnd + 150) - p.y) * .004, toC.z).normalize(); rate = .95; if (hd < 700 && align < .5) want = new V3(hdir.x, .1, hdir.z).normalize(); if (align > .8 && hd > 650) A.st = 'in'; }
+  A.dir.lerp(want, Math.min(1, dt * rate)).normalize(); p.addScaledVector(A.dir, 125 * dt);
+  const floor = Math.max(getH(p.x, p.z), WATER) + 30; if (p.y < floor) { p.y = floor; if (A.dir.y < 0) A.dir.y = 0; }
+  p.x = clamp(p.x, -WORLD - 400, XMAX + 400); p.z = clamp(p.z, -WORLD - 400, WORLD + 400);
+  A.g.position.copy(p); A.g.rotation.set(-Math.asin(clamp(A.dir.y, -1, 1)), Math.atan2(A.dir.x, A.dir.z), clamp(-hdir.x * toC.z + hdir.z * toC.x, -1, 1) * (A.st === 'turn' ? .7 : .15), 'YXZ');
+  const inRange = A.st === 'in' && hd < 900 && hd > 110;
+  A.inRange = inRange;
+  if (CTL.fire && inRange && A.ammo > 0) {
+    A.cd -= dt;
+    while (A.cd <= 0 && A.ammo > 0) {
+      A.cd += .03; A.n++; A.ammo--; const gun = p.clone().addScaledVector(A.dir, 9);
+      const r = fireBullet(A.owner, gun, c.clone().add(new V3(rnd(-6, 6), 1, rnd(-6, 6))).sub(gun).normalize(), { dmg: 130, range: 1100, spread: .005, ap: .55, tracer: A.n % 3 === 0, from: gun, tcol: 0xffd27a });
+      // 30 mm rounds explode: every third one hurts everything close to where it lands
+      if (A.n % 3 === 0 && r.kind !== 'none') { if (A.n % 6 === 0) explosion(r.point.clone(), .55, { r: 2 }); applyBlast(r.point, 6, 85, A.owner); }
+    }
+    CTL.sndT -= dt; if (CTL.sndT <= 0) { CTL.sndT = .7; Snd.burst(p, { f: 130, type: 'lowpass', dur: .8, vol: 1.4, thump: .4, tf: 60, brown: true, rng: 3000 }); }
+  } else A.cd = 0;
+  if (CTL.rk) { CTL.rk = false; if (A.rk > 0 && A.st === 'in' && hd < 1000) { for (let k = 0; k < 2 && A.rk > 0; k++) { A.rk--; const pod = p.clone().add(new V3(k ? 3.5 : -3.5, -1, 0)); launch('rocket', pod, c.clone().add(new V3(rnd(-4, 4), 0, rnd(-4, 4))).sub(pod).normalize().multiplyScalar(200), A.owner); } Snd.shot(p, 'tank'); } else if (A.rk <= 0) { CTL.msg = 'Geen raketten meer'; CTL.msgT = 1.5; } else { CTL.msg = 'Raketten pas tijdens de duikvlucht'; CTL.msgT = 1.5; } }
+  // out of ammo or out of time: fly home
+  if (!A.leaving && (A.t > 150 || (A.ammo <= 0 && A.rk <= 0))) { A.leaving = true; if (CTL.on && CTL.obj === A) { ctlExit(false); addFeed(null, null, A.ammo <= 0 ? '✈ De A-10 is door zijn munitie heen en vliegt naar huis' : '✈ De A-10 moet tanken en vliegt naar huis'); } }
+  if (A.leaving) { A.player = false; A.st = 'out'; A.t = Math.max(A.t, 45); }
+  return false;
+}
+// ---------- rendering while you fly ----------
+function ctlCamera(dt) {
+  const o = CTL.obj;
+  if (CTL.kind === 'gunship') { CTL.cam.position.lerp(o.g.position.clone().add(new V3(0, -3, 0)), Math.min(1, dt * 8)); CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(CTL.aim); }
+  else {
+    const want = o.pos.clone().addScaledVector(o.dir, -42).add(new V3(0, 10, 0)); CTL.cam.position.lerp(want, Math.min(1, dt * 5));
+    const ahead = o.pos.clone().addScaledVector(o.dir, 300), look = o.st === 'in' ? ahead.lerp(CTL.aim, .65) : ahead; CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(look);
+  }
+  CTL.cam.fov = lerp(CTL.cam.fov, CTL.fov, Math.min(1, dt * 8)); CTL.cam.aspect = innerWidth / innerHeight; CTL.cam.updateProjectionMatrix();
+}
+function ctlHud(dt) {
+  const W = innerWidth, H = innerHeight; oc.clearRect(0, 0, W, H);
+  const pr = v => { const q = v.clone().project(CTL.cam); return q.z > 1 || q.z < -1 ? null : [(q.x * .5 + .5) * W, (-q.y * .5 + .5) * H]; };
+  const o = CTL.obj, A = CTL.aim, s = pr(A.clone().add(new V3(0, .5, 0)));
+  oc.lineWidth = 2; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'left';
+  // friend or foe markers around the aim
+  for (const u of units) {
+    if (!u.alive || u.hidden || isAirT(u) || u.type === 'drone') continue; const d = Math.hypot(u.pos.x - A.x, u.pos.z - A.z); if (d > 280) continue;
+    const q = pr(u.center()); if (!q) continue; const fr = u.team === CMD.team, r = u.type === 'tank' ? 9 : 5;
+    oc.strokeStyle = fr ? 'rgba(111,178,220,.95)' : 'rgba(255,80,60,.95)';
+    if (fr) { oc.beginPath(); oc.moveTo(q[0], q[1] - r); oc.lineTo(q[0] + r, q[1]); oc.lineTo(q[0], q[1] + r); oc.lineTo(q[0] - r, q[1]); oc.closePath(); oc.stroke(); }
+    else oc.strokeRect(q[0] - r, q[1] - r, r * 2, r * 2);
+  }
+  const ink = CTL.kind === 'gunship' ? '#ffffff' : '#9cff7a';
+  if (s) {
+    oc.strokeStyle = ink; const x = s[0], y = s[1];
+    if (CTL.kind === 'gunship') {
+      const g = 26; oc.beginPath(); for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { oc.moveTo(x + a * g, y + b * (g - 10)); oc.lineTo(x + a * g, y + b * g); oc.lineTo(x + a * (g - 10), y + b * g); } oc.stroke();
+      oc.beginPath(); oc.moveTo(x - 60, y); oc.lineTo(x - 10, y); oc.moveTo(x + 10, y); oc.lineTo(x + 60, y); oc.moveTo(x, y - 60); oc.lineTo(x, y - 10); oc.moveTo(x, y + 10); oc.lineTo(x, y + 60); oc.stroke();
+      if (CTL.w === 2) { const k = 17 * (H / 2) / Math.tan(CTL.cam.fov * Math.PI / 360) / Math.max(1, CTL.cam.position.distanceTo(A)); oc.setLineDash([6, 5]); oc.beginPath(); oc.arc(x, y, k, 0, TAU); oc.stroke(); oc.setLineDash([]); }
+    } else {
+      oc.beginPath(); oc.arc(x, y, 16, 0, TAU); oc.moveTo(x - 3, y); oc.lineTo(x + 3, y); oc.stroke();
+      if (o.inRange) { oc.fillStyle = '#9cff7a'; oc.textAlign = 'center'; oc.fillText(o.ammo > 0 ? 'IN BEREIK · VUUR' : 'GEEN KOGELS', x, y + 36); oc.textAlign = 'left'; }
+    }
+  }
+  // text block
+  oc.fillStyle = ink; oc.font = '700 14px IBM Plex Mono, monospace'; const L = [], x0 = 16, y0 = IS_TOUCH ? 74 : 70;
+  if (CTL.kind === 'gunship') {
+    const left = Math.max(0, Math.ceil(o.dur - o.t));
+    L.push(`AC-130 · ${o.t < 0 ? 'NADERT ' + Math.ceil(-o.t) + ' s' : 'BOVEN DOEL · ' + left + ' s'}`, `WAPEN ${GSW[CTL.w].n}  [${CTL.w + 1}]`, `25mm ${o.ammo[0]}  40mm ${o.ammo[1]}  105mm ${o.ammo[2]}`, `AFSTAND ${Math.round(CTL.cam.position.distanceTo(A))} m · ZOOM ${(22 / CTL.fov).toFixed(1)}×`);
+    if (CTL.cd[CTL.w] > .3) L.push(`HERLADEN ${CTL.cd[CTL.w].toFixed(1)} s`);
+  } else {
+    const st = { in: 'AANVAL', out: 'OPTREKKEN', turn: 'DRAAIT TERUG' }[o.st] || '';
+    L.push(`A-10 · ${st}`, `KANON ${o.ammo}  RAKETTEN ${o.rk}`, `DOEL ${Math.round(Math.hypot(A.x - o.pos.x, A.z - o.pos.z))} m · HOOGTE ${Math.round(o.pos.y - Math.max(getH(o.pos.x, o.pos.z), WATER))} m`);
+  }
+  L.forEach((t, i) => { oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.6)'; oc.strokeText(t, x0, y0 + i * 19); oc.fillText(t, x0, y0 + i * 19); });
+  if (CTL.msgT > 0) { CTL.msgT -= dt; oc.textAlign = 'center'; oc.fillStyle = '#ffd27a'; oc.fillText(CTL.msg, W / 2, H * .3); oc.textAlign = 'left'; }
+  CTL.ui.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', +b.dataset.w === CTL.w));
+}
+const _renderMainC = renderMain;
+renderMain = function (dt) {
+  if (!CTL.on) return _renderMainC(dt);
+  if (state !== 'play') { ctlExit(false); return _renderMainC(dt); }
+  cam.x = CTL.aim.x; cam.z = CTL.aim.z;
+  ctlCamera(dt);
+  const cp = CTL.cam.position; for (const u of units) if (!u.hidden && u.group) { const dx = u.pos.x - CTL.aim.x, dz = u.pos.z - CTL.aim.z; u.group.visible = dx * dx + dz * dz < 1400 * 1400 || u.type === 'jet' || u.type === 'heli'; }
+  renderer.render(scene, CTL.cam); ctlHud(dt); pipEl.hidden = true;
+};
+// call one in and you fly it straight away; the button brings you back in later
+const _deliverC = deliver;
+deliver = function (kind, team, p) {
+  const r = _deliverC(kind, team, p);
+  if (team === CMD.team && state === 'play' && (kind === 'gunship' || kind === 'a10')) { const o = kind === 'gunship' ? GUNS[GUNS.length - 1] : A10S[A10S.length - 1]; if (o && !CTL.on) setTimeout(() => { if (state === 'play' && !CTL.on && (GUNS.includes(o) || A10S.includes(o))) ctlEnter(kind, o); }, 60); }
+  return r;
+};
+function updateCtlBtn(dt) {
+  CTL.bT = (CTL.bT || 0) - dt; if (CTL.bT > 0) return; CTL.bT = .3;
+  const o = !CTL.on && state === 'play' ? ctlCandidate() : null;
+  CTL.btn.hidden = !o; if (o) CTL.btn.textContent = o.kind === 'gunship' ? `🎮 BESTUUR AC-130 · ${Math.max(0, Math.ceil(o.obj.dur - Math.max(0, o.obj.t)))} s` : `🎮 BESTUUR A-10 · ${o.obj.ammo} kogels`;
+}
+// ---------- the island's farms, oil pumps and coal mine visibly deliver ----------
+const HARV = { t: 20, pops: [] };
+function islandHarvest(dt) {
+  for (let i = HARV.pops.length - 1; i >= 0; i--) { HARV.pops[i].t += dt; if (HARV.pops[i].t > 3.2) HARV.pops.splice(i, 1); }
+  HARV.t -= dt; if (HARV.t > 0) return; HARV.t = 20;
+  const T = ISL.team, civ = EVM.st['isle' + T] ? EVM.st['isle' + T].saved : 0, workers = Math.min(60, civ);
+  const food = 6 + workers * .1, oil = 5, coal = 5;   // per 20 seconds: civilians on the island work the fields
+  if (ZM.on) { ZM.res.food = Math.min(600, ZM.res.food + food); ZM.res.oil = Math.min(300, ZM.res.oil + oil); ZM.res.coal = Math.min(300, ZM.res.coal + coal); }
+  else if (ECO.on) { ECO.money[T] = Math.min(1e14, ECO.money[T] + Math.round(food * 4 + oil * 10 + coal * 6)); }
+  const tag = (v, ic) => ZM.on ? `+${Math.round(v)} ${ic}` : `+◆ ${Math.round(v * (ic === '🍞' ? 4 : ic === '⛽' ? 10 : 6))}`;
+  HARV.pops.push({ x: ISL.farm.x, z: ISL.farm.z, s: tag(food, '🍞'), t: 0 }, { x: ISL.oil.x, z: ISL.oil.z, s: tag(oil, '⛽'), t: 0 }, { x: ISL.mine.x, z: ISL.mine.z, s: tag(coal, '⛏'), t: 0 });
+  HARV.food = food; HARV.workers = workers;
+}
+const _drawOverlayH = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayH(dt); if (state !== 'play' || !HARV.pops.length) return;
+  const cp = camera.position;
+  for (const P of HARV.pops) {
+    const w = new V3(P.x, WATER + 22 + P.t * 6, P.z); if (w.distanceTo(cp) > 1600) continue; const q = project(w); if (!q) continue;
+    oc.globalAlpha = Math.min(1, (3.2 - P.t) * 1.5); oc.font = '700 17px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.7)'; oc.strokeText(P.s, q[0], q[1]); oc.fillStyle = '#f3e38a'; oc.fillText(P.s, q[0], q[1]); oc.globalAlpha = 1;
+  }
+};
+const _updateWavesC = updateWaves;
+updateWaves = function (dt) {
+  _updateWavesC(dt); updateCtlBtn(dt); if (ECO.on || ZM.on) islandHarvest(dt);
+  if (CTL.on) {
+    const kx = (CTL.keys.KeyD || CTL.keys.ArrowRight ? 1 : 0) - (CTL.keys.KeyA || CTL.keys.ArrowLeft ? 1 : 0), ky = (CTL.keys.KeyS || CTL.keys.ArrowDown ? 1 : 0) - (CTL.keys.KeyW || CTL.keys.ArrowUp ? 1 : 0);
+    if (kx || ky) ctlMoveAim(kx * 520 * dt, ky * 520 * dt);
+    ctlClampAim(); if (CTL.kind === 'gunship') ctlGunship(dt);
+  }
+};
 
 </script>
