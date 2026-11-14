@@ -8547,7 +8547,7 @@ const ZDEF = {
   screamer: { hp: 65, sp: 3.8, dps: 10, sc: 1.05, col: [.8, .78, .7] }
 };
 const ZEMPTY = [];
-const ZR = { cap: 340, body: null, head: null, col: new THREE.Color() };
+const ZR = { cap: 420, body: null, head: null, col: new THREE.Color() };
 {
   const g = new THREE.Group(), w = mat(0xffffff), leg = mat(0x7d7d7d), arm = mat(0xb9c4a6);
   const t = mesh(new THREE.BoxGeometry(.46, .64, .26), w, 0, 1.18, .06, g); t.rotation.x = .22;
@@ -8590,7 +8590,7 @@ class Zombie extends Unit {
         direct = false; let O = null, od = 1e9; for (const q of fortOpenings()) { const dd = Math.hypot(q.x - p.x, q.z - p.z); if (dd < od) { od = dd; O = q; } }
         const ox = O.x - O.nx * 7, oz = O.z - O.nz * 7, ix = O.x + O.nx * 6, iz = O.z + O.nz * 6;
         if (Math.hypot(p.x - ox, p.z - oz) < 4 || od < 7) { tx = ix; tz = iz; } else { tx = ox; tz = oz; }
-        if (this.variant === 'brute' && this.blocked) { this.breakT = (this.breakT || 0) + dt; if (this.breakT > 4) { this.breakT = 0; fortBreach(p.x, p.z); } }
+        if ((this.variant === 'brute' || this.D.boss) && this.blocked) { this.breakT = (this.breakT || 0) + dt; if (this.breakT > (this.D.boss ? 1 : 4)) { this.breakT = 0; fortBreach(p.x, p.z); } }
       }
       if (this.labAtk && Math.hypot(p.x - ISL.lab.x, p.z - ISL.lab.z) < 21) { ISL.lab.hp -= D.dps * dt * .5; this.ph += dt * 6; this.yaw = Math.atan2(ISL.lab.x - p.x, ISL.lab.z - p.z); if (Math.random() < dt * .4) spawnP(new V3(p.x, p.y + 1.4, p.z), { tex: smokeTex, color: 0xd9d6cc, op: .5, size: 1, grow: 2, life: 1, vel: new V3(0, 1, 0), drag: 1 }); return; }
     }
@@ -8663,7 +8663,7 @@ drawCivs = function () { _drawCivsZ(); if (ZM.list.length || ZR.body.count) draw
 function zSpawn(x, z, kind) { if (ZM.list.length >= ZM.cap + 100) return null; return new Zombie(ZM.zt, x, z, kind); }
 function zKind() {
   const t = ZM.t, r = Math.random();
-  if (t > 90 && r < Math.min(.1, .03 + t / 6000)) return 'brute';
+  if (t > 60 && r < Math.min(.13, .04 + t / 5000)) return 'brute';
   if (r < .13) return 'spitter'; if (r < .2) return 'screamer'; if (r < .2 + Math.min(.42, .2 + t / 1800)) return 'runner';
   return 'walker';
 }
@@ -8726,7 +8726,7 @@ function zmSecond() {
   for (let i = ZM.turn.length - 1; i >= 0; i--) { const t = ZM.turn[i]; t.t -= 1; if (t.t <= 0) { ZM.turn.splice(i, 1); zSpawn(t.x, t.z, Math.random() < .3 ? 'runner' : 'walker'); } }
   for (let i = CIV.list.length - 1; i >= 0; i--) { const c = CIV.list[i]; if (!c.alive && c.bit && SIMT - c.bit > 3.5) { CIV.list.splice(i, 1); if (zAlive() < ZM.cap) zSpawn(c.x, c.z, Math.random() < .25 ? 'runner' : 'walker'); } }
   // tanks run them over
-  for (const u of units) { if (!u.alive || u.type !== 'tank' || u.team !== T || Math.abs(u.speed) < 3) continue; for (const z of ZM.list) if (z.alive && (z.pos.x - u.pos.x) ** 2 + (z.pos.z - u.pos.z) ** 2 < 9) z.damage(z.variant === 'brute' ? 90 : 500, u, 'crush'); }
+  for (const u of units) { if (!u.alive || u.type !== 'tank' || u.team !== T || Math.abs(u.speed) < 3) continue; for (const z of ZM.list) if (z.alive && !z.D.boss && (z.pos.x - u.pos.x) ** 2 + (z.pos.z - u.pos.z) ** 2 < 9) z.damage(z.variant === 'brute' ? 90 : 500, u, 'crush'); }
   // points fall when a crowd of zombies stands on them and nobody defends
   for (const p of POINTS) {
     let zc = 0, pc = 0; for (const z of ZM.list) if (z.alive && (z.pos.x - p.x) ** 2 + (z.pos.z - p.z) ** 2 < 3600) zc++;
@@ -8823,7 +8823,7 @@ startEvac = function (C, how, to, team, list) {
 };
 // ---------- turning zombie mode on ----------
 function zmSetup() {
-  ZM.on = true; ZM.team = SET.side; ZM.zt = 1 - SET.side; ZM.cap = QUALITY.low ? 160 : 280; ZM.diff = { makkelijk: .9, normaal: 1.4, moeilijk: 1.85, brutaal: 2.4 }[SET.diff] || 1.4; ZM.hpMul = { makkelijk: 1, normaal: 1.5, moeilijk: 1.8, brutaal: 2.2 }[SET.diff] || 1.5; ZM.spMul = { makkelijk: 1, normaal: 1.1, moeilijk: 1.15, brutaal: 1.25 }[SET.diff] || 1.1; ZM.isleT = 150;
+  ZM.on = true; ZM.team = SET.side; ZM.zt = 1 - SET.side; ZM.cap = QUALITY.low ? 190 : 330; ZM.diff = { makkelijk: 1.1, normaal: 1.75, moeilijk: 2.3, brutaal: 3 }[SET.diff] || 1.75; ZM.hpMul = { makkelijk: 1.2, normaal: 1.8, moeilijk: 2.2, brutaal: 2.7 }[SET.diff] || 1.8; ZM.spMul = { makkelijk: 1.05, normaal: 1.18, moeilijk: 1.24, brutaal: 1.32 }[SET.diff] || 1.18; ZM.isleT = 150;
   for (const u of units.slice()) if (u.team === ZM.zt) u.remove();
   POINTS.forEach(p => { p.owner = ZM.team; p.prog = ZM.team ? 1 : -1; p.lastOwner = p.owner; paintPoint(p); });
   ECO.money[ZM.zt] = 0; if (typeof HSTG !== 'undefined') HSTG.nextT = 1e12;
@@ -9707,7 +9707,7 @@ const NEST = { list: [], max: 6, growT: 160, borderT: -1e9, alive: 0, swim: 0, s
 const NESTG = { mound: new THREE.SphereGeometry(5.2, 14, 8, 0, TAU, 0, Math.PI / 2), lump: new THREE.SphereGeometry(2.6, 10, 6, 0, TAU, 0, Math.PI / 2), pus: new THREE.SphereGeometry(.7, 8, 6), hole: new THREE.CircleGeometry(2, 14).rotateX(-Math.PI / 2), bone: new THREE.CylinderGeometry(.14, .2, 3.2, 5) };
 class Nest extends Unit {
   constructor(x, z, where) {
-    super(ZM.zt, 'nest'); this.variant = 'nest'; this.hp = this.maxHp = 2600 * ZM.hpMul; this.radius = 5; this.blastMul = 1; this.where = where || 'het binnenland';
+    super(ZM.zt, 'nest'); this.variant = 'nest'; this.hp = this.maxHp = 3400 * ZM.hpMul; this.radius = 5; this.blastMul = 1; this.where = where || 'het binnenland';
     this.nid = NEST.seq++; this.ph = rnd(0, 6); this.queue = 0; this.qT = 0; this.trT = rnd(4, 9);
     const y = getH(x, z); this.pos.set(x, y, z);
     const g = this.group, flesh = mat(0x3b3528), dark = mat(0x2a241c), boneM = mat(0xcfc6aa);
@@ -9810,7 +9810,7 @@ function zSwimTarget(z0) {
 zIsleAssault = function () {
   // wait while a big group is still on its way over
   let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 30) { ZM.isleT = Math.min(ZM.isleT, 30); return; }
-  const n = Math.min(28, Math.round((7 + ZM.t / 50) * ZM.diff));
+  const n = Math.min(36, Math.round((8 + ZM.t / 45) * ZM.diff));
   // the zombies closest to the east coast go first
   const cand = ZM.list.filter(z => z.alive && !z.isleRun && z.pos.x < WORLD - 5 && z.pos.x > COAST - 480 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
   if (cand.length < n) {
@@ -10135,5 +10135,555 @@ function a10Wing(W, dt) {
 // ---------- per frame ----------
 const _updateWavesF = updateWaves;
 updateWaves = function (dt) { _updateWavesF(dt); if (BURN.size) updateBurn(dt); };
+
+// ================= GIANTS AND BOSSES, MISSIONS: HELI DROP, FIRST PERSON, OBJECTIVES, AIR SUPPORT =================
+// ---------- giants: zombies melt together into one huge one ----------
+Object.assign(ZDEF, {
+  giant: { hp: 11000, sp: 4.1, dps: 300, sc: 4.4, col: [.4, .44, .33], boss: true },
+  titan: { hp: 26000, sp: 4.4, dps: 520, sc: 6.4, col: [.42, .3, .3], boss: true }
+});
+Object.assign(UNAME, { giant: ['reus', 'reuzen'], titan: ['kolos', 'kolossen'], surv: ['overlevende', 'overlevenden'] });
+const GG = { eye: new THREE.SphereGeometry(.035, 6, 4), spike: new THREE.ConeGeometry(.05, .26, 5), club: new THREE.CylinderGeometry(.06, .1, 1.5, 6), plate: new THREE.BoxGeometry(.56, .12, .32), rock: new THREE.DodecahedronGeometry(1, 0) };
+const GEYE = new THREE.MeshBasicMaterial({ color: 0xff3020 });
+function giantGear(z) {
+  const g = new THREE.Group();
+  for (const s of [-1, 1]) mesh(GG.eye, GEYE, s * .055, 1.66, .28, g).castShadow = false;
+  for (let i = 0; i < 5; i++) { const sp = mesh(GG.spike, mat(0xd8d0b8), i % 2 ? .12 : -.12, 1.05 + i * .1, -.13, g); sp.rotation.x = -1.1; }
+  const c = mesh(GG.club, mat(0x5a4330), .3, 1.22, 1.0, g); c.rotation.x = 1.25;
+  mesh(GG.plate, mat(0x3a3f44), 0, 1.5, .02, g);
+  if (z.variant === 'titan') for (const s of [-1, 1]) { const h = mesh(GG.spike, mat(0x2b2b2b), s * .1, 1.78, .12, g); h.rotation.z = -s * .6; h.scale.setScalar(1.3); }
+  scene.add(g); z.gear = g;
+}
+const _zRemoveB = Zombie.prototype.remove;
+Zombie.prototype.remove = function () { if (this.gear) scene.remove(this.gear); return _zRemoveB.call(this); };
+function spawnGiant(x, z, kind, where, merged) {
+  const g = new Zombie(ZM.zt, x, z, kind || 'giant'); giantGear(g); g.where = where;
+  const name = g.variant === 'titan' ? 'KOLOS' : 'REUS';
+  addFeed(null, null, `👹 ${merged ? `${merged} zombies zijn samengesmolten tot een ` : 'Een '}${name} bij ${where || placeName(x, z)}! Tanks, luchtsteun en vlammenwerpers nodig`); siren();
+  for (let i = 0; i < 18; i++) spawnP(new V3(x + rnd(-6, 6), getH(x, z) + rnd(1, 8), z + rnd(-6, 6)), { tex: smokeTex, color: 0x5d5040, op: .7, size: 4, grow: 4, life: 3, vel: new V3(rnd(-5, 5), rnd(2, 8), rnd(-5, 5)), drag: 1.2 });
+  markers.push({ p: g.pos.clone(), t: 0, col: '#ff6a50' });
+  return g;
+}
+// bosses shrug off bullets; fire and explosives still hurt. Zombies swimming under water are hard to hit from ships
+const _zDmgB = Zombie.prototype.damage;
+Zombie.prototype.damage = function (n, src, kind, p) {
+  // heavy hits (tank shells, rockets) still bite, small arms barely scratch it
+  if (this.D.boss && kind !== 'c4' && kind !== 'cure') n *= kind === 'fire' ? .7 : kind === 'blast' ? .5 : n >= 150 ? .6 : .25;
+  if (this.isleRun && src && (src.type === 'ship' || src.type === 'struct') && getH(this.pos.x, this.pos.z) < WATER - .7) n *= .4;
+  return _zDmgB.call(this, n, src, kind, p);
+};
+const _zKilledB = Zombie.prototype.killedBy;
+Zombie.prototype.killedBy = function (src) {
+  _zKilledB.call(this, src);
+  if (this.D.boss) { score[1 - this.team] += 20; addFeed(null, null, `👹 De ${this.variant === 'titan' ? 'KOLOS' : 'REUS'}${this.where ? ' van ' + this.where : ''} is gevallen!`); explosion(this.pos.clone().add(new V3(0, 3, 0)), 2.6, { r: 4 }); if (ECO.on) ECO.money[CMD.team] += 1500; }
+};
+// what a giant does every frame on top of walking and biting: stomp and throw rocks
+const ROCKS = [];
+function bossFoes(z, r) { const out = []; for (const u of units) { if (!u.alive || u.hidden || u.team === z.team || u.type === 'zombie' || u.type === 'nest' || u.type === 'drone' || u.type === 'jet') continue; if (u.type === 'heli' && u.pos.y - z.pos.y > 7 * z.D.sc / 4.4) continue; if (u.pos.x > WORLD + 20 && z.pos.x < WORLD - 200) continue; const d = Math.hypot(u.pos.x - z.pos.x, u.pos.z - z.pos.z); if (d < r) out.push([u, d]); } return out; }
+function bossStomp(z) {
+  const k = z.D.sc / 4.4, f = z.forward(), c = z.pos.clone().addScaledVector(f, 2 * k), R = 10 * k;
+  for (const u of units) {
+    if (!u.alive || u.hidden || u.team === z.team || u.type === 'zombie' || u.type === 'nest') continue; if (u.type === 'heli' && u.pos.y - z.pos.y > 4) continue; if (isAirT(u) && u.type !== 'heli') continue;
+    const d = Math.hypot(u.pos.x - c.x, u.pos.z - c.z); if (d > R + (u.radius || 0)) continue;
+    const base = u.type === 'tank' ? 330 : u.type === 'struct' ? 420 : u.type === 'ship' ? 0 : 240; if (base) u.damage(base * k * (1 - Math.min(1, d / R) * .6), z, 'stomp');
+  }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; spawnP(new V3(c.x + Math.cos(a) * 3 * k, Math.max(getH(c.x, c.z), WATER) + .6, c.z + Math.sin(a) * 3 * k), { tex: smokeTex, color: 0x8a7c62, op: .6, size: 2.5 * k, grow: 3, life: 1.4, vel: new V3(Math.cos(a) * 9 * k, 1.5, Math.sin(a) * 9 * k), drag: 2 }); }
+  Snd.burst(c, { f: 55, type: 'lowpass', dur: .9, vol: 1.3, thump: .9, tf: 35, brown: true, rng: 1100 }); addShake(c, .5 * k); zNoise(c.x, c.z, 260, 3);
+}
+function bossThrow(z, t) {
+  const k = z.D.sc / 4.4, f = z.forward(), from = z.pos.clone().addScaledVector(f, 1.2 * k); from.y += 7.2 * k;
+  const tp = t.center().clone().addScaledVector(t.velocity ? t.velocity() : new V3(), 1.2), dx = tp.x - from.x, dz = tp.z - from.z, d = Math.hypot(dx, dz), T = .7 + d / 55;
+  const v = new V3(dx / T, (tp.y - from.y + .5 * G * T * T) / T, dz / T), m = mesh(GG.rock, mat(0x6b6458), from.x, from.y, from.z); m.scale.setScalar(1.1 * k); scene.add(m);
+  ROCKS.push({ m, p: from, v, z, k }); Snd.burst(from, { f: 120, type: 'lowpass', dur: .5, vol: .7, brown: true, rng: 600 });
+}
+function updateRocks(dt) {
+  for (let i = ROCKS.length - 1; i >= 0; i--) {
+    const R = ROCKS[i]; R.v.y -= G * dt; R.p.addScaledVector(R.v, dt); R.m.position.copy(R.p); R.m.rotation.x += dt * 4; R.m.rotation.z += dt * 3;
+    let hit = R.p.y < Math.max(getH(R.p.x, R.p.z), WATER) + .5 || inBox(R.p);
+    if (!hit) for (const u of units) { if (!u.alive || u.team === R.z.team || u.type === 'zombie') continue; if (u.center().distanceToSquared(R.p) < (u.radius + 1.6 * R.k) ** 2) { hit = true; break; } }
+    if (!hit && R.p.y > -500) continue;
+    explosion(R.p.clone(), 1.1 * R.k, { r: 4 }); const rad = 8 * R.k;
+    for (const u of units) { if (!u.alive || u.hidden || u.team === R.z.team || u.type === 'zombie' || u.type === 'nest') continue; const d = u.center().distanceTo(R.p); if (d < rad + u.radius) u.damage((u.type === 'tank' ? 380 : u.type === 'struct' ? 300 : 260) * R.k * (1 - Math.min(1, d / rad) * .5), R.z.alive ? R.z : null, 'rock'); }
+    scene.remove(R.m); ROCKS.splice(i, 1);
+  }
+}
+function bossAct(z, dt) {
+  const k = z.D.sc / 4.4;
+  z.stompT = (z.stompT === undefined ? 1 : z.stompT) - dt; z.throwT = (z.throwT === undefined ? 3 : z.throwT) - dt;
+  if (z.stompT <= 0) { if (bossFoes(z, 8.5 * k).length) { z.stompT = 2.2; bossStomp(z); } else z.stompT = .35; }
+  if (z.throwT <= 0) {
+    z.throwT = .9; let best = null, bs = 1e9;
+    for (const [u, d] of bossFoes(z, 170 * Math.min(1.3, k))) { if (d < 28 * k) continue; const w = d * (u.type === 'tank' ? .55 : u.type === 'heli' ? .5 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
+    if (best) { z.throwT = rnd(5, 7.5) / Math.sqrt(ZM.diff / 1.4); bossThrow(z, best); }
+  }
+  // the ground shakes when it walks
+  z.stepT = (z.stepT || 0) - dt; if (z.stepT <= 0) { z.stepT = .9; const c = z.pos; if (camera.position.distanceTo(c) < 260) { Snd.burst(c, { f: 45, type: 'lowpass', dur: .35, vol: .6, thump: .5, tf: 30, brown: true, rng: 500 }); addShake(c, .12 * k); } }
+}
+const _zUpdB = Zombie.prototype.update;
+Zombie.prototype.update = function (dt) {
+  _zUpdB.call(this, dt);
+  if (!this.D.boss) return;
+  const g = this.gear;
+  if (g) { if (!this.alive || this.removed) g.visible = false; else { g.visible = true; g.position.set(this.pos.x, this.pos.y + Math.abs(Math.sin(this.ph)) * .05, this.pos.z); g.rotation.set(Math.sin(this.ph) * .05, this.yaw, Math.sin(this.ph * .5) * .09, 'YXZ'); g.scale.setScalar(this.D.sc); } }
+  if (!this.alive || (this.isleRun && getH(this.pos.x, this.pos.z) < WATER - .7)) return;
+  bossAct(this, dt);
+};
+// giants look further for something to smash; zombies that are melting together walk to the spot
+const _zThinkB = zThink;
+zThink = function (z) {
+  if (z.fuse) {
+    _zThinkB(z); const p = z.pos;
+    if (z.prey && Math.hypot(z.prey.pos.x - p.x, z.prey.pos.z - p.z) > 5) z.prey = null; if (z.civ && Math.hypot(z.civ.x - p.x, z.civ.z - p.z) > 4) z.civ = null;
+    if (!z.prey && !z.civ) { z.goal = { x: z.fuse.x, z: z.fuse.z }; z.heard = true; }
+    return;
+  }
+  _zThinkB(z);
+  if (z.prey && z.prey.noTarget && z.prey.type === 'soldier') z.prey = null;
+  // a giant turns on whatever is shooting at it
+  if (z.D.boss && !z.isleRun && !z.isle) { const a = z.lastHit; if (a && a.alive && !a.hidden && a.team !== z.team && a.pos && !isAirT(a) && a.type !== 'ship' && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 170 && Math.random() < .7) { z.prey = a; z.civ = null; z.heard = true; return; } }
+  if (z.D.boss && !z.isleRun && !z.isle && !z.prey && !z.civ) {
+    let best = null, bs = 1e9; for (const [u, d] of bossFoes(z, 150)) { const w = d * (u.type === 'tank' ? .6 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
+    if (best) { z.prey = best; z.heard = true; }
+  }
+};
+// the melting: every few minutes a crowd of zombies walks into a nest and a giant climbs out
+const FUSE = { t: 230, cur: null, n: 0 };
+function fuseStart() {
+  let at = null;
+  const live = NEST.list.filter(N => N.alive); let bc = 0;
+  for (const N of live) { let c = 0; for (const z of ZM.list) if (z.alive && !z.isleRun && !z.D.boss && (z.pos.x - N.pos.x) ** 2 + (z.pos.z - N.pos.z) ** 2 < 220 * 220) c++; if (c > bc) { bc = c; at = { x: N.pos.x, z: N.pos.z, N, where: N.where }; } }
+  if (!at || bc < 10) {
+    at = null; const ml = ZM.list.filter(z => z.alive && z.pos.x < COAST && !z.isleRun && !z.D.boss); if (ml.length < 14) return false;
+    let best = null; bc = 0; for (let k = 0; k < 20; k++) { const z = ml[(Math.random() * ml.length) | 0]; let c = 0; for (const o of ml) if ((o.pos.x - z.pos.x) ** 2 + (o.pos.z - z.pos.z) ** 2 < 6400) c++; if (c > bc) { bc = c; best = z; } }
+    if (!best || bc < 12) return false; at = { x: best.pos.x, z: best.pos.z, where: placeName(best.pos.x, best.pos.z) };
+  }
+  const list = ZM.list.filter(z => z.alive && !z.isleRun && !z.D.boss && !z.fuse && !z.isle && (z.pos.x - at.x) ** 2 + (z.pos.z - at.z) ** 2 < 260 * 260).sort((a, b) => ((a.pos.x - at.x) ** 2 + (a.pos.z - at.z) ** 2) - ((b.pos.x - at.x) ** 2 + (b.pos.z - at.z) ** 2)).slice(0, 22);
+  for (const z of list) { z.fuse = at; z.goal = { x: at.x, z: at.z }; z.prey = z.civ = null; z.heard = true; }
+  at.list = list; at.t = 0; at.n = 0; at.kind = FUSE.n % 3 === 2 && ZM.t > 840 ? 'titan' : 'giant'; FUSE.n++; FUSE.cur = at;
+  addFeed(null, null, `🧟 De zombies bij ${at.where} kruipen op één hoop… er groeit iets GROOTS. Stop ze voor het te laat is!`); markers.push({ p: new V3(at.x, getH(at.x, at.z), at.z), t: 0, col: '#ff6a50' });
+  return true;
+}
+function updateFuse(dt) {
+  if (!ZM.on || ECO.over || ZM.cured || ZM.outT > 0) return;
+  const F = FUSE.cur;
+  if (!F) { FUSE.t -= dt; if (FUSE.t <= 0) { FUSE.t = rnd(200, 260) / Math.sqrt(ZM.diff / 1.4); if (!fuseStart()) FUSE.t = 40; } return; }
+  F.t += dt;
+  for (const z of F.list) {
+    if (!z.alive || z.removed || z.fuse !== F) continue;
+    if ((z.pos.x - F.x) ** 2 + (z.pos.z - F.z) ** 2 < 70) { z.fuse = null; for (let i = 0; i < 3; i++) spawnP(z.pos.clone().add(new V3(0, 1, 0)), { tex: smokeTex, color: 0x6b7a3a, op: .6, size: 1.8, grow: 2, life: 1.2, vel: new V3(rnd(-1, 1), 2, rnd(-1, 1)), drag: 1 }); z.remove(); F.n++; }
+  }
+  if (F.n && Math.random() < dt * 6) spawnP(new V3(F.x + rnd(-3, 3), getH(F.x, F.z) + 1, F.z + rnd(-3, 3)), { tex: smokeTex, color: 0x7f9a4a, op: .45, size: 3, grow: 3, life: 2, vel: new V3(0, 3 + F.n * .2, 0), drag: .8 });
+  if (F.n >= 14 || F.t > 38) {
+    FUSE.cur = null; for (const z of F.list) if (z.fuse === F) z.fuse = null;
+    if (F.n >= 4) spawnGiant(F.x + 2, F.z, F.kind, F.where, F.n);
+  }
+}
+// giants sometimes join the swim to the island (later in the game)
+const _zIsleB = zIsleAssault;
+zIsleAssault = function () {
+  _zIsleB();
+  if (ZM.t < 720 || Math.random() > .35) return;
+  const g = ZM.list.find(z => z.alive && z.D.boss && !z.isleRun && !z.misBoss && z.pos.x < WORLD); if (!g) return;
+  const R = zSwimTarget(g.pos.z); g.isleRun = R; g.goal = { x: R.gx, z: R.gz }; g.prey = null; g.heard = true;
+  addFeed(null, null, `👹 Er zwemt ook een ${g.variant === 'titan' ? 'KOLOS' : 'REUS'} naar je eiland!`);
+};
+// boss health bar
+{
+  const st = document.createElement('style');
+  st.textContent = `#bossBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(166px + env(safe-area-inset-top,0px));width:min(46vw,420px);z-index:21;pointer-events:none;font:700 12px var(--display);color:#ffd6cc;text-align:center;letter-spacing:.08em;text-shadow:0 1px 3px #000}
+#bossBar .b{height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,120,90,.6);margin-top:3px} #bossBar .b i{display:block;height:100%;background:linear-gradient(90deg,#b3301f,#ff6a50)}`;
+  document.head.appendChild(st);
+  const b = document.createElement('div'); b.id = 'bossBar'; b.hidden = true; document.body.appendChild(b);
+}
+function updateBossBar() {
+  const el = document.getElementById('bossBar'); if (!el) return;
+  let best = null, bd = 1e18; const cp = camera.position;
+  if (state === 'play' || state === 'possess') for (const z of ZM.list) { if (!z.alive || !z.D.boss) continue; let d = (z.pos.x - cp.x) ** 2 + (z.pos.z - cp.z) ** 2; if (z.misBoss && MIS.active === z.misBoss) d *= .05; if (d < bd) { bd = d; best = z; } }
+  if (!best || bd > 1100 * 1100) { if (!el.hidden) el.hidden = true; return; }
+  const h = `👹 ${best.variant === 'titan' ? 'KOLOS' : 'REUS'}${best.where ? ' · ' + best.where : ''} · ${Math.ceil(best.hp / best.maxHp * 100)}%<div class="b"><i style="width:${best.hp / best.maxHp * 100}%"></i></div>`;
+  if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false;
+}
+// ---------- missions ----------
+ROLES.surv = { rng: 0, chase: 0, dmg: 0, mag: 1, burst: [1, 1], cd: 1, pause: [1, 1], spr: 1, snd: 'rifle' };
+const MIS = { list: [], active: null, nextT: 40, seq: 0, cd: { a10: 0, arty: 0, apache: 0 }, arty: [], hold: false, sig: '', min: false, uiT: 0, followT: 0 };
+const MCD = { a10: 70, arty: 35, apache: 120 };
+function lzSpot(x, z, r0, r1) {
+  for (let i = 0; i < 120; i++) {
+    const a = rnd(0, TAU), r = rnd(r0, r1 + i), px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+    if (Math.abs(pz) > WORLD - 50 || px < -WORLD + 50 || (px > COAST - 40 && px < WORLD + 300)) continue;
+    const h = getH(px, pz); if (h < WATER + 1.2) continue; let ok = true;
+    for (const [a2, b2] of [[0, 0], [9, 0], [-9, 0], [0, 9], [0, -9]]) if (inBox(new V3(px + a2, getH(px + a2, pz + b2) + 2, pz + b2))) { ok = false; break; }
+    if (!ok || Math.abs(getH(px + 8, pz) - getH(px - 8, pz)) > 3 || Math.abs(getH(px, pz + 8) - getH(px, pz - 8)) > 3) continue;
+    return new V3(px, 0, pz);
+  }
+  return new V3(x + r0, 0, z);
+}
+function landIn(x0, x1, z0, z1) { for (let i = 0; i < 80; i++) { const x = rnd(x0, x1), z = rnd(z0, z1); if (getH(x, z) > WATER + 2 && !inBox(new V3(x, getH(x, z) + 1, z))) return new V3(x, 0, z); } return null; }
+function misCreate() {
+  const T = CMD.team, foe = 1 - T, opts = [], taken = o => MIS.list.some(M => M.target === o) || (MIS.active && MIS.active.target === o);
+  if (ZM.on) {
+    const ns = NEST.list.filter(N => N.alive && !taken(N));
+    if (ns.length) opts.push(Object.assign(() => { const N = ns[(Math.random() * ns.length) | 0]; return { type: 'c4', title: 'Blaas het broeinest op', where: N.where, target: N, obj: N.pos.clone(), tname: 'het broeinest' }; }, { k: 'c4' }));
+    const cs = CITIES.filter(C => C.X && C.X.length);
+    if (cs.length) opts.push(Object.assign(() => { const C = cs[(Math.random() * cs.length) | 0]; const p = new V3(C.X[(Math.random() * C.X.length) | 0], 0, C.Z[(Math.random() * C.Z.length) | 0]); return { type: 'rescue', title: 'Red de overlevenden', where: cityName(C), obj: p, nSurv: 4 }; }, { k: 'rescue' }));
+    if (HOSP.length) opts.push(Object.assign(() => { const H = HOSP[(Math.random() * HOSP.length) | 0]; return { type: 'sample', title: 'Haal het virusstaal uit het ziekenhuis', where: H.name, obj: H.nodes.D.clone(), H, item: 'staal' }; }, { k: 'sample' }));
+    opts.push(Object.assign(() => { const p = landIn(-WORLD * .8, COAST - 200, -WORLD * .8, WORLD * .8); return p && { type: 'radio', title: 'Verdedig de noodzender', where: placeName(p.x, p.z), obj: p }; }, { k: 'radio' }));
+    if (ZM.t > 90 && !ZM.list.some(z => z.alive && z.misBoss) && !MIS.list.some(M => M.type === 'boss')) opts.push(Object.assign(() => { const p = landIn(-WORLD * .8, COAST - 200, -WORLD * .8, WORLD * .8); return p && { type: 'boss', title: ZM.t > 900 ? 'Dood de kolos' : 'Dood de reus', where: placeName(p.x, p.z), obj: p, kind: ZM.t > 900 ? 'titan' : 'giant' }; }, { k: 'boss' }));
+  } else {
+    const ss = units.filter(u => u.alive && u.team === foe && u.type === 'struct' && !u.noTarget && u.pos.x < WORLD && !u.isleSilo && !taken(u));
+    if (ss.length) opts.push(Object.assign(() => { const s = ss[(Math.random() * ss.length) | 0]; return { type: 'c4', title: `Blaas de vijandelijke ${s.label().replace(/^Rood |^Blauw /, '').toLowerCase()} op`, where: placeName(s.pos.x, s.pos.z), target: s, obj: s.pos.clone(), tname: 'de ' + s.label().replace(/^Rood |^Blauw /, '').toLowerCase() }; }, { k: 'c4' }));
+    const bz = BASES[foe].z, zz = [Math.min(0, bz * .2), Math.max(0, bz * .2)], z0 = bz < 0 ? bz * .75 : bz * .2, z1 = bz < 0 ? bz * .2 : bz * .75;
+    opts.push(Object.assign(() => { const p = landIn(-WORLD * .75, COAST - 200, Math.min(z0, z1), Math.max(z0, z1)); return p && { type: 'pilot', title: 'Red de neergeschoten piloot', where: placeName(p.x, p.z), obj: p, nSurv: 1 }; }, { k: 'pilot' }));
+    const ps = POINTS.filter(p => p.owner === foe);
+    if (ps.length) opts.push(Object.assign(() => { const P = ps[(Math.random() * ps.length) | 0]; const p = lzSpot(P.x, P.z, 5, 30); return { type: 'intel', title: 'Steel de geheime plannen', where: `${P.L} ${P.name}`, obj: p, item: 'plannen' }; }, { k: 'intel' }));
+    opts.push(Object.assign(() => { const p = landIn(-WORLD * .7, COAST - 200, -WORLD * .5, WORLD * .5); return p && { type: 'radio', title: 'Verdedig de zendmast', where: placeName(p.x, p.z), obj: p }; }, { k: 'radio' }));
+    void zz;
+  }
+  // prefer a kind of mission that is not on the list yet
+  const fresh = opts.filter(f => !MIS.list.some(m => m.type === f.k)), pool = fresh.length ? fresh : opts;
+  for (let tries = 0; tries < 6 && pool.length; tries++) {
+    const M = pool[(Math.random() * pool.length) | 0](); if (!M) continue;
+    M.id = ++MIS.seq; M.state = 'avail'; M.t = 0; M.icon = { c4: '💣', rescue: '🆘', pilot: '🪂', sample: '🧪', intel: '📁', radio: '📡', boss: '👹' }[M.type];
+    MIS.list.push(M); addFeed(null, null, `⭐ Nieuwe missie: ${M.icon} ${M.title} · ${M.where} · open het missievak om te starten`); MIS.sig = ''; return M;
+  }
+  return null;
+}
+// what waits at the objective
+function misPopulate(M) {
+  const o = M.obj, T = M.team, foe = 1 - T;
+  const ring = (n, r0, r1, f) => { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), r = rnd(r0, r1), x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r; if (getH(x, z) > WATER + .5) f(x, z); } };
+  if (ZM.on) {
+    const n = Math.round(6 + 4 * ZM.diff);
+    if (M.type === 'c4') { M.target.queue += Math.round(8 + 3 * ZM.diff); ring(n, 10, 40, (x, z) => zSpawn(x, z, zKind())); }
+    else if (M.type === 'boss') { const g = spawnGiant(o.x, o.z, M.kind, M.where); g.misBoss = M; M.target = g; ring(Math.round(n / 2), 10, 35, (x, z) => zSpawn(x, z, zKind())); }
+    else if (M.type === 'sample') { const H = M.H, rooms = ['A', 'B', 'C', 'E', 'cL', 'cR', 'lobby']; for (let i = 0; i < n; i++) { const q = H.nodes[rooms[i % rooms.length]]; zSpawn(q.x + rnd(-2, 2), q.z + rnd(-2, 2), Math.random() < .3 ? 'runner' : 'walker'); } ring(Math.round(n / 2), 30, 60, (x, z) => zSpawn(x, z, zKind())); }
+    else if (M.type === 'rescue') ring(n + 2, 40, 80, (x, z) => zSpawn(x, z, zKind()));
+    else ring(n + 4, 12, 50, (x, z) => zSpawn(x, z, zKind()));
+  } else {
+    const n = M.type === 'radio' ? 4 : 7;
+    ring(n, M.type === 'pilot' ? 25 : 8, M.type === 'pilot' ? 60 : 30, (x, z) => { const s = new Soldier(foe, x, z, Math.random() < .25 ? 'mg' : Math.random() < .2 ? 'at' : 'rifle'); s.misGuard = new V3(x, 0, z); s.order = { type: 'move', p: s.misGuard.clone() }; });
+  }
+  // props: the case, the radio mast
+  if (M.item) { const g = new THREE.Group(); mesh(new THREE.BoxGeometry(.9, .5, .6), mat(M.type === 'sample' ? 0xe8e4da : 0x3a3f2a), 0, .25, 0, g); mesh(new THREE.BoxGeometry(.3, .08, .62), mat(0xc62828), 0, .52, 0, g); const beam = mesh(new THREE.CylinderGeometry(.25, .25, 40, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd34a, transparent: true, opacity: .28, depthWrite: false, side: THREE.DoubleSide }), 0, 20, 0, g); beam.castShadow = false; g.position.set(o.x, getH(o.x, o.z), o.z); scene.add(g); M.prop = g; }
+  if (M.type === 'radio') { const g = new THREE.Group(), st = mat(0x8a8f92); mesh(new THREE.CylinderGeometry(.12, .2, 14, 6), st, 0, 7, 0, g); mesh(new THREE.BoxGeometry(1.4, 1.1, .9), mat(0x4f5b38), 1.3, .55, 0, g); M.lamp = mesh(new THREE.SphereGeometry(.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b2a }), 0, 14.2, 0, g); g.position.set(o.x, getH(o.x, o.z), o.z); scene.add(g); M.prop = g; }
+}
+function misSurvivors(M) {
+  const o = M.obj; M.surv = [];
+  for (let i = 0; i < M.nSurv; i++) {
+    const s = new Soldier(M.team, o.x + rnd(-3, 3), o.z + rnd(-3, 3), 'surv'); s.surv = M; s.hp = s.maxHp = M.type === 'pilot' ? 300 : 150; s.misName = M.type === 'pilot' ? 'piloot' : 'overlevende';
+    if (s.gun) s.gun.visible = false; const vest = mesh(new THREE.BoxGeometry(.5, .5, .34), mat(M.type === 'pilot' ? 0x5d6b3a : 0xff7a1a), 0, 1.25, 0, s.body); vest.castShadow = false;
+    s.noTarget = true; M.surv.push(s);
+  }
+}
+const misLeader = M => (PZ.unit && PZ.unit.alive && M.squad && M.squad.includes(PZ.unit)) ? PZ.unit : null;
+function misStart(M) {
+  if (MIS.active) { flashTip('Er loopt al een missie · maak die eerst af'); return; }
+  if (state === 'possess') unpossess(); if (CTL.on) ctlExit(false); if (typeof BCW !== 'undefined' && BCW.unit) stopWatch();
+  if (state !== 'play') return;
+  const i = MIS.list.indexOf(M); if (i >= 0) MIS.list.splice(i, 1);
+  if (M.target && !M.target.alive) { flashTip('Het doel bestaat niet meer'); return; }
+  MIS.active = M; M.state = 'fly'; M.step = 'fly'; M.team = CMD.team; M.t = 0; M.prog = 0;
+  M.lz = lzSpot(M.obj.x, M.obj.z, M.type === 'c4' && ZM.on ? 90 : 70, 140);
+  misPopulate(M);
+  const b = BASES[M.team], dv = new V3(b.x - M.lz.x, 0, b.z - M.lz.z); if (dv.lengthSq() < 1) dv.set(0, 0, 1); dv.normalize();
+  const sx = clamp(M.lz.x + dv.x * 480, -WORLD + 60, WORLD - 60), sz = clamp(M.lz.z + dv.z * 480, -WORLD + 60, WORLD - 60);
+  const h = new Heli(M.team, M.lz, []); h.hp = h.maxHp = 1400; h.pos.set(sx, Math.max(getH(sx, sz), WATER) + 70, sz); h.start = new V3(b.x, 0, b.z); h.yaw = Math.atan2(M.lz.x - sx, M.lz.z - sz); h.MS = M; h.MSrole = 'drop'; h.noTarget = true; M.drop = h;   // flies low and fast: enemy air defence does not lock on
+  addFeed(null, null, `🚁 Missie gestart: ${M.icon} ${M.title} · de heli brengt je team naar de landingszone`);
+  ctlEnter('watch', h); MIS.sig = '';
+}
+// the mission helicopters wait on the ground until we let them go
+const _heliUpdM = Heli.prototype.update;
+Heli.prototype.update = function (dt) {
+  const M = this.MS; if (!M || !this.alive || this.isPlayerUnit()) return _heliUpdM.call(this, dt);
+  if (this.state === 'unload' && !this.MSgo) this.t = 0;
+  _heliUpdM.call(this, dt);
+  if (this.state !== 'unload' || this.MSgo) return;
+  if (this.MSrole === 'drop') { this.MSgo = true; misLanded(M, this); }
+  else if (this.MSrole === 'exfil' && !M.exReady) { M.exReady = true; addFeed(null, null, '🚁 De heli is geland · instappen!'); }
+};
+function misLanded(M, h) {
+  if (MIS.active !== M) return;
+  const f = h.forward(), door = new V3(h.pos.x + f.z * 3, 0, h.pos.z - f.x * 3);
+  const roles = ZM.on ? ['rifle', 'mg', 'flame', 'at'] : ['rifle', 'mg', 'at', 'rifle'];
+  M.squad = roles.map((r, i) => { const s = new Soldier(M.team, door.x + rnd(-1.5, 1.5) + (i % 2) * 1.5, door.z + rnd(-1.5, 1.5) + (i >> 1) * 1.5, r); s.mis = M; s.yaw = h.yaw; s.hp = s.maxHp = i ? 170 : 220; return s; });
+  M.state = 'ground'; M.step = M.type === 'radio' ? 'goto' : 'goto'; M.lzLeft = SIMT;
+  if (CTL.on && CTL.obj === h) ctlExit(false);
+  if (state === 'play') { PZ.fp = true; possess(M.squad[0]); }
+  addFeed(null, null, `🪖 Je team is geland · ${misStepText(M)} · luchtsteun: knoppen links (1 2 3), actie: E`);
+}
+function misStepText(M) {
+  const t = M.type, s = M.step;
+  if (s === 'fly') return 'Onderweg naar de landingszone';
+  if (s === 'exfil') return M.exReady ? '🚁 Ren naar de heli en stap in' : '🚁 De heli komt je ophalen · houd stand';
+  if (t === 'c4') return s === 'armed' ? `💥 WEGWEZEN! Ontploffing over ${Math.ceil(M.boomT)} s` : `Plant C4 op ${M.tname}`;
+  if (t === 'rescue' || t === 'pilot') { const n = (M.surv || []).filter(u => u.alive).length; return s === 'goto' ? (t === 'pilot' ? 'Vind de piloot' : 'Vind de overlevenden') : `Breng ${t === 'pilot' ? 'de piloot' : `de overlevenden (${n})`} naar de heli`; }
+  if (t === 'sample' || t === 'intel') return M.carrier ? `Breng ${t === 'sample' ? 'het staal' : 'de plannen'} naar de heli` : `Pak ${t === 'sample' ? 'het virusstaal' : 'de geheime plannen'}`;
+  if (t === 'radio') return s === 'hold' ? `Verdedig de zender · ${Math.floor(M.prog)}/60 s` : 'Ga naar de zender';
+  if (t === 'boss') { const g = M.target; return g && g.alive ? `Dood de ${g.variant === 'titan' ? 'kolos' : 'reus'} · ${Math.ceil(g.hp / g.maxHp * 100)}%` : 'Doel uitgeschakeld'; }
+  return '';
+}
+function misGoal(M) {
+  if (M.step === 'exfil' && M.ex) return M.ex.pos;
+  if ((M.type === 'rescue' || M.type === 'pilot') && M.step === 'escort') return M.ex ? M.ex.pos : M.lz;
+  if (M.type === 'boss' && M.target && M.target.alive) return M.target.pos;
+  if (M.type === 'c4' && M.target && M.target.alive) return M.target.pos;
+  return M.obj;
+}
+function misCallExfil(M) {
+  if (M.ex) return; const L = misLeader(M) || (M.squad || []).find(s => s.alive); if (!L) return;
+  const lz = lzSpot(L.pos.x, L.pos.z, 35, 110), b = BASES[M.team], dv = new V3(b.x - lz.x, 0, b.z - lz.z); if (dv.lengthSq() < 1) dv.set(0, 0, 1); dv.normalize();
+  const sx = clamp(lz.x + dv.x * 520, -WORLD + 60, WORLD - 60), sz = clamp(lz.z + dv.z * 520, -WORLD + 60, WORLD - 60);
+  const h = new Heli(M.team, lz, []); h.hp = h.maxHp = 1600; h.pos.set(sx, Math.max(getH(sx, sz), WATER) + 70, sz); h.start = new V3(b.x, 0, b.z); h.yaw = Math.atan2(lz.x - sx, lz.z - sz); h.MS = M; h.MSrole = 'exfil'; h.noTarget = true;
+  M.ex = h; M.exReady = false; addFeed(null, null, '📞 Ophaalheli onderweg · houd stand tot hij landt');
+}
+function misDone(M, what) { M.step = M.type === 'rescue' || M.type === 'pilot' ? 'escort' : 'exfil'; if (M.step === 'exfil' || M.type === 'pilot' || M.type === 'rescue') misCallExfil(M); addFeed(null, null, `✅ ${what} · ${misStepText(M)}`); }
+function misCleanup(M) {
+  if (M.prop) { const g = M.prop; M.prop = null; setTimeout(() => scene.remove(g), 4000); }
+  if (M.c4) { scene.remove(M.c4); M.c4 = null; }
+  for (const s of M.squad || []) s.mis = null;
+  for (const s of units) if (s.misGuard) s.misGuard = null;
+  MIS.sig = '';
+}
+function misFail(M, why) {
+  if (MIS.active !== M) return; MIS.active = null; M.state = 'fail';
+  if (state === 'possess' && M.squad && M.squad.includes(PZ.unit)) unpossess();
+  if (CTL.on && (CTL.obj === M.drop || CTL.obj === M.ex)) ctlExit(false);
+  if (M.ex && M.ex.alive) M.ex.MSgo = true; misCleanup(M);
+  addFeed(null, null, `❌ MISSIE MISLUKT · ${why}`); flashTip(`❌ Missie mislukt: ${why}`);
+}
+function misSucceed(M) {
+  const h = M.ex, near = u => u.alive && !u.removed && Math.hypot(u.pos.x - h.pos.x, u.pos.z - h.pos.z) < 45;
+  if (PZ.unit && M.squad.includes(PZ.unit)) unpossess();
+  let men = 0, saved = 0; for (const s of M.squad) if (near(s)) { liftHidden(s); men++; } for (const s of M.surv || []) if (near(s)) { liftHidden(s); saved++; }
+  h.MSgo = true; MIS.active = null; M.state = 'done'; misCleanup(M);
+  const T = M.team, R = []; let money = 2500;
+  if (ZM.on) {
+    const res = ZM.res;
+    if (M.type === 'sample') { ZM.cure = Math.min(99, ZM.cure + 12); res.med += 25; R.push('+12% geneesmiddel', '+25 💊'); }
+    else if (M.type === 'rescue') { res.food += 10; const st = EVM.st['isle' + T]; if (st) st.saved = (st.saved || 0) + saved; R.push(`${saved} ${saved === 1 ? 'overlevende' : 'overlevenden'} naar het eiland`); money += saved * 400; }
+    else if (M.type === 'radio') { ZM.isleT += 150; R.push('de volgende eilandaanval komt later'); }
+    else if (M.type === 'boss') { for (const k in res) res[k] += 20; money = 5000; R.push('+20 van alle voorraden'); }
+    else if (M.type === 'c4') { res.oil += 20; R.push('+20 ⛽'); }
+  } else { score[T] += 15; if (M.type === 'pilot') { money += 1500; R.push('de piloot is gered'); } if (M.type === 'intel') { money += 2000; R.push('je ziet een tijdje alle vijandelijke plannen'); } }
+  if (ECO.on) { ECO.money[T] += money; R.unshift(`◆ ${fmtMoney ? fmtMoney(money) : money}`); }
+  addFeed(null, null, `🏆 MISSIE GESLAAGD · ${M.icon} ${M.title} · ${men} van ${M.squad.length} soldaten terug · ${R.join(' · ')}`); flashTip(`🏆 Missie geslaagd! ${R.join(' · ')}`);
+  cam.x = h.pos.x; cam.z = h.pos.z;
+}
+// the mission, once a frame
+function updateMission(dt) {
+  if (state === 'menu') return;
+  for (const k in MIS.cd) MIS.cd[k] = Math.max(0, MIS.cd[k] - dt);
+  // queued artillery shells
+  for (let i = MIS.arty.length - 1; i >= 0; i--) { const A = MIS.arty[i]; A.t -= dt; if (A.t > 0) continue; MIS.arty.splice(i, 1); const p = A.p.clone().add(new V3(rnd(-13, 13), 0, rnd(-13, 13))); p.y = Math.max(getH(p.x, p.z), WATER); const from = p.clone().add(new V3(rnd(-25, 25), 320, rnd(-25, 25))); launch('arty', from, p.clone().sub(from).normalize().multiplyScalar(300), A.owner); }
+  if (ROCKS.length) updateRocks(dt);
+  // offering new missions
+  if (!ECO.over && (state === 'play' || state === 'possess')) {
+    MIS.nextT -= dt; if (MIS.nextT <= 0) { MIS.nextT = rnd(100, 160); if (MIS.list.length < 3) misCreate(); }
+    for (let i = MIS.list.length - 1; i >= 0; i--) { const M = MIS.list[i]; M.t += dt; if (M.t > 600 || (M.target && !M.target.alive)) { MIS.list.splice(i, 1); MIS.sig = ''; } }
+  }
+  const M = MIS.active; if (!M) return;
+  M.t += dt;
+  if (M.state === 'fly') { if (!M.drop.alive || M.drop.removed) misFail(M, 'de heli is neergehaald voor hij kon landen'); return; }
+  const sq = M.squad.filter(s => s.alive && !s.removed);
+  if (!sq.length) return misFail(M, 'je hele team is gesneuveld');
+  // take over from a fallen soldier
+  if (M.swapT > 0) { M.swapT -= dt; if (M.swapT <= 0) { const nx = sq[0]; if (state === 'possess') unpossess(); if (nx && state === 'play') { PZ.fp = true; possess(nx); addFeed(null, null, `🎮 Je neemt het over: ${nx.label().replace(/^Blauw |^Rood /, '').toLowerCase()}`); } } }
+  const L = misLeader(M), lead = L || sq[0];
+  // the rest of the team follows you; the survivors follow too once found
+  MIS.followT -= dt;
+  if (MIS.followT <= 0) {
+    MIS.followT = .6; const f = new V3(Math.sin(lead.yaw), 0, Math.cos(lead.yaw)), r = new V3(f.z, 0, -f.x);
+    const followers = [...sq.filter(s => s !== L), ...(M.step !== 'goto' && M.surv ? M.surv.filter(s => s.alive) : [])];
+    followers.forEach((s, i) => {
+      if (!L && !(M.exReady && M.ex)) return; if (s === lead && !M.exReady) return;
+      let goal; if (M.exReady && M.ex) { const h = M.ex; goal = new V3(h.pos.x + rnd(-3, 3), 0, h.pos.z + rnd(-3, 3)); }
+      else { const side = i % 2 ? 1 : -1, back = 3 + Math.floor(i / 2) * 2.6; goal = lead.pos.clone().addScaledVector(f, -back).addScaledVector(r, side * 2.4); }
+      const d = Math.hypot(goal.x - s.pos.x, goal.z - s.pos.z);
+      if (d > (M.exReady ? 2 : 5)) s.order = { type: 'move', p: goal, run: d > 14 || !!M.exReady }; else if (s.order && s.order.type === 'move') s.order = null;
+    });
+    for (const s of units) if (s.misGuard && s.alive && !s.order && Math.hypot(s.pos.x - s.misGuard.x, s.pos.z - s.misGuard.z) > 14) s.order = { type: 'move', p: s.misGuard.clone() };
+  }
+  // the objective
+  const o = misGoal(M), dO = Math.hypot(o.x - lead.pos.x, o.z - lead.pos.z), act = MIS.act = { can: false, label: '', need: 0 };
+  if (M.step === 'goto' || M.step === 'armed' || M.step === 'hold' || M.step === 'escort') {
+    if (M.type === 'c4') {
+      if (!M.target.alive && M.step === 'goto') misDone(M, `${M.tname[0].toUpperCase() + M.tname.slice(1)} is al vernietigd`);
+      else if (M.step === 'goto') { act.can = !!L && dO < 9 + (M.target.radius || 0); act.label = '💣 PLANT C4'; act.need = 2.5; }
+      else if (M.step === 'armed') {
+        M.boomT -= dt; if (M.c4 && Math.floor(M.boomT * 3) % 2) M.c4.children[1].visible = !M.c4.children[1].visible;
+        if (M.boomT <= 0) { const p = M.c4 ? M.c4.position.clone() : M.target.pos.clone(); if (M.c4) { scene.remove(M.c4); M.c4 = null; } explosion(p.clone().add(new V3(0, 2, 0)), 3.4, { r: 10 }); for (const u of units) { if (!u.alive || u.hidden) continue; const d = u.center().distanceTo(p); if (d < 18 + u.radius) u.damage(u === M.target ? 1e7 : 700 * (1 - d / 22), lead, 'c4', p); } if (M.target.alive) M.target.damage(1e7, lead, 'c4'); misDone(M, `${M.tname[0].toUpperCase() + M.tname.slice(1)} is opgeblazen`); }
+      }
+    } else if (M.type === 'rescue' || M.type === 'pilot') {
+      if (M.step === 'goto') { if (!M.surv && dO < 30) misSurvivors(M); if (M.surv && sq.some(s => Math.hypot(s.pos.x - M.obj.x, s.pos.z - M.obj.z) < 11)) { for (const u of M.surv) u.noTarget = false; misDone(M, M.type === 'pilot' ? 'Je hebt de piloot gevonden' : 'Je hebt de overlevenden gevonden'); } }
+      if (M.surv && !M.surv.some(s => s.alive)) return misFail(M, M.type === 'pilot' ? 'de piloot is gedood' : 'alle overlevenden zijn dood');
+    } else if (M.type === 'sample' || M.type === 'intel') {
+      if (M.carrier && (!M.carrier.alive || M.carrier.removed)) { M.obj = M.carrier.pos.clone(); M.carrier = null; M.step = 'goto'; if (M.prop) { M.prop.visible = true; M.prop.position.set(M.obj.x, getH(M.obj.x, M.obj.z), M.obj.z); } addFeed(null, null, `⚠ ${M.type === 'sample' ? 'Het staal' : 'De plannen'} ligt op de grond · raap het weer op`); }
+      if (M.carrier && M.carrier !== L && L) { M.carrier = L; }
+      if (M.step === 'goto') { act.can = !!L && dO < 3.5; act.label = M.type === 'sample' ? '🧪 PAK HET STAAL' : '📁 PAK DE PLANNEN'; act.need = 3; }
+    } else if (M.type === 'radio') {
+      const inZone = sq.some(s => Math.hypot(s.pos.x - M.obj.x, s.pos.z - M.obj.z) < 15);
+      if (M.step === 'goto' && inZone) { M.step = 'hold'; M.waveT = 2; addFeed(null, null, '📡 De zender staat aan · het lawaai trekt vijanden aan · houd 60 seconden stand'); }
+      if (M.step === 'hold') {
+        if (inZone) M.prog += dt; if (M.lamp) M.lamp.visible = Math.floor(SIMT * 2) % 2 === 0;
+        M.waveT -= dt; if (M.waveT <= 0) { M.waveT = 11; misWave(M); }
+        if (M.prog >= 60) misDone(M, 'De noodzender heeft zijn bericht verstuurd');
+      }
+    } else if (M.type === 'boss') { if (!M.target.alive) misDone(M, `De ${M.target.variant === 'titan' ? 'kolos' : 'reus'} is dood`); }
+  }
+  if (M.step === 'exfil' || M.step === 'escort') {
+    if (M.ex && (!M.ex.alive || M.ex.removed) && !M.exDeadT) { M.exDeadT = SIMT; addFeed(null, null, '⚠ De ophaalheli is neergehaald · een nieuwe komt eraan'); }
+    if (M.exDeadT && SIMT - M.exDeadT > 5) { M.exDeadT = 0; M.ex = null; M.exReady = false; misCallExfil(M); }
+    if (M.exReady && M.ex && M.ex.alive) {
+      const h = M.ex, who = L ? [L] : sq, near = who.some(s => Math.hypot(s.pos.x - h.pos.x, s.pos.z - h.pos.z) < 8);
+      const needS = M.type === 'rescue' || M.type === 'pilot', sOk = !needS || (M.surv || []).some(s => s.alive && Math.hypot(s.pos.x - h.pos.x, s.pos.z - h.pos.z) < 40);
+      if (near && sOk && (M.step === 'exfil' || M.step === 'escort')) return misSucceed(M);
+      if (near && !sOk && noteOnce('waitS', 6)) flashTip(M.type === 'pilot' ? 'Wacht op de piloot' : 'Wacht op de overlevenden');
+    }
+  }
+  // the action button (hold E or the button)
+  if (act.can && MIS.hold) { M.actP = (M.actP || 0) + dt; if (M.actP >= act.need) { M.actP = 0; MIS.hold = false; misAction(M, L); } } else if (!act.can || !MIS.hold) M.actP = Math.max(0, (M.actP || 0) - dt * 2);
+}
+function misAction(M, L) {
+  if (M.type === 'c4') {
+    const t = M.target, p = L.pos.clone().lerp(t.pos, .5); p.y = getH(p.x, p.z);
+    const g = new THREE.Group(); mesh(new THREE.BoxGeometry(.5, .3, .35), mat(0x8a8d6a), 0, .15, 0, g); mesh(new THREE.SphereGeometry(.07, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff2a1a }), 0, .34, 0, g); g.position.copy(p); scene.add(g);
+    M.c4 = g; M.step = 'armed'; M.boomT = 8; addFeed(null, null, '💣 C4 geplant · 8 seconden · RENNEN!'); Snd.shot(p, 'click');
+  } else if (M.type === 'sample' || M.type === 'intel') { M.carrier = L; if (M.prop) M.prop.visible = false; misDone(M, M.type === 'sample' ? 'Je hebt het virusstaal' : 'Je hebt de geheime plannen'); }
+}
+function misWave(M) {
+  const o = M.obj;
+  if (ZM.on) {
+    zNoise(o.x, o.z, 700, 6); const N = NEST.list.filter(n => n.alive).sort((a, b) => Math.hypot(a.pos.x - o.x, a.pos.z - o.z) - Math.hypot(b.pos.x - o.x, b.pos.z - o.z))[0];
+    for (let i = 0; i < Math.round(3 + 2 * ZM.diff); i++) { const a = rnd(0, TAU), r = rnd(90, 140), x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r; if (getH(x, z) > WATER + .5) { const zb = zSpawn(x, z, zKind()); if (zb) { zb.goal = { x: o.x, z: o.z }; zb.heard = true; } } }
+    if (N) N.queue += 4;
+  } else {
+    const a = rnd(0, TAU); for (let i = 0; i < 4; i++) { const x = o.x + Math.cos(a) * 220 + rnd(-10, 10), z = o.z + Math.sin(a) * 220 + rnd(-10, 10); if (getH(x, z) > WATER + .5) { const s = new Soldier(1 - M.team, x, z, i === 0 ? 'mg' : 'rifle'); s.order = { type: 'move', p: new V3(o.x, 0, o.z), run: true }; } }
+  }
+}
+// air support, called on the point you look at
+function misAir(kind) {
+  const M = MIS.active, L = M && misLeader(M);
+  if (!L) { flashTip('Luchtsteun kan alleen tijdens een missie als je zelf speelt'); return; }
+  if (MIS.cd[kind] > 0) { flashTip(`Nog ${Math.ceil(MIS.cd[kind])} s wachten`); return; }
+  const p = PZ.aim.clone(); p.y = Math.max(getH(p.x, p.z), WATER); const d = Math.hypot(p.x - L.pos.x, p.z - L.pos.z);
+  if (d > 1400) { flashTip('Te ver weg · kijk naar een plek dichterbij'); return; }
+  MIS.cd[kind] = MCD[kind];
+  for (let i = 0; i < 10; i++) spawnP(p.clone().add(new V3(rnd(-1, 1), .5, rnd(-1, 1))), { tex: smokeTex, color: 0xd9482a, op: .7, size: 2, grow: 3, life: 6, vel: new V3(rnd(-.4, .4), rnd(1.5, 3), rnd(-.4, .4)), drag: .6 });
+  markers.push({ p: p.clone(), t: 0, col: '#ff6a50' });
+  if (d < 35) flashTip('⚠ GEVAARLIJK DICHTBIJ · zoek dekking!');
+  if (kind === 'a10') { a10Run(M.team, p); addFeed(null, null, '✈ Drie A-10\'s vliegen naar je rookgranaat'); }
+  else if (kind === 'arty') { for (let i = 0; i < 8; i++) MIS.arty.push({ t: 6 + i * .45, p: p.clone(), owner: L }); addFeed(null, null, '💥 Artillerie: 8 granaten over 6 seconden'); }
+  else if (kind === 'apache') { const h = new AttackHeli(M.team, new V3(p.x, 0, p.z)); h.misAir = true; addFeed(null, null, '🚁 Aanvalshelikopter onderweg naar je rookgranaat'); }
+}
+// when the soldier you play dies, you take over a teammate
+const _pDiedM = player.died;
+player.died = function (...a) { if (_pDiedM) _pDiedM.apply(this, a); const M = MIS.active; if (M && M.squad && M.squad.includes(PZ.unit) && M.squad.some(s => s.alive && s !== PZ.unit)) M.swapT = 2.2; };
+// ---------- mission UI: the list, the objective bar, the marker, the buttons ----------
+{
+  const st = document.createElement('style');
+  st.textContent = `#misBox{background:var(--panel);border-left:2px solid #ffd34a;padding:6px 8px;font:500 12px/1.35 var(--display);color:#f3ecd2;pointer-events:auto}
+#misBox .hd{display:flex;justify-content:space-between;font-weight:700;color:#ffd34a;letter-spacing:.05em;cursor:pointer}
+#misBox .m{display:flex;align-items:center;gap:6px;margin-top:5px} #misBox .m div{flex:1;min-width:0} #misBox .m small{display:block;opacity:.75;font-size:10.5px}
+#misBox button{appearance:none;background:rgba(255,211,74,.16);border:1px solid rgba(255,211,74,.55);color:#fff;font:700 11px var(--display);padding:5px 7px;cursor:pointer;white-space:nowrap}
+#misBox button.x{background:rgba(226,84,60,.15);border-color:rgba(226,84,60,.5)}
+#misBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(128px + env(safe-area-inset-top,0px));z-index:21;pointer-events:none;background:rgba(14,16,12,.72);border:1px solid rgba(255,211,74,.55);padding:5px 12px;font:700 13px var(--display);color:#fff4cc;letter-spacing:.04em;text-align:center;max-width:70vw}
+#misBar .p{height:4px;background:rgba(255,255,255,.15);margin-top:4px} #misBar .p i{display:block;height:100%;background:#ffd34a}
+#misMark{position:fixed;z-index:20;pointer-events:none;transform:translate(-50%,-100%);font:700 12px var(--display);color:#ffd34a;text-align:center;text-shadow:0 1px 3px #000;white-space:nowrap}
+#misMark b{display:block;font-size:20px;line-height:1}
+#misAir{position:fixed;left:calc(10px + env(safe-area-inset-left,0px));top:38%;z-index:22;display:flex;flex-direction:column;gap:7px}
+#misAir button,#misAct{appearance:none;background:rgba(14,16,12,.7);border:1px solid rgba(255,211,74,.6);color:#fff;font:700 11px var(--display);padding:6px 8px;min-width:76px;min-height:40px;position:relative;overflow:hidden;cursor:pointer;touch-action:none}
+#misAir button i{position:absolute;left:0;bottom:0;height:3px;background:#ffd34a}
+#misAir button.cd{opacity:.5}
+#misAct{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:22;font-size:14px;padding:10px 18px;border-color:#9be04a;background:rgba(40,60,20,.8)}
+#misAct i{position:absolute;left:0;bottom:0;height:4px;background:#9be04a}`;
+  document.head.appendChild(st);
+  const side = document.getElementById('side');
+  const box = document.createElement('div'); box.id = 'misBox'; box.hidden = true; if (side) side.appendChild(box); else document.body.appendChild(box);
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) { if (e.target.closest('.hd')) { MIS.min = !MIS.min; MIS.sig = ''; } return; }
+    if (b.dataset.go) { const M = MIS.list.find(m => m.id === +b.dataset.go); if (M) misStart(M); }
+    else if (b.dataset.play) { const M = MIS.active; if (M) { if (M.state === 'fly') { if (CTL.on) ctlExit(false); ctlEnter('watch', M.drop); } else { const u = M.squad.find(s => s.alive); if (u) { if (CTL.on) ctlExit(false); PZ.fp = true; possess(u); } } } }
+    else if (b.dataset.abort) { const M = MIS.active; if (M) misFail(M, 'afgebroken'); }
+    b.blur();
+  });
+  const bar = document.createElement('div'); bar.id = 'misBar'; bar.hidden = true; document.body.appendChild(bar);
+  const mk = document.createElement('div'); mk.id = 'misMark'; mk.hidden = true; document.body.appendChild(mk);
+  const air = document.createElement('div'); air.id = 'misAir'; air.hidden = true;
+  air.innerHTML = '<button data-a="a10">✈ A-10<small> 1</small><i></i></button><button data-a="arty">💥 Artie<small> 2</small><i></i></button><button data-a="apache">🚁 Apache<small> 3</small><i></i></button>';
+  document.body.appendChild(air);
+  air.addEventListener('pointerdown', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); e.stopPropagation(); misAir(b.dataset.a); });
+  const actB = document.createElement('button'); actB.id = 'misAct'; actB.hidden = true; document.body.appendChild(actB);
+  actB.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { actB.setPointerCapture(e.pointerId); } catch (er) { } MIS.hold = true; });
+  const up = () => { MIS.hold = false; }; actB.addEventListener('pointerup', up); actB.addEventListener('pointercancel', up);
+  addEventListener('keydown', e => { if (state !== 'possess' || e.repeat) return; if (e.code === 'KeyE') MIS.hold = true; else if (e.code === 'Digit1') misAir('a10'); else if (e.code === 'Digit2') misAir('arty'); else if (e.code === 'Digit3') misAir('apache'); });
+  addEventListener('keyup', e => { if (e.code === 'KeyE') MIS.hold = false; });
+}
+function misUI(dt) {
+  const box = document.getElementById('misBox'); if (!box) return;
+  const M = MIS.active, play = state === 'play' || state === 'possess';
+  // the list in the side panel
+  MIS.uiT -= dt;
+  if (MIS.uiT <= 0) {
+    MIS.uiT = .5; const cp = new V3(cam.x, 0, cam.z);
+    const rows = MIS.list.map(m => `<div class="m"><div><b>${m.icon} ${m.title}</b><small>${m.where} · ${Math.round(Math.hypot(m.obj.x - cp.x, m.obj.z - cp.z))} m</small></div><button data-go="${m.id}">🚁 Start</button></div>`).join('');
+    const act = M ? `<div class="m"><div><b>▶ ${M.icon} ${M.title}</b><small>${misStepText(M)}</small></div><button data-play="1">🎮 Speel</button><button class="x" data-abort="1">✕</button></div>` : '';
+    const html = `<div class="hd"><span>⭐ MISSIES${MIS.list.length ? ' · ' + MIS.list.length : ''}</span><span>${MIS.min ? '▸' : '▾'}</span></div>${MIS.min ? '' : act + (rows || (M ? '' : '<div class="m"><small>Er komen zo nieuwe missies binnen</small></div>'))}`;
+    if (html !== MIS.sig) { MIS.sig = html; box.innerHTML = html; }
+    box.hidden = !(MIS.list.length || M) || state === 'menu';
+  }
+  const bar = document.getElementById('misBar'), mk = document.getElementById('misMark'), air = document.getElementById('misAir'), actB = document.getElementById('misAct');
+  const inMis = M && play && M.state !== 'fly' && misLeader(M);
+  air.hidden = !inMis; actB.hidden = true;
+  if (!M || !play || (state === 'play' && !(CTL.on && CTL.obj === M.drop))) { bar.hidden = true; mk.hidden = true; return; }
+  // the objective bar
+  let prog = 0; if (M.type === 'radio' && M.step === 'hold') prog = M.prog / 60; if (M.type === 'c4' && M.step === 'armed') prog = 1 - M.boomT / 8; if (M.type === 'boss' && M.target) prog = 1 - M.target.hp / M.target.maxHp;
+  const h = `${M.icon} ${misStepText(M)}${prog ? `<div class="p"><i style="width:${Math.min(100, prog * 100)}%"></i></div>` : ''}`;
+  if (bar._h !== h) { bar._h = h; bar.innerHTML = h; } bar.hidden = false;
+  if (inMis) {
+    for (const b of air.children) { const k = b.dataset.a, c = MIS.cd[k]; b.classList.toggle('cd', c > 0); b.lastChild.style.width = (c > 0 ? (1 - c / MCD[k]) * 100 : 100) + '%'; }
+    const A = MIS.act; if (A && A.can) { actB.hidden = false; const t = `${A.label}${IS_TOUCH ? '' : ' [E]'} <i style="width:${(M.actP || 0) / A.need * 100}%"></i>`; if (actB._h !== t) { actB._h = t; actB.innerHTML = t; } }
+  }
+  // the marker on the objective
+  const L = misLeader(M), g = misGoal(M); if (!g || M.state === 'fly') { mk.hidden = true; return; }
+  const P = new V3(g.x, Math.max(getH(g.x, g.z), WATER) + (M.type === 'boss' ? 14 : 4), g.z), v = P.clone().applyMatrix4(camera.matrixWorldInverse), pr = P.clone().project(camera);
+  let sx = (pr.x * .5 + .5) * innerWidth, sy = (-pr.y * .5 + .5) * innerHeight; const behind = v.z > 0; if (behind) { sx = innerWidth - sx; sy = innerHeight * .8; }
+  const cx = clamp(sx, 50, innerWidth - 50), cy = clamp(sy, 90, innerHeight - 60), edge = behind || cx !== sx || cy !== sy;
+  const dist = L ? Math.round(Math.hypot(g.x - L.pos.x, g.z - L.pos.z)) : 0, icon = M.step === 'exfil' || M.step === 'escort' ? '🚁' : M.icon;
+  const t = `<b>${edge ? (cx <= 50 ? '◀' : cx >= innerWidth - 50 ? '▶' : behind ? '▼' : '▲') : icon}</b>${dist ? dist + ' m' : ''}`;
+  if (mk._h !== t) { mk._h = t; mk.innerHTML = t; } mk.style.left = cx + 'px'; mk.style.top = cy + 'px'; mk.hidden = false;
+}
+// labels and stars for missions on the map and the minimap
+const _drawOverlayM = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayM(dt);
+  if (state !== 'play' || (typeof CTL !== 'undefined' && CTL.on)) return;
+  const cp = camera.position;
+  for (const M of MIS.list) {
+    const P = new V3(M.obj.x, Math.max(getH(M.obj.x, M.obj.z), WATER) + 16, M.obj.z); if (P.distanceTo(cp) > 2600) continue; const q = project(P); if (!q) continue;
+    const t = `⭐ MISSIE: ${M.icon} ${M.title}`; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.7)'; oc.strokeText(t, q[0], q[1]); oc.fillStyle = '#ffd34a'; oc.fillText(t, q[0], q[1]);
+  }
+};
+const _drawMinimapM = drawMinimap;
+drawMinimap = function () {
+  _drawMinimapM(); const k = 392 / (2 * WORLD);
+  const star = (x, y, r, col) => { mmc.fillStyle = col; mmc.strokeStyle = '#000'; mmc.lineWidth = 1.5; mmc.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r; mmc.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } mmc.closePath(); mmc.fill(); mmc.stroke(); };
+  for (const M of MIS.list) star((M.obj.x + WORLD) * k, (M.obj.z + WORLD) * k, 7, '#ffd34a');
+  const M = MIS.active; if (M) { const g = misGoal(M); star((g.x + WORLD) * k, (g.z + WORLD) * k, 8 + Math.sin(SIMT * 6) * 2, '#ff9a4a'); }
+  for (const z of ZM.list) if (z.alive && z.D.boss) { const x = (z.pos.x + WORLD) * k, y = (z.pos.z + WORLD) * k; mmc.fillStyle = '#ff3b2a'; mmc.strokeStyle = '#000'; mmc.lineWidth = 2; mmc.beginPath(); mmc.arc(x, y, 6, 0, TAU); mmc.fill(); mmc.stroke(); }
+};
+// guards stay near what they guard
+const _thinkG = Soldier.prototype.think;
+Soldier.prototype.think = function (dt) { if (this.misGuard && !this.order && Math.hypot(this.pos.x - this.misGuard.x, this.pos.z - this.misGuard.z) > 16) this.order = { type: 'move', p: this.misGuard.clone() }; return _thinkG.call(this, dt); };
+const _labelS = Soldier.prototype.label;
+Soldier.prototype.label = function () { return this.misName ? (this.misName[0].toUpperCase() + this.misName.slice(1)) : _labelS.call(this); };
+// reset per battle
+const _setupBattleM = setupBattle;
+setupBattle = function (battle) {
+  if (MIS.active) { MIS.active = null; } MIS.list.length = 0; MIS.nextT = 40; MIS.arty.length = 0; for (const k in MIS.cd) MIS.cd[k] = 0; MIS.sig = '';
+  for (const R of ROCKS) scene.remove(R.m); ROCKS.length = 0; FUSE.cur = null; FUSE.t = 230; FUSE.n = 0;
+  _setupBattleM(battle);
+};
+const _updateWavesM = updateWaves;
+updateWaves = function (dt) { _updateWavesM(dt); updateFuse(dt); updateMission(dt); misUI(dt); updateBossBar(); };
 
 </script>
