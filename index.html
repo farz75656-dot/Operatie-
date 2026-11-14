@@ -8662,7 +8662,7 @@ function zThink(z) {
 function drawZombies() {
   let n = 0; const col = ZR.col, cp = camera.position, far = QUALITY.low ? 900 : 1500;
   for (const z of ZM.list) {
-    if (n >= ZR.cap) break; const p = z.pos; if ((p.x - cp.x) ** 2 + (p.z - cp.z) ** 2 > (z.D.boss ? far * 2.5 : far) ** 2) continue;
+    if (n >= ZR.cap) break; const p = z.pos; if ((p.x - cp.x) ** 2 + (p.z - cp.z) ** 2 > (z.D.boss ? (z.D.mega ? 1e5 : far * 2.5) : far) ** 2) continue;
     const s = z.D.sc;
     if (z.alive) { _e4.set(Math.sin(z.ph) * .05, z.yaw, Math.sin(z.ph * .5) * .09, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + Math.abs(Math.sin(z.ph)) * .05, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
     else { _e4.set(-Math.PI / 2, z.rot || 0, 0, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + .2, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
@@ -10158,20 +10158,21 @@ Object.assign(ZDEF, {
 Object.assign(UNAME, { giant: ['reus', 'reuzen'], titan: ['kolos', 'kolossen'], surv: ['overlevende', 'overlevenden'] });
 const GG = { eye: new THREE.SphereGeometry(.035, 6, 4), spike: new THREE.ConeGeometry(.05, .26, 5), club: new THREE.CylinderGeometry(.06, .1, 1.5, 6), plate: new THREE.BoxGeometry(.56, .12, .32), rock: new THREE.DodecahedronGeometry(1, 0) };
 const GEYE = new THREE.MeshBasicMaterial({ color: 0xff3020 });
+const BOSSNAME = { giant: 'REUS', titan: 'KOLOS', colossus: 'BEHEMOTH' }, bossName = z => BOSSNAME[z.variant] || 'REUS';
 function giantGear(z) {
   const g = new THREE.Group();
   for (const s of [-1, 1]) mesh(GG.eye, GEYE, s * .055, 1.66, .28, g).castShadow = false;
   for (let i = 0; i < 5; i++) { const sp = mesh(GG.spike, mat(0xd8d0b8), i % 2 ? .12 : -.12, 1.05 + i * .1, -.13, g); sp.rotation.x = -1.1; }
-  const c = mesh(GG.club, mat(0x5a4330), .3, 1.22, 1.0, g); c.rotation.x = 1.25;
+  if (z.variant !== 'colossus') { const c = mesh(GG.club, mat(0x5a4330), .3, 1.22, 1.0, g); c.rotation.x = 1.25; }
   mesh(GG.plate, mat(0x3a3f44), 0, 1.5, .02, g);
-  if (z.variant === 'titan') for (const s of [-1, 1]) { const h = mesh(GG.spike, mat(0x2b2b2b), s * .1, 1.78, .12, g); h.rotation.z = -s * .6; h.scale.setScalar(1.3); }
+  if (z.variant === 'titan' || z.variant === 'colossus') for (const s of [-1, 1]) { const h = mesh(GG.spike, mat(0x2b2b2b), s * .1, 1.78, .12, g); h.rotation.z = -s * .6; h.scale.setScalar(1.3); }
   scene.add(g); z.gear = g;
 }
 const _zRemoveB = Zombie.prototype.remove;
 Zombie.prototype.remove = function () { if (this.gear) scene.remove(this.gear); return _zRemoveB.call(this); };
 function spawnGiant(x, z, kind, where, merged) {
   const g = new Zombie(ZM.zt, x, z, kind || 'giant'); giantGear(g); g.where = where;
-  const name = g.variant === 'titan' ? 'KOLOS' : 'REUS';
+  const name = bossName(g);
   addFeed(null, null, `👹 ${merged ? `${merged} zombies zijn samengesmolten tot een ` : 'Een '}${name} bij ${where || placeName(x, z)}! Tanks, luchtsteun en vlammenwerpers nodig`); siren();
   for (let i = 0; i < 18; i++) spawnP(new V3(x + rnd(-6, 6), getH(x, z) + rnd(1, 8), z + rnd(-6, 6)), { tex: smokeTex, color: 0x5d5040, op: .7, size: 4, grow: 4, life: 3, vel: new V3(rnd(-5, 5), rnd(2, 8), rnd(-5, 5)), drag: 1.2 });
   markers.push({ p: g.pos.clone(), t: 0, col: '#ff6a50' });
@@ -10188,7 +10189,7 @@ Zombie.prototype.damage = function (n, src, kind, p) {
 const _zKilledB = Zombie.prototype.killedBy;
 Zombie.prototype.killedBy = function (src) {
   _zKilledB.call(this, src);
-  if (this.D.boss) { score[1 - this.team] += 20; addFeed(null, null, `👹 De ${this.variant === 'titan' ? 'KOLOS' : 'REUS'}${this.where ? ' van ' + this.where : ''} is gevallen!`); explosion(this.pos.clone().add(new V3(0, 3, 0)), 2.6, { r: 4 }); if (ECO.on) ECO.money[CMD.team] += 1500; }
+  if (this.D.boss) { score[1 - this.team] += 20; addFeed(null, null, `👹 De ${bossName(this)}${this.where ? ' van ' + this.where : ''} is gevallen!`); explosion(this.pos.clone().add(new V3(0, 3, 0)), 2.6, { r: 4 }); if (ECO.on) ECO.money[CMD.team] += 1500; }
 };
 // what a giant does every frame on top of walking and biting: stomp and throw rocks
 const ROCKS = [];
@@ -10300,9 +10301,9 @@ const _zIsleB = zIsleAssault;
 zIsleAssault = function () {
   _zIsleB();
   if (ZM.t < 600 || Math.random() > .45) return;
-  const g = ZM.list.find(z => z.alive && z.D.boss && !z.isleRun && !z.misBoss && z.pos.x < WORLD); if (!g) return;
+  const g = ZM.list.find(z => z.alive && z.D.boss && !z.D.mega && !z.isleRun && !z.misBoss && z.pos.x < WORLD); if (!g) return;
   const R = zSwimTarget(g.pos.z); g.isleRun = R; g.goal = { x: R.gx, z: R.gz }; g.prey = null; g.heard = true;
-  addFeed(null, null, `👹 Er zwemt ook een ${g.variant === 'titan' ? 'KOLOS' : 'REUS'} naar je eiland!`);
+  addFeed(null, null, `👹 Er zwemt ook een ${bossName(g)} naar je eiland!`);
 };
 // boss health bar (with a ✕ to hide it; '👹 toon balk' brings it back)
 const BOSSBAR = { off: false };
@@ -10325,10 +10326,10 @@ const BOSSBAR = { off: false };
 function updateBossBar() {
   const el = document.getElementById('bossBar'), sh = document.getElementById('bossShow'); if (!el) return;
   let best = null, bd = 1e18; const cp = camera.position;
-  if (state === 'play' || state === 'possess') for (const z of ZM.list) { if (!z.alive || !z.D.boss) continue; let d = (z.pos.x - cp.x) ** 2 + (z.pos.z - cp.z) ** 2; if (z.misBoss && MIS.active === z.misBoss) d *= .05; if (d < bd) { bd = d; best = z; } }
+  if (state === 'play' || state === 'possess') for (const z of ZM.list) { if (!z.alive || !z.D.boss) continue; let d = (z.pos.x - cp.x) ** 2 + (z.pos.z - cp.z) ** 2; if (z.misBoss && MIS.active === z.misBoss) d *= .05; if (z.D.mega) d *= .0001; if (d < bd) { bd = d; best = z; } }
   if (!best || bd > 1100 * 1100) { if (!el.hidden) el.hidden = true; if (sh && !sh.hidden) sh.hidden = true; return; }
   if (BOSSBAR.off) { el.hidden = true; if (sh) sh.hidden = false; return; } if (sh) sh.hidden = true;
-  const h = `👹 ${best.variant === 'titan' ? 'KOLOS' : 'REUS'}${best.where ? ' · ' + best.where : ''} · ${Math.ceil(best.hp / best.maxHp * 100)}%<div class="b"><i style="width:${best.hp / best.maxHp * 100}%"></i></div>`;
+  const h = `👹 ${bossName(best)}${best.where ? ' · ' + best.where : ''} · ${Math.ceil(best.hp / best.maxHp * 100)}%<div class="b"><i style="width:${best.hp / best.maxHp * 100}%"></i></div>`;
   if (el._h !== h) { el._h = h; el.firstChild.innerHTML = h; } el.hidden = false;
 }
 // ---------- missions ----------
@@ -10383,7 +10384,7 @@ function misPopulate(M) {
   if (ZM.on) {
     const n = Math.round(6 + 4 * ZM.diff);
     if (M.type === 'c4') { M.target.queue += Math.round(8 + 3 * ZM.diff); ring(n, 10, 40, (x, z) => zSpawn(x, z, zKind())); }
-    else if (M.type === 'boss') { const g = spawnGiant(o.x, o.z, M.kind, M.where); g.misBoss = M; M.target = g; ring(Math.round(n / 2), 10, 35, (x, z) => zSpawn(x, z, zKind())); }
+    else if (M.type === 'boss') { const g = M.target && M.target.alive ? M.target : spawnGiant(o.x, o.z, M.kind, M.where); g.misBoss = M; M.target = g; ring(Math.round(n / 2), 10, 35, (x, z) => zSpawn(x, z, zKind())); }
     else if (M.type === 'sample') { const H = M.H, rooms = ['A', 'B', 'C', 'E', 'cL', 'cR', 'lobby']; for (let i = 0; i < n; i++) { const q = H.nodes[rooms[i % rooms.length]]; zSpawn(q.x + rnd(-2, 2), q.z + rnd(-2, 2), Math.random() < .3 ? 'runner' : 'walker'); } ring(Math.round(n / 2), 30, 60, (x, z) => zSpawn(x, z, zKind())); }
     else if (M.type === 'rescue') ring(n + 2, 40, 80, (x, z) => zSpawn(x, z, zKind()));
     else ring(n + 4, 12, 50, (x, z) => zSpawn(x, z, zKind()));
@@ -10411,7 +10412,7 @@ function misStart(M) {
   const i = MIS.list.indexOf(M); if (i >= 0) MIS.list.splice(i, 1);
   if (M.target && !M.target.alive) { flashTip('Het doel bestaat niet meer'); return; }
   MIS.active = M; M.state = 'fly'; M.step = 'fly'; M.team = CMD.team; M.t = 0; M.prog = 0;
-  M.lz = lzSpot(M.obj.x, M.obj.z, M.type === 'c4' && ZM.on ? 90 : 70, 140);
+  M.lz = M.kind === 'colossus' ? lzSpot(M.obj.x, M.obj.z, 380, 520) : lzSpot(M.obj.x, M.obj.z, M.type === 'c4' && ZM.on ? 90 : 70, 140);
   misPopulate(M);
   const b = BASES[M.team], dv = new V3(b.x - M.lz.x, 0, b.z - M.lz.z); if (dv.lengthSq() < 1) dv.set(0, 0, 1); dv.normalize();
   const sx = clamp(M.lz.x + dv.x * 480, -WORLD + 60, WORLD - 60), sz = clamp(M.lz.z + dv.z * 480, -WORLD + 60, WORLD - 60);
@@ -10447,7 +10448,7 @@ function misStepText(M) {
   if (t === 'rescue' || t === 'pilot') { const n = (M.surv || []).filter(u => u.alive).length; return s === 'goto' ? (t === 'pilot' ? 'Vind de piloot' : 'Vind de overlevenden') : `Breng ${t === 'pilot' ? 'de piloot' : `de overlevenden (${n})`} naar de heli`; }
   if (t === 'sample' || t === 'intel') return M.carrier ? `Breng ${t === 'sample' ? 'het staal' : 'de plannen'} naar de heli` : `Pak ${t === 'sample' ? 'het virusstaal' : 'de geheime plannen'}`;
   if (t === 'radio') return s === 'hold' ? `Verdedig de zender · ${Math.floor(M.prog)}/60 s` : 'Ga naar de zender';
-  if (t === 'boss') { const g = M.target; return g && g.alive ? `Dood de ${g.variant === 'titan' ? 'kolos' : 'reus'} · ${Math.ceil(g.hp / g.maxHp * 100)}%` : 'Doel uitgeschakeld'; }
+  if (t === 'boss') { const g = M.target; return g && g.alive ? `Dood de ${bossName(g).toLowerCase()} · ${Math.ceil(g.hp / g.maxHp * 100)}%` : 'Doel uitgeschakeld'; }
   return '';
 }
 function misGoal(M) {
@@ -10556,7 +10557,7 @@ function updateMission(dt) {
         M.waveT -= dt; if (M.waveT <= 0) { M.waveT = 11; misWave(M); }
         if (M.prog >= 60) misDone(M, 'De noodzender heeft zijn bericht verstuurd');
       }
-    } else if (M.type === 'boss') { if (!M.target.alive) misDone(M, `De ${M.target.variant === 'titan' ? 'kolos' : 'reus'} is dood`); }
+    } else if (M.type === 'boss') { if (!M.target.alive) misDone(M, `De ${bossName(M.target).toLowerCase()} is dood`); }
   }
   if (M.step === 'exfil' || M.step === 'escort') {
     if (M.ex && (!M.ex.alive || M.ex.removed) && !M.exDeadT) { M.exDeadT = SIMT; addFeed(null, null, '⚠ De ophaalheli is neergehaald · een nieuwe komt eraan'); }
@@ -10964,6 +10965,138 @@ const _placeAtMis = placeAt;
 placeAt = function (p) {
   if (tool && tool.kind === 'mission') { const t = tool.mt; setTool(null); if (MIS.active) { flashTip('Er loopt al een missie · maak die eerst af'); return; } const M = misCreateAt(t, p); if (M) misStart(M); return; }
   _placeAtMis(p);
+};
+
+// ================= THE BEHEMOTH: A ZOMBIE A THIRD THE SIZE OF THE ISLAND =================
+ZDEF.colossus = { hp: 60000, sp: 9, dps: 3000, sc: 140, col: [.5, .52, .42], boss: true, mega: true };
+UNAME.colossus = ['behemoth', 'behemoths'];
+const MEGA = { t: 300, z: null };
+function bigShake(p, amt, range) { const d = (Snd.ear || camera.position).distanceTo(p); shake = Math.min(1.6, shake + amt * Math.max(0, 1 - d / range)); }
+const _spawnGiantM = spawnGiant;
+spawnGiant = function (x, z, kind, where, merged) {
+  if (kind !== 'colossus') return _spawnGiantM(x, z, kind, where, merged);
+  if (MEGA.z && MEGA.z.alive) return MEGA.z;
+  const g = new Zombie(ZM.zt, x, z, 'colossus'); giantGear(g); g.where = where || placeName(x, z); g.mGoal = null; g.mT = 0; g.stepT = 1; g.roarT = 12; g.side = 1; g.lastP = g.pos.clone();
+  const sc = g.D.sc;
+  // you aim at its legs and belly, not at a point 140 m up in the air
+  g.center = function () { return this._c.set(this.pos.x, this.pos.y + (this.alive ? sc * .5 : 8), this.pos.z); };
+  g._hs = [{ c: new V3(), r: .3 * sc }, { c: new V3(), r: .2 * sc }, { c: new V3(), r: .12 * sc }, { c: new V3(), r: .12 * sc }, { c: new V3(), r: .1 * sc }, { c: new V3(), r: .1 * sc }];
+  g.hitSpheres = function () {
+    if (!this.alive) return ZEMPTY; const p = this.pos, s = sc, cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), rx = cy, rz = -sy;
+    this._hs[0].c.set(p.x + sy * .06 * s, p.y + 1.2 * s, p.z + cy * .06 * s); this._hs[1].c.set(p.x + sy * .14 * s, p.y + 1.62 * s, p.z + cy * .14 * s);
+    for (const k of [0, 1]) { const sd = k ? 1 : -1; this._hs[2 + k].c.set(p.x + rx * sd * .12 * s, p.y + .5 * s, p.z + rz * sd * .12 * s); this._hs[4 + k].c.set(p.x + rx * sd * .12 * s, p.y + .18 * s, p.z + rz * sd * .12 * s); }
+    return this._hs;
+  };
+  g.radius = 18; MEGA.z = g;
+  for (let i = 0; i < 40; i++) spawnP(new V3(x + rnd(-60, 60), getH(x, z) + rnd(2, 40), z + rnd(-60, 60)), { tex: smokeTex, color: 0x6b5f4a, op: .75, size: rnd(20, 40), grow: 3, life: 6, vel: new V3(rnd(-12, 12), rnd(4, 18), rnd(-12, 12)), drag: .8 });
+  addFeed(null, null, `🦖 DE BEHEMOTH IS ONTWAAKT bij ${g.where}! Een zombie zo groot als een derde van je eiland · tanks, A-10's, artillerie en raketten op zijn benen!`); siren();
+  Snd.burst(g.pos, { f: 35, type: 'lowpass', dur: 3, vol: 2, thump: 1, tf: 25, brown: true, rng: 6000 }); bigShake(g.pos, 1.2, 2500);
+  markers.push({ p: g.pos.clone(), t: 0, col: '#ff3b2a' });
+  return g;
+};
+// where it walks: from city to city, to your base, and once the cure is close it wades through the sea to your island
+function megaGoal(z) {
+  if (z.toIsle) return { x: ISL.lab.x, z: ISL.lab.z };
+  const A = ZM.att && ZM.att.length ? ZM.att : [{ x: BASES[ZM.team].x, z: BASES[ZM.team].z, w: 10, r: 40 }];
+  let tot = 0; for (const a of A) tot += a.w + 2; let r = Math.random() * tot;
+  for (const a of A) { r -= a.w + 2; if (r <= 0) return { x: a.x + rnd(-a.r, a.r), z: a.z + rnd(-a.r, a.r) }; }
+  return { x: A[0].x, z: A[0].z };
+}
+const _zThinkM = zThink;
+zThink = function (z) {
+  if (!z.D.mega) return _zThinkM(z);
+  z.prey = null; z.civ = null; z.heard = true; z.isle = z.pos.x > WORLD; z.labAtk = !!z.toIsle && z.isle;
+  z.mT -= .65; if (!z.mGoal || z.mT <= 0 || Math.hypot(z.mGoal.x - z.pos.x, z.mGoal.z - z.pos.z) < 30) { z.mGoal = megaGoal(z); z.mT = z.toIsle ? 1e9 : 70; }
+  z.goal = z.mGoal;
+};
+const _zUpdM = Zombie.prototype.update;
+Zombie.prototype.update = function (dt) {
+  if (!this.D.mega) return _zUpdM.call(this, dt);
+  this.swim = true; this.isleRun = null;
+  _zUpdM.call(this, dt);
+  if (!this.alive) return;
+  const p = this.pos; p.y = getH(p.x, p.z);   // it simply wades: the sea only comes up to its knees
+  if (!this.toIsle && p.x > COAST - 40) p.x = COAST - 40;
+  if (this.gear) this.gear.position.y = p.y;
+};
+// footsteps that flatten everything, a roar that calls the dead, and helicopters swatted out of the sky
+const _bossActM = bossAct;
+bossAct = function (z, dt) {
+  if (!z.D.mega) return _bossActM(z, dt);
+  const p = z.pos, sc = z.D.sc, moved = Math.hypot(p.x - z.lastP.x, p.z - z.lastP.z); z.lastP.copy(p);
+  z.stepT -= dt;
+  if (z.stepT <= 0 && (moved > .02 || Math.random() < .3)) {
+    z.stepT = 1.5; z.side = -z.side; const f = z.forward(), r = new V3(f.z, 0, -f.x), foot = p.clone().addScaledVector(r, z.side * .12 * sc).addScaledVector(f, .12 * sc); foot.y = getH(foot.x, foot.z);
+    const R = 42;
+    for (const u of units) {
+      if (!u.alive || u.hidden || u.team === z.team || u.type === 'zombie' || u.type === 'nest' || u.type === 'drone' || u.type === 'jet') continue; if (u.type === 'heli' && u.pos.y - foot.y > 12) continue;
+      const d = Math.hypot(u.pos.x - foot.x, u.pos.z - foot.z); if (d > R + (u.radius || 0)) continue;
+      const base = u.type === 'tank' ? 1100 : u.type === 'struct' ? 2500 : u.type === 'ship' ? 900 : 800; u.damage(base * (1 - Math.min(1, d / R) * .5), z, 'stomp');
+    }
+    if (typeof damageBuildings === 'function') damageBuildings(new V3(foot.x, foot.y + 4, foot.z), 34, 6000);
+    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; spawnP(new V3(foot.x + Math.cos(a) * 14, Math.max(foot.y, WATER) + 1, foot.z + Math.sin(a) * 14), { tex: smokeTex, color: foot.y < WATER ? 0xe4eaea : 0x8a7c62, op: .7, size: 16, grow: 3, life: 2.5, vel: new V3(Math.cos(a) * 26, 3, Math.sin(a) * 26), drag: 1.6 }); }
+    Snd.burst(foot, { f: 30, type: 'lowpass', dur: 1.4, vol: 1.8, thump: 1, tf: 22, brown: true, rng: 3500 }); bigShake(foot, .7, 1600); zNoise(foot.x, foot.z, 600, 3);
+  }
+  // it swats at aircraft that fly around its head
+  z.swatT = (z.swatT || 0) - dt;
+  if (z.swatT <= 0) { z.swatT = .5; for (const u of units) { if (!u.alive || u.team === z.team || (u.type !== 'heli' && u.type !== 'jet' && u.type !== 'drone')) continue; const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z); if (d < .45 * sc && u.pos.y - p.y < 1.9 * sc) u.damage(u.type === 'drone' ? 400 : 260, z, 'swat'); } }
+  // the roar: every zombie for kilometres comes running, and the dead fall off its body
+  z.roarT -= dt;
+  if (z.roarT <= 0) {
+    z.roarT = rnd(24, 32); zNoise(p.x, p.z, 2600, 8);
+    Snd.burst(p, { f: 70, q: 2, dur: 3.2, vol: 1.6, rng: 6000 }); Snd.burst(p, { f: 28, type: 'lowpass', dur: 3, vol: 1.6, thump: .8, tf: 20, brown: true, rng: 6000 }); bigShake(p, .6, 3000);
+    for (let i = 0; i < 10; i++) { const a = rnd(0, TAU), rr = rnd(25, 60), x = p.x + Math.cos(a) * rr, zz = p.z + Math.sin(a) * rr; if (getH(x, zz) > WATER + .3) zSpawn(x, zz, zKind()); }
+    if (camera.position.distanceTo(p) < 2500 || noteOnce('roar', 90)) addFeed(null, null, '🦖 De BEHEMOTH brult · alle zombies in de buurt komen eraan');
+  }
+  // when the cure is close it goes for your island
+  if (!z.toIsle && ZM.cure >= 60) { z.toIsle = true; z.mGoal = null; z.mT = 0; addFeed(null, null, '🦖 DE BEHEMOTH LOOPT DE ZEE IN, RICHTING JE EILAND! Stop hem voor hij bij het labo is'); siren(); }
+};
+const _zKilledM = Zombie.prototype.killedBy;
+Zombie.prototype.killedBy = function (src) {
+  _zKilledM.call(this, src);
+  if (this.D.mega) {
+    MEGA.t = 600; score[1 - this.team] += 100; if (ECO.on) ECO.money[CMD.team] += 10000; if (ZM.on) for (const k in ZM.res) ZM.res[k] += 40;
+    addFeed(null, null, '🏆 DE BEHEMOTH IS DOOD! ◆ 10.000 en +40 van alle voorraden'); flashTip('🏆 Je hebt de Behemoth verslagen!');
+    for (let i = 0; i < 6; i++) explosion(this.pos.clone().add(new V3(rnd(-40, 40), rnd(20, 160), rnd(-40, 40))), 3, { r: 10 });
+    bigShake(this.pos, 1.6, 3000);
+  }
+};
+// it awakes after five minutes, and ten minutes after you kill one, the next one comes
+function updateMega(dt) {
+  if (!ZM.on || ECO.over || ZM.cured || ZM.outT > 0) return;
+  if (MEGA.z && MEGA.z.alive) return;
+  MEGA.t -= dt; if (MEGA.t > 0) return; MEGA.t = 600;
+  const b = BASES[ZM.team], live = NEST.list.filter(N => N.alive).sort((a, c) => Math.hypot(c.pos.x - b.x, c.pos.z - b.z) - Math.hypot(a.pos.x - b.x, a.pos.z - b.z));
+  const s = live[0] ? lzSpot(live[0].pos.x, live[0].pos.z, 60, 160) : lzSpot(-b.x * .6, -b.z * .6, 0, 300);
+  spawnGiant(s.x, s.z, 'colossus', live[0] ? live[0].where : placeName(s.x, s.z));
+}
+// you can also pick it as a mission
+MTYPES.zombie.push(['behemoth', '🦖 Behemoth doden']);
+const _misCreateAtM = misCreateAt;
+misCreateAt = function (type, p) {
+  if (type !== 'behemoth') return _misCreateAtM(type, p);
+  const g = MEGA.z && MEGA.z.alive ? MEGA.z : null; let q = g ? g.pos.clone() : new V3(p.x, 0, p.z);
+  if (!g) { if (q.x > COAST - 60) { flashTip('Kies een plek op het vasteland'); return null; } if (getH(q.x, q.z) < WATER + 1) q = lzSpot(q.x, q.z, 0, 120); }
+  return { type: 'boss', title: 'Dood de Behemoth', where: g ? g.where : placeName(q.x, q.z), obj: q, kind: 'colossus', target: g, id: ++MIS.seq, state: 'avail', t: 0, icon: '🦖' };
+};
+// on the minimap: a big red ring
+const _drawMinimapMega = drawMinimap;
+drawMinimap = function () {
+  _drawMinimapMega(); const z = MEGA.z; if (!z || !z.alive) return; const k = 392 / (2 * WORLD), x = (z.pos.x + WORLD) * k, y = (z.pos.z + WORLD) * k;
+  mmc.strokeStyle = '#ff3b2a'; mmc.lineWidth = 3; mmc.beginPath(); mmc.arc(x, y, 11 + Math.sin(SIMT * 4) * 2, 0, TAU); mmc.stroke(); mmc.fillStyle = '#ff3b2a'; mmc.beginPath(); mmc.arc(x, y, 5, 0, TAU); mmc.fill();
+};
+const _setupBattleMega = setupBattle;
+setupBattle = function (battle) { if (MEGA.z && !MEGA.z.removed) MEGA.z.remove(); MEGA.z = null; MEGA.t = 300; _setupBattleMega(battle); };
+const _updateWavesMega = updateWaves;
+updateWaves = function (dt) { _updateWavesMega(dt); updateMega(dt); };
+// explosions hurt it where they hit: at its feet and legs, not only near its belly 70 m up
+const _applyBlastM = applyBlast;
+applyBlast = function (p, radius, dmg, owner, direct) {
+  _applyBlastM(p, radius, dmg, owner, direct);
+  const z = MEGA.z; if (!z || !z.alive || z === direct || (owner && owner.team === z.team)) return;
+  if (z.center().distanceTo(p) - z.radius * .6 <= radius) return;   // the normal blast already got it
+  let d = 1e9; for (const s of z.hitSpheres()) d = Math.min(d, s.c.distanceTo(p) - s.r); if (d > radius) return;
+  const f = 1 - Math.max(0, d) / radius; z.damage(dmg * f * f, owner, 'blast', p);
 };
 
 </script>
