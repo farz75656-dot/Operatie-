@@ -412,6 +412,8 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       <button class="act" id="btnArtyCtl" style="margin-top:4px;color:var(--amber);border-color:rgba(233,185,73,.5)">🎯 Artillerie zelf richten <span class="num k">K</span></button>
       <div class="lbl" style="margin-top:4px">Bommenwerpers</div>
       <div class="trow trow5"><button class="tb" data-tool="nukebomber"></button><button class="tb" data-tool="gbomber"></button><button class="tb" data-tool="transport"></button><button class="tb x" data-tool="airstrike"></button></div>
+      <div class="lbl" style="margin-top:4px">Aanvalshelikopters, luchtsteun en granaatdrones</div>
+      <div class="trow trow5"><button class="tb" data-tool="apache"></button><button class="tb x" data-tool="a10"></button><button class="tb x" data-tool="gunship"></button><button class="tb" data-tool="quad"></button></div>
       <div class="lbl" style="margin-top:4px">Bevoorrading · tik op een eigen punt · onderweg kan de vijand het aanvallen</div>
       <div class="trow trow5"><button class="tb" data-tool="supLand"></button><button class="tb" data-tool="supSea"></button><button class="tb" data-tool="supAir"></button><button class="tb" data-tool="milconvoy"></button></div>
       <div class="lbl" style="margin-top:4px">Raketwerpers · rijden zelf naar de plek</div>
@@ -424,6 +426,7 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       <div class="trow trow5"><button class="tb" data-tool="reaper"></button><button class="tb" data-tool="kamikaze"></button><button class="tb" data-tool="gcruise"></button><button class="tb x" data-tool="swarm"></button></div>
       <div class="lbl" style="margin-top:4px">Hoofdkwartier-eiland · buiten bereik van je eigen kernbommen</div>
       <div class="trow trow5"><button class="act" id="btnIsleGo" style="color:#b9e38a;border-color:rgba(156,196,107,.5)">🏝 Leger + burgers naar het eiland</button><button class="act" id="btnIsleBack">⬅ Leger terug naar het vasteland</button><button class="act" id="btnIsleView">👁 Bekijk eiland</button></div>
+      <div class="trow trow5"><button class="tb" data-tool="scav"></button><button class="tb x zmOnly" data-tool="lure"></button></div>
       <div id="tip">Klik op de kaart of de minikaart · Shift = meerdere · Esc = annuleren</div>
     </div>
     <button class="panel" id="reqBtn"><b>＋</b> Versterking</button>
@@ -515,11 +518,11 @@ const HASHP = location.hash.replace('#', '').split('-');
 const MAPKEY = MAPS[HASHP[0]] ? HASHP[0] : 'megastad', MAP = MAPS[MAPKEY];
 const WORLD = MAP.world || 1000, COAST = MAP.coast || 560, WATER = MAP.water, G = 9.81;
 // your headquarters island lies out at sea, east of the map
-const ISLE = { x: WORLD + 560, z: 0, r: 270 }, XMAX = ISLE.x + ISLE.r * 1.25 + 120;
+const ISLE = { x: WORLD + 720, z: 0, r: 380 }, XMAX = ISLE.x + ISLE.r * 1.2 + 120;
 // game settings (also carried through the URL hash when switching maps)
 const SET = { role: 'verdedigen', map: MAPKEY, mode: 'battle', diff: 'normaal', money: 900, tickets: 400, tod: 'day', side: 0, gfx: 'auto', weather: 'helder', aiSkill: 1, aiIncome: 1 };
 const SET_OPTS = {
-  mode: [['battle', 'Veldslag'], ['sandbox', 'Sandbox']],
+  mode: [['battle', 'Veldslag'], ['zombie', '🧟 Zombies'], ['sandbox', 'Sandbox']],
   diff: [['makkelijk', 'Makkelijk'], ['normaal', 'Normaal'], ['moeilijk', 'Moeilijk'], ['brutaal', 'Brutaal']],
   money: [[500, '◆ 500'], [900, '◆ 900'], [1500, '◆ 1500'], [3000, '◆ 3000']],
   tickets: [[200, '200'], [400, '400'], [800, '800']],
@@ -655,14 +658,10 @@ function getH(x, z) {
 }
 function isleH(x, z) {
   const dx = x - ISLE.x, dz = z - ISLE.z, d = Math.hypot(dx, dz), floor = WATER - 48;
-  if (d > ISLE.r * 1.75) return floor;
-  const a = Math.atan2(dz, dx), rr = ISLE.r * (.84 + .32 * fbm(Math.cos(a) * 1.6 + 11, Math.sin(a) * 1.6 + 4, 3)), e = d - rr;
-  const top = WATER + 6 + 16 * fbm(x / 110 + 3, z / 110 + 9, 3) * smooth(rr * .8, rr * .35, d);
-  let h = e < -60 ? top : e < 0 ? lerp(top, WATER - .6, (e + 60) / 60) : lerp(WATER - .6, floor, smooth(0, 110, e));
-  h = lerp(h, WATER + 7, smooth(125, 95, d));
-  const rx = Math.abs(dx - 95), rz = Math.abs(dz);
-  if (rx < 50 && rz < 190) h = lerp(h, WATER + 7, smooth(50, 28, rx) * smooth(190, 165, rz));
-  return h;
+  if (d > ISLE.r * 1.65) return floor;
+  const a = Math.atan2(dz, dx), rr = ISLE.r * (.86 + .28 * fbm(Math.cos(a) * 1.6 + 11, Math.sin(a) * 1.6 + 4, 3)), e = d - rr;
+  const top = WATER + 7 + 18 * fbm(x / 110 + 3, z / 110 + 9, 3) * smooth(232, 290, d) * smooth(rr - 30, rr - 90, d);
+  return e < -60 ? top : e < 0 ? lerp(top, WATER - .6, (e + 60) / 60) : lerp(WATER - .6, floor, smooth(0, 110, e));
 }
 function groundNormal(x, z) { const e = 2; return new V3(getH(x - e, z) - getH(x + e, z), 2 * e, getH(x, z - e) - getH(x, z + e)).normalize(); }
 let terrain;
@@ -1237,7 +1236,7 @@ function fireBullet(shooter, origin, dir, o) {
   if (r.unit) {
     const u = r.unit; let dmg = o.dmg;
     if (u.type === 'tank') dmg *= (o.ap ?? .02); else if (u.type === 'jet') dmg *= (o.air ?? .35); else if (u.type === 'heli') dmg *= .55; else if (u.type === 'struct') dmg *= .1; else if (u.type === 'ship') dmg *= (o.ap ?? .02) * .6;
-    else if (u.type === 'soldier' && r.point.y - u.pos.y > 1.45 && !u.prone) dmg *= 2.2; // headshot
+    else if ((u.type === 'soldier' || u.type === 'zombie') && r.point.y - u.pos.y > 1.45 * (u.D && u.D.sc || 1) && !u.prone) dmg *= 2.2; // headshot
     u.damage(dmg, shooter, 'bullet');
   }
   if (r.kind !== 'none') impactPuff(r.point, r.kind);
@@ -1690,7 +1689,7 @@ class Tank extends Unit {
       const gd = this.gunDir(), want = new V3(Math.sin(I.aimYaw) * Math.cos(I.aimPitch), Math.sin(I.aimPitch), Math.cos(I.aimYaw) * Math.cos(I.aimPitch));
       const err = gd.angleTo(want);
       I.fire = this.canSee && err < .03 && d < this.V.rng && (t.type === 'tank' || Math.random() < .3);
-      I.mg = this.canSee && t.type === 'soldier' && d < 260 && err < .06;
+      I.mg = this.canSee && (t.type === 'soldier' || t.type === 'zombie') && d < 260 && err < .06;
     } else if (!(o && o.type === 'move')) { I.aimYaw = this.yaw; I.aimPitch = 0; }
     let goal = null, stopDist = 10;
     if (o && o.type === 'move') { goal = o.p; stopDist = 3; if (Math.hypot(o.p.x - this.pos.x, o.p.z - this.pos.z) < 5) { this.order = null; goal = null; } if (!t) { I.aimYaw = this.yaw; I.aimPitch = 0; } }
@@ -2660,8 +2659,8 @@ function drawMinimap() {
   drawPointsMinimap(mmc, toS, k);
   for (const u of units) {
     if (!u.alive || u.hidden) continue; const [x, y] = toS(u.pos.x, u.pos.z);
-    mmc.fillStyle = sel.has(u) ? '#ffffff' : u.team ? '#ff6a50' : '#7cc4f0';
-    const s = u.type === 'soldier' ? 4 : u.type === 'tank' ? 9 : u.type === 'struct' ? (u.noTarget ? 5 : 8) : 0;
+    mmc.fillStyle = sel.has(u) ? '#ffffff' : u.type === 'zombie' ? '#9be04a' : u.team ? '#ff6a50' : '#7cc4f0';
+    const s = u.type === 'soldier' ? 4 : u.type === 'zombie' ? 3 : u.type === 'tank' ? 9 : u.type === 'struct' ? (u.noTarget ? 5 : 8) : 0;
     if (s) mmc.fillRect(x - s / 2, y - s / 2, s, s);
     else { const f = u.forward(), a = Math.atan2(f.x, f.z); mmc.save(); mmc.translate(x, y); mmc.rotate(Math.PI - a); mmc.beginPath(); mmc.moveTo(0, -9); mmc.lineTo(7, 7); mmc.lineTo(-7, 7); mmc.closePath(); mmc.fill(); mmc.restore(); }
   }
@@ -3197,18 +3196,18 @@ function openSettings(key) {
 }
 function refreshSettings() {
   document.querySelectorAll('#setGrid .seg').forEach(seg => { const k = seg.dataset.row; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(SET[k]) === b.dataset.v)); });
-  const battle = SET.mode === 'battle';
+  const battle = SET.mode !== 'sandbox';
   document.querySelectorAll('#setGrid [data-row="money"],#setGrid [data-row="tickets"]').forEach(e => e.hidden = !battle);
   const lbl = k => (SET_OPTS[k].find(o => o[0] === SET[k]) || ['', ''])[1];
   document.getElementById('startSub').textContent = `${MAPS[SET.map].name} · ${lbl('mode')}${battle ? ' · ' + lbl('diff') : ''} · ${lbl('side')} · ${lbl('tod')}`;
-  document.getElementById('setNote').textContent = SET.map !== MAPKEY ? 'Deze kaart wordt geladen als je start. Dat duurt een paar seconden.' : battle ? 'Moeilijkheid bepaalt hoe goed rood mikt en hoeveel bevelpunten rood verdient.' : 'In de sandbox bestuur je beide kanten met Tab.';
+  document.getElementById('setNote').textContent = SET.map !== MAPKEY ? 'Deze kaart wordt geladen als je start. Dat duurt een paar seconden.' : SET.mode === 'zombie' ? 'Zombies overspoelen je land. Evacueer burgers naar je eiland, haal voorraden en maak in het labo een geneesmiddel. Moeilijkheid bepaalt hoe snel de hordes groeien.' : battle ? 'Moeilijkheid bepaalt hoe goed rood mikt en hoeveel bevelpunten rood verdient.' : 'In de sandbox bestuur je beide kanten met Tab.';
 }
 function beginGame() {
   const D = DIFF[SET.diff]; SET.aiSkill = D.skill; SET.aiIncome = D.income;
   if (SET.gfx === 'laag') { QUALITY.pr = QUALITY.cap = Math.max(1, Math.min(window.devicePixelRatio || 1, 1.5)); QUALITY.shadows = false; sun.castShadow = false; renderer.setPixelRatio(QUALITY.pr); resize(); }
   if (SET.gfx === 'hoog') { QUALITY.pr = QUALITY.cap = Math.min(window.devicePixelRatio || 1, 2); QUALITY.noAuto = true; sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.setPixelRatio(QUALITY.pr); resize(); }
   setTimeOfDay(SET.tod); setupWeather(SET.weather === 'neerslag');
-  start(SET.mode === 'battle');
+  start(SET.mode !== 'sandbox');
   if (IS_TOUCH) { cam.D = cam.Dt = 165; }
   if (SET.side === 1) switchTeam();
   ECO.money[SET.side] = SET.money; ECO.money[1 - SET.side] = D.money;
@@ -8083,44 +8082,120 @@ function updateGeiger(dt) {
   document.getElementById('ggDose').textContent = P.u && P.u.dose ? `Opgelopen dosis: ${P.u.dose < 1 ? (P.u.dose * 1000).toFixed(0) + ' mSv' : P.u.dose.toFixed(2) + ' Sv'}${P.u.role === 'cbrn' ? ' · beschermd' : ''}` : '';
 }
 // ---------- the island: terrain, headquarters, helipads, runway, camp ----------
-const ISL = { built: false, pads: [], hqP: { x: ISLE.x, z: ISLE.z }, campP: { x: ISLE.x - 30, z: ISLE.z - 105 } };
+const ISL = { built: false, pads: [], team: 0, tur: [], pumps: [], hqP: { x: ISLE.x, z: ISLE.z }, campP: { x: ISLE.x - 20, z: ISLE.z - 122 },
+  lab: { x: ISLE.x - 50, z: ISLE.z - 44, hp: 3000, max: 3000 }, depot: { x: ISLE.x - 50, z: ISLE.z + 44 }, gate: { x: ISLE.x - 95, z: ISLE.z },
+  fort: { x0: ISLE.x - 95, x1: ISLE.x + 70, z0: ISLE.z - 75, z1: ISLE.z + 75 } };
 (function buildIsland() {
   const S = ISLE.r * 3.6, n = 128, geo = new THREE.PlaneGeometry(S, S, n, n); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) pos.setY(i, isleH(ISLE.x + pos.getX(i), ISLE.z + pos.getZ(i)));
   geo.computeVertexNormals();
   const P = MAP.pal, grass = new THREE.Color(P.grass), dry = new THREE.Color(P.dry), rock = new THREE.Color(P.rock), sand = new THREE.Color(P.sand), gravel = new THREE.Color(0x8a8578), c = new THREE.Color(), nor = geo.attributes.normal, cols = new Float32Array(pos.count * 3);
+  const F = ISL.fort;
   for (let i = 0; i < pos.count; i++) {
-    const x = ISLE.x + pos.getX(i), y = pos.getY(i), z = ISLE.z + pos.getZ(i), d = Math.hypot(x - ISLE.x, z - ISLE.z);
+    const x = ISLE.x + pos.getX(i), y = pos.getY(i), z = ISLE.z + pos.getZ(i);
     c.copy(grass).lerp(dry, smooth(.35, .7, fbm(x / 160, z / 160, 3)) * .7); c.lerp(sand, 1 - smooth(WATER + 1, WATER + 4.5, y)); c.lerp(rock, smooth(.9, .72, nor.getY(i)));
-    c.lerp(gravel, (1 - smooth(70, 120, d)) * .55);
+    if (x > F.x0 - 8 && x < F.x1 + 8 && z > F.z0 - 8 && z < F.z1 + 8) c.lerp(gravel, .6);
     const v = .9 + hash(i, 11) * .12; cols[i * 3] = c.r * v; cols[i * 3 + 1] = c.g * v; cols[i * 3 + 2] = c.b * v;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })); m.position.set(ISLE.x, 0, ISLE.z); m.receiveShadow = true; scene.add(m);
-  const X = ISLE.x, Z = ISLE.z, Y = WATER + 7, tc = CMD.team ? 0xb3301f : 0x2c5d8f;
-  // headquarters
-  house(X, Z, 44, 30, 9, 0x6f725f, 0, true); house(X + 30, Z - 26, 12, 12, 18, 0x8a8d84, 0, true);
+  const X = ISLE.x, Z = ISLE.z, Y = WATER + 7, tc = SET.side ? 0xb3301f : 0x2c5d8f;
   const g = new THREE.Group(); scene.add(g);
-  mesh(new THREE.CylinderGeometry(.35, .5, 34, 6), mat(0x9a9a92), X + 30, Y + 34, Z - 26, g); mesh(new THREE.SphereGeometry(.7, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b2a }), X + 30, Y + 51.5, Z - 26, g);
-  for (const k of [0, 1, 2]) mesh(new THREE.BoxGeometry(5 - k, .2, .2), mat(0x9a9a92), X + 30, Y + 30 + k * 6, Z - 26, g);
-  mesh(new THREE.SphereGeometry(6, 16, 10, 0, TAU, 0, Math.PI / 2), mat(0xe8e6dc), X - 32, Y, Z - 30, g); mesh(new THREE.CylinderGeometry(6.2, 6.2, 3, 16), mat(0xb8b6ae), X - 32, Y - 1.4, Z - 30, g);
-  mesh(new THREE.CylinderGeometry(.1, .12, 16, 6), mat(0xcfcfcf), X - 28, Y + 8, Z + 22, g); mesh(new THREE.BoxGeometry(.06, 2.6, 4.2), mat(tc), X - 28, Y + 14.5, Z + 24.2, g);
-  // sandbag ring and two anti-aircraft guns
-  for (let i = 0; i < 30; i++) { const a = i / 30 * TAU; if (i % 10 < 2) continue; const sb = mesh(new THREE.BoxGeometry(5, 1.4, 1.6), mat(0x9a8a62), X + Math.cos(a) * 62, Y + .5, Z + Math.sin(a) * 62, g); sb.rotation.y = -a + Math.PI / 2; }
-  for (const [ax, az] of [[-50, 40], [45, 45]]) { mesh(new THREE.CylinderGeometry(2.4, 2.8, 1.4, 10), mat(0x5d6247), X + ax, Y + .7, Z + az, g); const b = mesh(new THREE.BoxGeometry(.4, .4, 5), mat(0x2a2b28), X + ax, Y + 2.4, Z + az + 1.5, g); b.rotation.x = -.6; }
-  // helipads for the evacuation helicopters
-  for (let k = 0; k < 6; k++) {
-    const px = X - 75 + (k % 3) * 30, pz = Z + 75 + Math.floor(k / 3) * 30; ISL.pads.push({ x: px, z: pz });
-    mesh(new THREE.BoxGeometry(16, .14, 16), mat(0x3a3d40), px, Y + .07, pz, g); mesh(new THREE.BoxGeometry(1, .06, 7), mat(0xe8e6dc), px - 2.2, Y + .16, pz, g); mesh(new THREE.BoxGeometry(1, .06, 7), mat(0xe8e6dc), px + 2.2, Y + .16, pz, g); mesh(new THREE.BoxGeometry(3.4, .06, 1), mat(0xe8e6dc), px, Y + .16, pz, g);
+  const s0 = STATIC.children.length;
+  const conc = mat(0x9a9a92), dk = mat(0x2a2b28), steel = mat(0x6c7378), white = mat(0xf2f1ec), wood = mat(0x7a5a3a), sandb = mat(0x9a8a62);
+  const bx = (w, h, d, mt, x, y, z, ry) => { const o = mesh(new THREE.BoxGeometry(w, h, d), mt, X + x, Y + y, Z + z, g); if (ry) o.rotation.y = ry; return o; };
+  const cyl = (r0, r1, h, mt, x, y, z, seg = 10) => mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mt, X + x, Y + y, Z + z, g);
+  // ---- headquarters, comms tower, radar ----
+  house(X, Z, 44, 30, 9, 0x6f725f, 0, true); house(X + 38, Z - 40, 12, 12, 16, 0x8a8d84, 0, true);
+  cyl(.35, .5, 30, conc, 38, 31, -40, 6); mesh(new THREE.SphereGeometry(.7, 8, 6), mat(0xff3b2a), X + 38, Y + 46.5, Z - 40, g); for (const k of [0, 1, 2]) bx(5 - k, .2, .2, conc, 38, 28 + k * 6, -40);
+  mesh(new THREE.SphereGeometry(6, 16, 10, 0, TAU, 0, Math.PI / 2), white, X + 42, Y, Z + 48, g); cyl(6.2, 6.2, 3, mat(0xb8b6ae), 42, -1.4, 48, 16);
+  cyl(.1, .12, 16, mat(0xcfcfcf), -26, 8, 20, 6); bx(.06, 2.6, 4.2, mat(tc), -26, 14.5, 22.2);
+  // ---- the laboratory and the supply depot ----
+  house(ISL.lab.x, ISL.lab.z, 30, 20, 7, 0xf2f1ec, 0, true);
+  bx(30.2, .8, 20.2, mat(0x3f8f4a), -50, 6.2, -44); bx(.2, 3, 1, mat(0x3f8f4a), -34.9, 3.6, -44); bx(.2, 1, 3, mat(0x3f8f4a), -34.9, 3.6, -44); bx(.25, 2.2, 2.2, mat(0xe9c531), -34.9, 3.6, -38);
+  for (const dz of [-6, 0, 6]) cyl(1.6, 1.6, 5, mat(0xb9bcbf), -68, 2.5, -44 + dz, 12); for (const dx of [-8, 0, 8]) cyl(.5, .5, 3.5, steel, -50 + dx, 8.8, -48, 8);
+  house(ISL.depot.x, ISL.depot.z, 24, 16, 6, 0x7a7d6a, 0, true);
+  for (let i = 0; i < 14; i++) bx(1.8, 1.4, 1.8, i % 3 ? wood : mat(0x55603f), -36 + (i % 4) * 2.1, .7 + Math.floor(i / 8) * 1.4, 34 + Math.floor((i % 8) / 4) * 2.2);
+  // ---- fence with a gate, guard booths and barriers ----
+  const fx0 = F.x0 - X, fx1 = F.x1 - X, fz0 = F.z0 - Z, fz1 = F.z1 - Z, wire = new THREE.MeshLambertMaterial({ color: 0x8f969a, transparent: true, opacity: .38, side: THREE.DoubleSide });
+  const panel = (x0, z0, x1, z1) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(L, 3.2), wire); p.position.set(X + mx, Y + 1.6, Z + mz); p.rotation.y = ry + Math.PI / 2; p.castShadow = false; scene.add(p);
+    bx(.12, .12, L, steel, mx, 3.2, mz, ry); bx(.1, .1, L, dk, mx, 3.55, mz, ry);
+    for (let t = 0; t <= L + .1; t += 7.5) bx(.2, 3.7, .2, steel, x0 + (x1 - x0) * t / L, 1.85, z0 + (z1 - z0) * t / L);
+  };
+  panel(fx0, fz0, fx1, fz0); panel(fx1, fz0, fx1, fz1); panel(fx1, fz1, fx0, fz1); panel(fx0, fz1, fx0, 9); panel(fx0, -9, fx0, fz0);
+  for (const s of [-1, 1]) {
+    bx(.5, 5, .5, steel, fx0, 2.5, s * 9); bx(3.4, 2.8, 3.4, mat(0x5d6247), fx0 - 4.5, 1.4, s * 13); bx(3.8, .25, 3.8, dk, fx0 - 4.5, 2.9, s * 13); bx(.1, 1, 2, mat(0x22303a), fx0 - 6.25, 1.9, s * 13);
+    bx(2.4, 1.1, .8, conc, fx0 - 14, .55, s * 4, .5 * s); bx(2.4, 1.1, .8, conc, fx0 - 22, .55, -s * 3, -.4 * s);
   }
-  // runway and apron
-  mesh(new THREE.BoxGeometry(34, .12, 330), mat(0x3a3c3b), X + 95, Y + .06, Z, g); mesh(new THREE.BoxGeometry(26, .1, 300), mat(0x55585a), X + 128, Y + .05, Z, g);
-  for (let z = -150; z <= 150; z += 22) mesh(new THREE.BoxGeometry(.7, .04, 10), mat(0xe8e6dc), X + 95, Y + .14, Z + z, g);
-  // camp for the civilians
-  for (let i = 0; i < 10; i++) { const x = ISL.campP.x - 45 + (i % 5) * 18, z = ISL.campP.z + (i < 5 ? -12 : 12); mesh(new THREE.CylinderGeometry(3.6, 3.6, 10, 3).rotateX(-Math.PI / 2), i === 2 || i === 7 ? mat(0xe8e6dc) : mat(0x6b7350), x, isleH(x, z) + 1.6, z, g); }
-  collapse(g, null, 'isleHQ');
-  // trees
-  const pts = []; for (let i = 0; i < 900 && pts.length < 90; i++) { const a = rnd(0, TAU), r = rnd(140, ISLE.r * 1.05), x = X + Math.cos(a) * r, z = Z + Math.sin(a) * r, h = isleH(x, z); if (h < WATER + 3.5 || (Math.abs(x - X - 110) < 70 && Math.abs(z - Z) < 200)) continue; pts.push([x, h, z]); }
+  bx(.3, .3, 17, mat(0xd9d9d9), fx0 - 2.2, 4.6, 0).rotation.x = .5; bx(.32, .32, 3, mat(0xc62828), fx0 - 2.2, 4.6 + Math.sin(.5) * 4, 4 * Math.cos(.5));
+  // ---- watchtowers and machine-gun nests (they shoot at anything hostile on the ground) ----
+  const tower = (x, z) => {
+    for (const [a, b] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) bx(.3, 9, .3, wood, x + a, 4.5, z + b);
+    bx(4.4, .3, 4.4, wood, x, 9, z); for (const [a, b, w, d] of [[0, -2.1, 4.4, .2], [0, 2.1, 4.4, .2], [-2.1, 0, .2, 4.4], [2.1, 0, .2, 4.4]]) bx(w, 1.2, d, mat(0x5d6247), x + a, 9.75, z + b);
+    bx(5, .25, 5, dk, x, 12, z); for (const [a, b] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) bx(.16, 2.2, .16, wood, x + a, 10.9, z + b);
+    bx(.12, .12, 1.8, dk, x - 2.4, 10.4, z, Math.PI / 2); mesh(new THREE.SphereGeometry(.35, 8, 6), mat(0xfff3c4), X + x - 1.9, Y + 11.5, Z + z + 1.6, g);
+    ISL.tur.push({ x: X + x, y: Y + 10.6, z: Z + z, r: 250, cd: rnd(0, 1), burst: 0 });
+  };
+  tower(fx0, fz0); tower(fx0, fz1); tower(fx1, fz0); tower(fx1, fz1); tower(fx0 + 5, -24); tower(fx0 + 5, 24);
+  const nest = (x, z, a) => {
+    for (let i = -2; i <= 2; i++) { const b = bx(2.2, 1.2, 1.1, sandb, x + Math.cos(a + i * .45) * 3, .6, z + Math.sin(a + i * .45) * 3); b.rotation.y = -(a + i * .45) + Math.PI / 2; }
+    bx(.14, .14, 1.9, dk, x + Math.cos(a) * 2.4, 1.45, z + Math.sin(a) * 2.4, -a + Math.PI / 2); cyl(.08, .08, 1.1, dk, x + Math.cos(a) * 1.4, .8, z + Math.sin(a) * 1.4, 6);
+    ISL.tur.push({ x: X + x + Math.cos(a) * 2.4, y: Y + 1.5, z: Z + z + Math.sin(a) * 2.4, r: 190, cd: rnd(0, 1), burst: 0 });
+  };
+  nest(fx0 - 9, -18, Math.PI); nest(fx0 - 9, 18, Math.PI); nest(fx1 + 4, 0, 0); nest(0, fz1 + 4, Math.PI / 2); nest(0, fz0 - 4, -Math.PI / 2);
+  // ---- helipads ----
+  for (let k = 0; k < 6; k++) {
+    const px = -60 + (k % 3) * 30, pz = 105 + Math.floor(k / 3) * 30; ISL.pads.push({ x: X + px, z: Z + pz });
+    bx(16, .14, 16, mat(0x3a3d40), px, .07, pz); bx(1, .06, 7, white, px - 2.2, .16, pz); bx(1, .06, 7, white, px + 2.2, .16, pz); bx(3.4, .06, 1, white, px, .16, pz);
+  }
+  // ---- runway, apron, hangar and parked aircraft ----
+  bx(34, .12, 340, mat(0x3a3c3b), 130, .06, 0); bx(30, .1, 240, mat(0x55585a), 164, .05, 0);
+  for (let z = -160; z <= 160; z += 22) bx(.7, .04, 10, white, 130, .14, z);
+  house(X + 190, Z + 62, 22, 30, 9, 0x6f725f, 0, true);
+  const jet = (x, z, ry) => {
+    const j = new THREE.Group(); j.position.set(X + x, Y + 1.7, Z + z); j.rotation.y = ry; g.add(j); const cm = mat(0x7c858c);
+    mesh(new THREE.CylinderGeometry(.8, .6, 11, 10).rotateX(Math.PI / 2), cm, 0, 0, 0, j); mesh(new THREE.ConeGeometry(.8, 3.4, 10).rotateX(Math.PI / 2), cm, 0, 0, 7.2, j); mesh(new THREE.SphereGeometry(.62, 8, 6), mat(0x22303a), 0, .6, 3.4, j).scale.set(1, .8, 2.2);
+    const wg = new THREE.Shape(); wg.moveTo(0, 2.5); wg.lineTo(5.2, -2.6); wg.lineTo(5.2, -3.8); wg.lineTo(0, -3); wg.lineTo(-5.2, -3.8); wg.lineTo(-5.2, -2.6); wg.closePath();
+    const w = mesh(new THREE.ExtrudeGeometry(wg, { depth: .16, bevelEnabled: false }).rotateX(Math.PI / 2), cm, 0, 0, 0, j); w.castShadow = false;
+    for (const s of [-1, 1]) { const f = mesh(new THREE.BoxGeometry(.14, 2.4, 2.2), cm, s * .9, 1.2, -4.6, j); f.rotation.z = -s * .25; }
+    for (const [a, b] of [[0, 4], [-1.2, -2], [1.2, -2]]) mesh(new THREE.CylinderGeometry(.09, .09, 1.6, 6), dk, a, -.9, b, j);
+  };
+  jet(164, 28, -Math.PI / 2); jet(164, 50, -Math.PI / 2);
+  const heli = (x, z, ry) => {
+    const h = new THREE.Group(); h.position.set(X + x, Y + 1.7, Z + z); h.rotation.y = ry; g.add(h); const hm = mat(0x55603f);
+    mesh(new THREE.BoxGeometry(2.2, 2, 5.4), hm, 0, 0, 0, h); mesh(new THREE.CylinderGeometry(.4, .2, 7, 8).rotateX(Math.PI / 2), hm, 0, .5, -6, h); mesh(new THREE.BoxGeometry(.15, 1.8, 1), hm, 0, 1.2, -9.3, h);
+    mesh(new THREE.BoxGeometry(.36, .05, 15), dk, 0, 2.3, -.3, h); mesh(new THREE.BoxGeometry(15, .05, .36), dk, 0, 2.3, -.3, h); for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(.14, .14, 5), dk, s * 1.2, -1.5, .3, h);
+  };
+  heli(160, 92, 0); heli(172, 108, .4);
+  const cp = buildCargoPlane(SET.side); cp.position.set(X + 166, Y + 2.7, Z + 74); cp.rotation.y = -Math.PI / 2; cp.scale.setScalar(.8);
+  // ---- camp for the civilians ----
+  for (let i = 0; i < 10; i++) { const x = ISL.campP.x - X - 45 + (i % 5) * 18, z = ISL.campP.z - Z + (i < 5 ? -12 : 12); mesh(new THREE.CylinderGeometry(3.6, 3.6, 10, 3).rotateX(-Math.PI / 2), i === 2 || i === 7 ? white : mat(0x6b7350), X + x, Y + 1.6, Z + z, g); }
+  // ---- farms: fields, barn, silo, tractor ----
+  for (let f = 0; f < 2; f++) for (let s = 0; s < 9; s++) bx(52, .18, 4.4, mat(f ? (s % 2 ? 0xc9b458 : 0xb39c45) : (s % 2 ? 0x5f8f3a : 0x7ea64a)), -148, .1, -148 + f * 48 + s * 4.6);
+  house(X - 108, Z - 150, 16, 12, 7, 0xa33b2a, 0x5a2a22, false); cyl(3, 3, 11, mat(0xc9ccc8), -96, 5.5, -138, 14); mesh(new THREE.SphereGeometry(3, 14, 8, 0, TAU, 0, Math.PI / 2), mat(0xb9bcbf), X - 96, Y + 11, Z - 138, g);
+  bx(1.6, 1.3, 2.8, mat(0x2e7d32), -118, 1.1, -98); bx(1.4, 1.1, 1.2, mat(0x2e7d32), -118, 2.1, -98.9); for (const s of [-1, 1]) { cyl(.75, .75, .5, dk, -118 + s * 1, .75, -99).rotation.z = Math.PI / 2; cyl(.45, .45, .4, dk, -118 + s * .9, .45, -96.9).rotation.z = Math.PI / 2; }
+  for (let i = 0; i < 6; i++) cyl(1, 1, 1.2, mat(0xd8c877), -176 + i * 2.6, .6, -52 + (i % 2) * 2.4).rotation.z = Math.PI / 2;
+  ISL.farm = { x: X - 148, z: Z - 106 };
+  // ---- mines: oil pumps with nodding beams, tanks, a coal mine with headframe, conveyor and coal heaps ----
+  for (const [px, pz, ry] of [[-150, 96, .3], [-176, 122, -.4], [-138, 138, 1.2]]) {
+    const pj = new THREE.Group(); pj.position.set(X + px, Y, Z + pz); pj.rotation.y = ry; scene.add(pj);
+    const st = new THREE.Group(); pj.add(st); mesh(new THREE.BoxGeometry(2.2, .4, 7), dk, 0, .2, 0, st); for (const s of [-1, 1]) { const l = mesh(new THREE.BoxGeometry(.28, 5.4, .28), mat(0xb8862b), s * .8, 2.6, .4, st); l.rotation.z = s * .18; } mesh(new THREE.BoxGeometry(1.4, 1.6, 1.6), mat(0x4a4d50), 0, 1, -2.4, st);
+    collapse(st, null, 'pumpBase');
+    const beam = new THREE.Group(); beam.position.set(0, 5.3, .4); pj.add(beam); mesh(new THREE.BoxGeometry(.4, .5, 8), mat(0xb8862b), 0, 0, 0, beam); mesh(new THREE.BoxGeometry(.5, 2.2, 1.2), mat(0xb8862b), 0, -.7, 4.2, beam); mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), dk, 0, -.5, -3.6, beam);
+    collapse(beam, null, 'pumpBeam'); ISL.pumps.push({ beam, ph: rnd(0, 6) });
+  }
+  for (const [tx, tz] of [[-128, 112], [-120, 120]]) { cyl(3.2, 3.2, 5, mat(0x8a8d90), tx, 2.5, tz, 14); cyl(3.3, 3.3, .3, dk, tx, 5.1, tz, 14); }
+  mesh(new THREE.ConeGeometry(15, 9, 9), mat(0x5b574e), X - 104, Y + 3, Z + 172, g).scale.set(1.3, 1, 1); bx(4.6, 4, 3, mat(0x121212), -104, 2, 161); bx(5.4, .5, 3.4, wood, -104, 4.2, 161); for (const s of [-1, 1]) bx(.4, 4, .4, wood, -104 + s * 2.5, 2, 159.6);
+  for (const [a, b] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) bx(.3, 13, .3, steel, -86 + a, 6.5, 150 + b).rotation.z = -a * .04; mesh(new THREE.TorusGeometry(1.6, .18, 6, 16), dk, X - 86, Y + 13.2, Z + 150, g); bx(4.6, .3, 4.6, steel, -86, 12, 150);
+  const cv = bx(1.4, .3, 22, steel, -96, 3.6, 146); cv.rotation.x = .28; cv.rotation.y = .6;
+  for (const [hx, hz, r] of [[-72, 164, 5], [-64, 172, 3.6], [-78, 176, 4.2]]) mesh(new THREE.ConeGeometry(r, r * .9, 9), mat(0x1c1c1e), X + hx, Y + r * .45, Z + hz, g);
+  ISL.mine = { x: X - 104, z: Z + 150 }; ISL.oil = { x: X - 152, z: Z + 116 };
+  STATIC.children.slice(s0).forEach(c => g.add(c)); // houses built after the map's scenery was merged
+  collapse(g, null, 'isleFort');
+  // ---- trees on the outer ring ----
+  const pts = []; for (let i = 0; i < 1400 && pts.length < 130; i++) { const a = rnd(0, TAU), r = rnd(235, ISLE.r * 1.1), x = X + Math.cos(a) * r, z = Z + Math.sin(a) * r, h = isleH(x, z); if (h < WATER + 3.5) continue; pts.push([x, h, z]); }
   const tg = new THREE.ConeGeometry(2.6, 7, 6).translate(0, 4.5, 0), ti = new THREE.InstancedMesh(tg, new THREE.MeshLambertMaterial({ color: MAP.tree ? MAP.tree[0] : 0x3c5a2a }), pts.length), m4 = new THREE.Matrix4();
   pts.forEach((p, i) => { const s = rnd(.8, 1.4); m4.makeScale(s, s, s).setPosition(p[0], p[1], p[2]); ti.setMatrixAt(i, m4); }); scene.add(ti);
   ISL.built = true;
@@ -8192,8 +8267,8 @@ function liftEligible(u) {
 const onIsle = p => p.x > WORLD + 20;
 function assemblySlot(u) {
   if (LIFT.dir === 'out') {
-    if (u.type === 'soldier') { const i = LIFT.si++; return new V3(ISLE.x - 110 + (i % 7) * 11, 0, ISLE.z - 50 + Math.floor(i / 7) % 10 * 11); }
-    const j = LIFT.ti++; return new V3(ISLE.x + 42 + Math.floor(j / 12) * 14 % 28, 0, ISLE.z - 95 + (j % 12) * 16);
+    if (u.type === 'soldier') { const i = LIFT.si++, blk = Math.floor(i / 42) % 3; return new V3(ISLE.x - 86 + (i % 7) * 8 + (blk === 1 ? 110 : 0), 0, ISLE.z - 24 + Math.floor(i / 7) % 6 * 9 + (blk === 2 ? 115 : 0)); }
+    const j = LIFT.ti++; return new V3(ISLE.x + 34 + Math.floor(j / 9) % 3 * 13, 0, ISLE.z - 62 + (j % 9) * 15);
   }
   const B = LIFT.B.M, i = LIFT.si++, back = 40 + Math.floor(i / 10) * 9; return new V3(B.L.x - back, 0, B.L.z + ((i % 10) - 4.5) * 8);
 }
@@ -8300,7 +8375,7 @@ function stepHoverUnload(H, dt) {
 }
 function parkJet(j) {
   liftHidden(j); j.parked = true; j.toIsle = false; const i = LIFT.parked.length; LIFT.parked.push(j);
-  const x = ISLE.x + 128, z = ISLE.z - 135 + (i % 10) * 28; j.pos.set(x, getH(x, z) + 1.95, z); if (j.q) j.q.copy(yawQ(-Math.PI / 2)); j.group.quaternion.setFromEuler(new THREE.Euler(0, -Math.PI / 2, 0)); j.group.position.copy(j.pos); scene.add(j.group);
+  const x = ISLE.x + 164, z = ISLE.z - 108 + (i % 5) * 26; j.pos.set(x, getH(x, z) + 1.95, z); if (j.q) j.q.copy(yawQ(-Math.PI / 2)); j.group.quaternion.setFromEuler(new THREE.Euler(0, -Math.PI / 2, 0)); j.group.position.copy(j.pos); scene.add(j.group);
   if (j.team === CMD.team) addFeed(null, null, '✈ Straaljager geland op het eiland');
 }
 const _jetThink9 = Jet.prototype.think;
@@ -8336,7 +8411,7 @@ function updateLift(dt) {
 ISL.team = CMD.team;
 function isleDefense(dt) {
   ISL.adT = (ISL.adT || 0) - dt; if (ISL.adT > 0) return; ISL.adT = .5;
-  const hq = new V3(ISLE.x + 30, WATER + 30, ISLE.z - 26);
+  const hq = new V3(ISLE.x + 38, WATER + 34, ISLE.z - 40);
   const trail = to => { for (let i = 1; i <= 14; i++) spawnP(hq.clone().lerp(to, i / 14), { tex: smokeTex, color: 0xdedbd2, op: .6, size: 2.5, grow: 1.5, life: 1.6, vel: new V3(0, .5, 0), drag: 1 }); };
   for (const S of STRIKES.slice()) {
     if (S.team === ISL.team || !S.t || !(S.t.x > WORLD + 20) || !(S.u > .55) || !S.pos) continue;
@@ -8389,7 +8464,7 @@ askTsar = function (p, team) {
   const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = () => { f(); toggleTools(false); }; };
   on('btnIsleGo', () => startExodus(CMD.team)); on('btnIsleBack', () => startReturn(CMD.team)); on('btnIsleView', viewIsle);
 }
-function viewIsle() { cam.x = ISLE.x - 60; cam.z = ISLE.z + 40; cam.D = cam.Dt = 520; cam.yaw = Math.PI / 2; LIFT.sig = ''; }
+function viewIsle() { cam.x = ISLE.x - 40; cam.z = ISLE.z + 20; cam.D = cam.Dt = 560; cam.yaw = Math.PI / 2; LIFT.sig = ''; }
 function updateIsleBox(dt) {
   LIFT.boxT = (LIFT.boxT || 0) - dt; if (LIFT.boxT > 0) return; LIFT.boxT = .5;
   const t = CMD.team, isle = units.filter(u => u.alive && u.team === t && onIsle(u.pos));
@@ -8427,6 +8502,658 @@ drawMinimap = function () {
   mmc.fillStyle = '#0d100c'; mmc.font = '700 12px Chakra Petch, sans-serif'; mmc.textAlign = 'center'; mmc.fillText('HQ', 386, y + 4);
   for (const H of LIFT.hovers) if (H.pos.x < WORLD) { mmc.fillStyle = '#9fd0ee'; mmc.fillRect((H.pos.x + WORLD) * k - 3, (H.pos.z + WORLD) * k - 3, 6, 6); }
   mmc.restore();
+};
+
+// ================= ZOMBIE MODE: hordes, noise, infection, the fortified island, supplies and the cure =================
+const ZM = { on: false, team: 0, zt: 1, t: 0, list: [], seq: 0, cap: 200, kills: 0, waveT: 22, wave: 0, isleT: 210, outT: 14, turn: [], lures: [], att: [], attT: 0, sT: 0, cured: 0, hpMul: 1, spMul: 1, diff: 1, res: { food: 70, oil: 45, coal: 45, med: 0 }, cure: 0, noteT: {}, scavN: 0, why: '' };
+const NOISE = [];
+function zNoise(x, z, r, t = 5) { if (!ZM.on) return; if (NOISE.length > 70) NOISE.shift(); NOISE.push({ x, z, r, t }); }
+Object.assign(UNAME, { walker: ['zombie', 'zombies'], runner: ['renner-zombie', 'renners'], brute: ['bruut', 'bruten'], spitter: ['spuwer', 'spuwers'], screamer: ['schreeuwer', 'schreeuwers'], scav: ['bevoorradingsteam', 'bevoorradingsteams'], lure: ['lokker', 'lokkers'] });
+Object.assign(COST, { scav: 150, lure: 60 });
+KINDS.scav = { label: '🔍 Bevoorradingsteam', sub: 'zoekt voorraden in een stad' }; KINDS.lure = { label: '🔊 Lokker', sub: 'sirene lokt zombies' };
+// ---------- everything loud is heard by the dead ----------
+const _explosionZ = explosion;
+explosion = function (p, size, opts) { if (ZM.on) zNoise(p.x, p.z, 170 + size * 110, 6); return _explosionZ(p, size, opts); };
+const _shootZ = Soldier.prototype.shoot;
+Soldier.prototype.shoot = function (dir, spread) { if (ZM.on && (!this._nz || SIMT - this._nz > 1.2)) { this._nz = SIMT; zNoise(this.pos.x, this.pos.z, 150, 4); } return _shootZ.call(this, dir, spread); };
+const _licbmZ = launchICBM;
+launchICBM = function (silo, ...a) {
+  if (ZM.on && silo && silo.pos) { zNoise(silo.pos.x, silo.pos.z, 2800, 35); if (silo.team === ZM.team && noteOnce('rocket', 20)) addFeed(null, null, '🔊 De raketlancering is kilometers ver te horen · zombies komen op het geluid af'); }
+  return _licbmZ.call(this, silo, ...a);
+};
+const _lcruiseZ = launchCruise;
+launchCruise = function (silo, ...a) { if (ZM.on && silo && silo.pos) zNoise(silo.pos.x, silo.pos.z, 1500, 20); return _lcruiseZ.call(this, silo, ...a); };
+function noteOnce(k, gap) { if (ZM.noteT[k] && SIMT - ZM.noteT[k] < gap) return false; ZM.noteT[k] = SIMT; return true; }
+// ---------- a grid over all buildings so hundreds of zombies can bump into walls cheaply ----------
+const ZG = { n: -1, cell: 48, map: new Map() };
+function zGrid() {
+  if (ZG.n === BOXES.length) return; ZG.n = BOXES.length; ZG.map.clear(); const c = ZG.cell;
+  for (const b of BOXES) for (let gx = Math.floor((b.minX - 1) / c); gx <= Math.floor((b.maxX + 1) / c); gx++) for (let gz = Math.floor((b.minZ - 1) / c); gz <= Math.floor((b.maxZ + 1) / c); gz++) { const k = gx * 8192 + gz; (ZG.map.get(k) || ZG.map.set(k, []).get(k)).push(b); }
+}
+function zPush(p, r) {
+  const list = ZG.map.get(Math.floor(p.x / ZG.cell) * 8192 + Math.floor(p.z / ZG.cell)); if (!list) return;
+  for (const b of list) {
+    if (p.y > b.top || p.y + 2.2 < b.minY || p.x < b.minX - r || p.x > b.maxX + r || p.z < b.minZ - r || p.z > b.maxZ + r) continue;
+    const dl = p.x - (b.minX - r), dr = (b.maxX + r) - p.x, dn = p.z - (b.minZ - r), df = (b.maxZ + r) - p.z, m = Math.min(dl, dr, dn, df);
+    if (m === dl) p.x = b.minX - r; else if (m === dr) p.x = b.maxX + r; else if (m === dn) p.z = b.minZ - r; else p.z = b.maxZ + r;
+  }
+}
+// ---------- the zombies ----------
+const ZDEF = {
+  walker: { hp: 90, sp: 2.4, dps: 16, sc: 1, col: [.45, .55, .38] },
+  runner: { hp: 55, sp: 6.3, dps: 13, sc: .94, col: [.62, .36, .3] },
+  brute: { hp: 1100, sp: 3, dps: 75, sc: 1.8, col: [.33, .38, .45] },
+  spitter: { hp: 70, sp: 2.7, dps: 8, sc: 1, col: [.5, .78, .22] },
+  screamer: { hp: 60, sp: 3.5, dps: 8, sc: 1.05, col: [.8, .78, .7] }
+};
+const ZEMPTY = [];
+const ZR = { cap: 240, body: null, head: null, col: new THREE.Color() };
+{
+  const g = new THREE.Group(), w = mat(0xffffff), leg = mat(0x7d7d7d), arm = mat(0xb9c4a6);
+  const t = mesh(new THREE.BoxGeometry(.46, .64, .26), w, 0, 1.18, .06, g); t.rotation.x = .22;
+  for (const s of [-1, 1]) { mesh(new THREE.BoxGeometry(.17, .9, .18), leg, s * .12, .45, 0, g); const a = mesh(new THREE.BoxGeometry(.11, .6, .11), arm, s * .29, 1.36, .36, g); a.rotation.x = -1.35 + s * .12; }
+  const geo = collapse(g, null, 'zombieBody').geometry;
+  ZR.body = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ZR.cap);
+  ZR.head = new THREE.InstancedMesh(new THREE.SphereGeometry(.15, 8, 6).translate(0, 1.62, .14), new THREE.MeshLambertMaterial({ color: 0x9fb08a }), ZR.cap);
+  for (let i = 0; i < ZR.cap; i++) ZR.body.setColorAt(i, ZR.col.setRGB(1, 1, 1));
+  [ZR.body, ZR.head].forEach(m => { m.count = 0; m.frustumCulled = false; m.castShadow = false; scene.add(m); });
+}
+class Zombie extends Unit {
+  constructor(team, x, z, kind = 'walker') {
+    super(team, 'zombie'); scene.remove(this.group);
+    const D = this.D = ZDEF[kind]; this.variant = kind; this.hp = this.maxHp = D.hp * ZM.hpMul; this.radius = .5 * D.sc; this.drop = true; this.yaw = rnd(0, TAU);
+    this.thinkT = rnd(0, .7); this.ph = rnd(0, 6); this.tint = rnd(.72, 1.08); this.prey = null; this.civ = null; this.goal = null; this.roamT = 0; this.atkT = 0; this.spitT = rnd(1, 3); this.scrT = 0; this.zid = ZM.seq++; this.side = Math.random() < .5 ? 1 : -1;
+    this.pos.set(x, Math.max(getH(x, z), WATER - 1.3), z); this._c = new V3(); this._hs = [{ c: new V3(), r: .55 * D.sc }, { c: new V3(), r: .24 * D.sc }];
+    ZM.list.push(this);
+  }
+  label() { const n = UNAME[this.variant][0]; return n[0].toUpperCase() + n.slice(1); }
+  center() { return this._c.set(this.pos.x, this.pos.y + (this.alive ? 1 : .3) * this.D.sc, this.pos.z); }
+  hitSpheres() { if (!this.alive) return ZEMPTY; const s = this.D.sc; this._hs[0].c.set(this.pos.x, this.pos.y + s, this.pos.z); this._hs[1].c.set(this.pos.x, this.pos.y + 1.62 * s, this.pos.z); return this._hs; }
+  forward() { return new V3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  killedBy(src) { ZM.kills++; score[1 - this.team]++; }
+  die() { this.rot = rnd(0, TAU); }
+  remove() { super.remove(); const i = ZM.list.indexOf(this); if (i >= 0) ZM.list.splice(i, 1); }
+  update(dt) {
+    if (!this.alive) { this.deadT += dt; if (this.deadT > 9) this.remove(); return; }
+    const p = this.pos, D = this.D;
+    this.thinkT -= dt; if (this.thinkT <= 0) { this.thinkT = rnd(.5, .8); zThink(this); }
+    let tx, tz, reach = 0, tgt = null, isCiv = false;
+    if (this.prey) { const q = this.prey; if (!q.alive || q.hidden || q.removed) this.prey = null; else { tx = q.pos.x; tz = q.pos.z; reach = 1.5 * D.sc + (q.radius || .5); tgt = q; } }
+    if (!tgt && this.civ) { const c = this.civ; if (!c.alive) this.civ = null; else { tx = c.x; tz = c.z; reach = 1.4 * D.sc; tgt = c; isCiv = true; } }
+    if (!tgt && this.goal) { tx = this.goal.x; tz = this.goal.z; }
+    if (tx === undefined) return;
+    // on the island the fence only lets them in through the gate
+    let direct = true;
+    if (this.isle) {
+      const F = ISL.fort, inP = p.x > F.x0 && p.x < F.x1 && p.z > F.z0 && p.z < F.z1, inT = tx > F.x0 - 1 && tx < F.x1 + 1 && tz > F.z0 - 1 && tz < F.z1 + 1;
+      if (!inP && inT) { direct = false; const gz = ISL.gate.z, lane = p.x > F.x0 - 9 && p.x < F.x0 + 2 && Math.abs(p.z - gz) < 7; if (lane || Math.hypot(p.x - (F.x0 - 7), p.z - gz) < 4) { tx = F.x0 + 6; tz = gz; } else { tx = F.x0 - 7; tz = gz; } }
+      if (this.labAtk && Math.hypot(p.x - ISL.lab.x, p.z - ISL.lab.z) < 21) { ISL.lab.hp -= D.dps * dt * .5; this.ph += dt * 6; this.yaw = Math.atan2(ISL.lab.x - p.x, ISL.lab.z - p.z); if (Math.random() < dt * .4) spawnP(new V3(p.x, p.y + 1.4, p.z), { tex: smokeTex, color: 0xd9d6cc, op: .5, size: 1, grow: 2, life: 1, vel: new V3(0, 1, 0), drag: 1 }); return; }
+    }
+    const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1;
+    if (tgt && direct && d < reach) {
+      this.yaw = Math.atan2(dx, dz); this.ph += dt * 7; this.atkT -= dt;
+      if (this.atkT <= 0) {
+        this.atkT = .5;
+        if (isCiv) { killCiv(tgt, this.team); tgt.bit = SIMT; this.civ = null; }
+        else {
+          let dmg = D.dps * .5; if (tgt.type === 'tank' || tgt.type === 'convoy') dmg *= this.variant === 'brute' ? .7 : .12; else if (tgt.type === 'struct' || tgt.type === 'heli') dmg *= .5;
+          const was = tgt.alive; tgt.damage(dmg, this, 'bite'); if (was && !tgt.alive && tgt.type === 'soldier') ZM.turn.push({ x: tgt.pos.x, z: tgt.pos.z, t: 4 });
+        }
+      }
+    } else if (tgt || d > 3) {
+      const sp = D.sp * (tgt || this.heard ? 1 : .55) * ZM.spMul * (this.swim ? .7 : 1); let nx = p.x + dx / d * sp * dt, nz = p.z + dz / d * sp * dt;
+      if (!this.swim && getH(nx, nz) < WATER - .5) { nx = p.x - dz / d * sp * dt * this.side; nz = p.z + dx / d * sp * dt * this.side; if (getH(nx, nz) < WATER - .5) { nx = p.x; nz = p.z; this.goal = null; this.side = -this.side; } }
+      if (this.isle) { const F = ISL.fort, was = p.x > F.x0 && p.x < F.x1 && p.z > F.z0 && p.z < F.z1, now = nx > F.x0 && nx < F.x1 && nz > F.z0 && nz < F.z1; if (!was && now && !(Math.abs(nz - ISL.gate.z) < 8 && nx < F.x0 + 4)) { const a = nx - F.x0, b = F.x1 - nx, c = nz - F.z0, e = F.z1 - nz, m = Math.min(a, b, c, e); if (m === a) nx = F.x0; else if (m === b) nx = F.x1; else if (m === c) nz = F.z0; else nz = F.z1; } }
+      p.x = nx; p.z = nz; this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 6); this.ph += dt * sp * 2.2;
+      if (((FRAME.n + this.zid) & 3) === 0) zPush(p, .45);
+      if (this.swim && getH(p.x, p.z) > WATER + .3) this.swim = false;
+    } else this.goal = null;
+    p.y = Math.max(getH(p.x, p.z), WATER - 1.3);
+    // spitters hurt from a distance
+    if (this.variant === 'spitter' && this.prey && direct) { this.spitT -= dt; const q = this.prey; if (this.spitT <= 0 && d < 30 && d > 3) { this.spitT = 2.6; q.damage(q.type === 'soldier' ? 16 : 3, this, 'acid'); const a = new V3(p.x, p.y + 1.5, p.z), b = q.center(); for (let i = 1; i <= 5; i++) spawnP(a.clone().lerp(b, i / 5), { add: true, color: 0x9cff5a, size: 1.1, grow: 0, life: .5, op: .8, vel: new V3(0, .4, 0) }); } }
+  }
+}
+const ZPREY = { soldier: 1, tank: 3, convoy: 2, struct: 2.5, heli: 1.6 };
+function zThink(z) {
+  const p = z.pos, isle = p.x > WORLD; z.isle = isle; z.heard = false; z.labAtk = false;
+  let best = null, bd = 58;
+  for (const u of units) {
+    if (u.team === z.team || !u.alive || u.hidden) continue; let w = ZPREY[u.type]; if (!w) continue;
+    if (u.type === 'struct' && u.noTarget) continue; if (u.type === 'heli' && u.pos.y - p.y > 5) continue; if (u.type === 'tank' && z.variant === 'brute') w = .8;
+    const dx = u.pos.x - p.x, dz = u.pos.z - p.z; if (Math.abs(dx) > bd || Math.abs(dz) > bd) continue; const d = Math.hypot(dx, dz) * w; if (d < bd) { bd = d; best = u; }
+  }
+  let cb = null, cd = Math.min(34, bd);
+  for (const c of CIV.list) { if (!c.alive || (c.x > WORLD) !== isle) continue; const dx = c.x - p.x, dz = c.z - p.z; if (Math.abs(dx) > cd || Math.abs(dz) > cd) continue; const d = Math.hypot(dx, dz); if (d < cd) { cd = d; cb = c; } }
+  z.prey = cb ? null : best; z.civ = cb;
+  if (z.prey || z.civ) {
+    if (z.variant === 'screamer' && SIMT > z.scrT) { z.scrT = SIMT + 9; zNoise(p.x, p.z, 430, 6); Snd.burst(p, { f: 1500, q: 7, dur: .9, vol: .45, rng: 700 }); }
+    return;
+  }
+  let bn = null, bs = 0; for (const N of NOISE) { if ((N.x > WORLD) !== isle) continue; const s = N.r - Math.hypot(N.x - p.x, N.z - p.z); if (s > bs) { bs = s; bn = N; } }
+  if (bn) { if (!z.goal || !z.goalN || z.goalN !== bn) { z.goal = { x: bn.x + rnd(-9, 9), z: bn.z + rnd(-9, 9) }; z.goalN = bn; } z.heard = true; return; }
+  z.goalN = null;
+  if (isle) { z.goal = { x: ISL.lab.x + rnd(-8, 8), z: ISL.lab.z + rnd(-6, 6) }; z.labAtk = true; return; }
+  if (!z.goal || SIMT > z.roamT) {
+    z.roamT = SIMT + rnd(10, 18); let a = null, as = 1e9;
+    for (const A of ZM.att) { const s = Math.hypot(A.x - p.x, A.z - p.z) / (1 + A.w * .05) * rnd(.7, 1.3); if (s < as) { as = s; a = A; } }
+    z.goal = a ? { x: a.x + rnd(-a.r, a.r), z: a.z + rnd(-a.r, a.r) } : null;
+  }
+}
+function drawZombies() {
+  let n = 0; const col = ZR.col, cp = camera.position, far = QUALITY.low ? 900 : 1500;
+  for (const z of ZM.list) {
+    if (n >= ZR.cap) break; const p = z.pos; if ((p.x - cp.x) ** 2 + (p.z - cp.z) ** 2 > far * far) continue;
+    const s = z.D.sc;
+    if (z.alive) { _e4.set(Math.sin(z.ph) * .05, z.yaw, Math.sin(z.ph * .5) * .09, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + Math.abs(Math.sin(z.ph)) * .05, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
+    else { _e4.set(-Math.PI / 2, z.rot || 0, 0, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + .2, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
+    ZR.body.setMatrixAt(n, _m4); ZR.head.setMatrixAt(n, _m4); const c = z.D.col, t = z.tint * (z.alive ? 1 : .6); ZR.body.setColorAt(n, col.setRGB(c[0] * t, c[1] * t, c[2] * t)); n++;
+  }
+  ZR.body.count = ZR.head.count = n; ZR.body.instanceMatrix.needsUpdate = ZR.head.instanceMatrix.needsUpdate = true; if (ZR.body.instanceColor) ZR.body.instanceColor.needsUpdate = true;
+}
+const _zs = new V3(1, 1, 1);
+const _drawCivsZ = drawCivs;
+drawCivs = function () { _drawCivsZ(); if (ZM.list.length || ZR.body.count) drawZombies(); };
+function zSpawn(x, z, kind) { if (ZM.list.length >= ZM.cap + 30) return null; return new Zombie(ZM.zt, x, z, kind); }
+function zKind() {
+  const t = ZM.t, r = Math.random();
+  if (t > 150 && r < Math.min(.07, .02 + t / 9000)) return 'brute';
+  if (r < .1) return 'spitter'; if (r < .16) return 'screamer'; if (r < .16 + Math.min(.3, .12 + t / 2400)) return 'runner';
+  return 'walker';
+}
+const zAlive = () => { let n = 0; for (const z of ZM.list) if (z.alive) n++; return n; };
+// ---------- the director: outbreak, hordes from the edge of the map, attacks on the island ----------
+function zOutbreak() {
+  const b = BASES[ZM.team], cs = CITIES.map(C => ({ C, n: CIV.list.filter(c => c.alive && c.kind === 'city' && c.city === C).length, d: Math.hypot((C.x0 + C.x1) / 2 - b.x, (C.z0 + C.z1) / 2 - b.z) })).filter(o => o.n > 0).sort((a, b) => b.d - a.d).slice(0, CITIES.length > 4 ? 3 : 1);
+  const names = [];
+  for (const o of cs) {
+    names.push(cityName(o.C)); let k = 0;
+    for (const c of CIV.list.slice()) if (c.alive && c.kind === 'city' && c.city === o.C && Math.random() < .7) { CIV.list.splice(CIV.list.indexOf(c), 1); CIV.max--; zSpawn(c.x, c.z, Math.random() < .25 ? 'runner' : 'walker'); k++; }
+    const cx = (o.C.x0 + o.C.x1) / 2, cz = (o.C.z0 + o.C.z1) / 2; for (let i = 0; i < 6; i++) zSpawn(o.C.X.length ? o.C.X[(Math.random() * o.C.X.length) | 0] : cx + rnd(-30, 30), o.C.Z.length ? o.C.Z[(Math.random() * o.C.Z.length) | 0] : cz + rnd(-30, 30), 'walker');
+    o.C.evacuated = true;
+  }
+  if (!cs.length) for (let i = 0; i < 14; i++) { const a = rnd(0, TAU); zSpawn(b.x + Math.cos(a) * 600, b.z + Math.sin(a) * 600, 'walker'); }
+  addFeed(null, null, `☣ UITBRAAK in ${names.join(', ') || 'het binnenland'}! De doden staan op en trekken naar je steden`); siren();
+}
+function zHorde() {
+  const alive = zAlive(), room = ZM.cap - alive; if (room < 4) return;
+  const n = Math.min(room, Math.round((5 + ZM.t / 42) * ZM.diff), 30), mine = units.filter(u => u.alive && u.team === ZM.team && u.type !== 'struct' && u.pos.x < WORLD);
+  for (let k = 0; k < 40; k++) {
+    const e = (Math.random() * 3) | 0, W = WORLD - 70; let x, z;
+    if (e === 0) { x = -W; z = rnd(-W, W); } else { x = rnd(-W, COAST - 220); z = e === 1 ? -W : W; }
+    if (WORLD > 1200) { x *= .8; z *= .8; }
+    if (getH(x, z) < WATER + 1.5 || mine.some(u => (u.pos.x - x) ** 2 + (u.pos.z - z) ** 2 < 300 * 300)) continue;
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), r = rnd(0, 28); const zx = x + Math.cos(a) * r, zz = z + Math.sin(a) * r; if (getH(zx, zz) > WATER + .5) zSpawn(zx, zz, zKind()); }
+    ZM.wave++; if (ZM.wave % 3 === 1) addFeed(null, null, `🧟 Een horde van ${n} zombies nadert vanuit het ${e === 0 ? 'westen' : e === 1 ? 'noorden' : 'zuiden'}`);
+    markers.push({ p: new V3(x, getH(x, z), z), t: 0, col: '#9be04a' }); return;
+  }
+}
+function zIsleAssault() {
+  const room = ZM.cap + 25 - zAlive(); if (room < 4) return; const n = Math.min(room, 24, Math.round((5 + ZM.t / 75) * ZM.diff));
+  const a = Math.random() < .7 ? Math.PI + rnd(-.55, .55) : rnd(0, TAU), dx = Math.cos(a), dz = Math.sin(a); let d = 240; while (d < ISLE.r * 1.6 && isleH(ISLE.x + dx * d, ISLE.z + dz * d) > WATER - .8) d += 4;
+  for (let i = 0; i < n; i++) { const r = d + rnd(4, 30), s = rnd(-22, 22), z = zSpawn(ISLE.x + dx * r - dz * s, ISLE.z + dz * r + dx * s, zKind()); if (z) { z.swim = true; z.isle = true; z.goal = { x: ISL.lab.x, z: ISL.lab.z }; z.labAtk = true; } }
+  addFeed(null, null, `🧟 ALARM · ${n} zombies kruipen uit de zee bij je eiland! Verdedig de poort en het labo`); siren();
+  markers.push({ p: new V3(ISLE.x + dx * d, WATER, ISLE.z + dz * d), t: 0, col: '#9be04a' });
+}
+function zAttractors() {
+  const A = [], cnt = new Map();
+  for (const c of CIV.list) { if (!c.alive || c.x > WORLD) continue; const C = c.kind === 'city' ? c.city : c.M ? c.M.C : null; if (C) cnt.set(C, (cnt.get(C) || 0) + 1); }
+  for (const [C, n] of cnt) A.push({ x: (C.x0 + C.x1) / 2, z: (C.z0 + C.z1) / 2, w: n, r: Math.min(C.x1 - C.x0, C.z1 - C.z0) * .4 });
+  for (const p of POINTS) if (p.owner === ZM.team) A.push({ x: p.x, z: p.z, w: 5, r: 25 });
+  const b = BASES[ZM.team]; A.push({ x: b.x, z: b.z, w: 12, r: 50 });
+  if (typeof EVM !== 'undefined') for (const M of EVM.list) if (!M.done && M.civs.length) { const P = atPick(M, 14, 0); A.push({ x: P.x, z: P.z, w: 14, r: 15 }); }
+  ZM.att = A;
+}
+function zmSecond() {
+  const T = ZM.team;
+  // engines are loud
+  for (const u of units) { if (!u.alive || u.team !== T) continue; if (u.type === 'heli') zNoise(u.pos.x, u.pos.z, 230, 1.6); else if (u.type === 'tank' && Math.abs(u.speed) > 3) zNoise(u.pos.x, u.pos.z, 110, 1.6); else if (u.type === 'convoy' && u.speed > 3) zNoise(u.pos.x, u.pos.z, 90, 1.6); }
+  if (typeof LIFT !== 'undefined') for (const H of LIFT.hovers) if (Math.abs(H.speed) > 3) zNoise(H.pos.x, H.pos.z, 200, 1.6);
+  for (let i = ZM.lures.length - 1; i >= 0; i--) { const L = ZM.lures[i]; L.t -= 1; zNoise(L.x, L.z, 650, 1.6); if (L.t <= 0) { scene.remove(L.m); ZM.lures.splice(i, 1); } }
+  ZM.attT -= 1; if (ZM.attT <= 0) { ZM.attT = 5; zAttractors(); }
+  // civilians run from zombies they can see
+  let k = 0; for (const z of ZM.list) { if (z.alive && (z.civ || z.prey) && Math.random() < .25) { addDanger(z.pos, 36); if (++k > 9) break; } }
+  // the bitten rise again
+  for (let i = ZM.turn.length - 1; i >= 0; i--) { const t = ZM.turn[i]; t.t -= 1; if (t.t <= 0) { ZM.turn.splice(i, 1); zSpawn(t.x, t.z, Math.random() < .3 ? 'runner' : 'walker'); } }
+  for (let i = CIV.list.length - 1; i >= 0; i--) { const c = CIV.list[i]; if (!c.alive && c.bit && SIMT - c.bit > 3.5) { CIV.list.splice(i, 1); if (zAlive() < ZM.cap) zSpawn(c.x, c.z, Math.random() < .25 ? 'runner' : 'walker'); } }
+  // tanks run them over
+  for (const u of units) { if (!u.alive || u.type !== 'tank' || u.team !== T || Math.abs(u.speed) < 3) continue; for (const z of ZM.list) if (z.alive && (z.pos.x - u.pos.x) ** 2 + (z.pos.z - u.pos.z) ** 2 < 9) z.damage(z.variant === 'brute' ? 90 : 500, u, 'crush'); }
+  // points fall when a crowd of zombies stands on them and nobody defends
+  for (const p of POINTS) {
+    let zc = 0, pc = 0; for (const z of ZM.list) if (z.alive && (z.pos.x - p.x) ** 2 + (z.pos.z - p.z) ** 2 < 3600) zc++;
+    if (zc >= 4) for (const u of units) if (u.alive && u.team === T && (u.type === 'soldier' || u.type === 'tank') && (u.pos.x - p.x) ** 2 + (u.pos.z - p.z) ** 2 < 3600) pc++;
+    p.zT = zc >= 4 && !pc ? (p.zT || 0) + 1 : 0;
+    if (p.zT > 10 && p.owner === T) { p.owner = -1; p.prog = 0; p.zom = true; p.lastOwner = -1; paintPoint(p); addFeed(null, null, `☣ ${p.L} ${p.name} is overrompeld door zombies`); }
+    if (p.zom && p.owner === T) p.zom = false;
+  }
+  zmEconomySecond();
+  // the lab: slow repairs, alarm, defeat
+  const L = ISL.lab; if (L.hp < L.max && !ZM.list.some(z => z.alive && z.isle)) L.hp = Math.min(L.max, L.hp + 6);
+  if (L.hp < L.max * .98 && noteOnce('lab', 25)) addFeed(null, null, `⚠ Zombies breken het labo af! Nog ${Math.max(0, Math.round(L.hp / L.max * 100))}% over`);
+  if (L.hp <= 0 && !ECO.over) { ZM.why = 'lab'; endGame(false); }
+}
+// ---------- food, oil, coal, medical supplies and the cure ----------
+const OILC = { light: 3, mbt: 4, heavy: 5, aa: 3, fighter: 6, bomber: 6, nukebomber: 8, gbomber: 6, transport: 5, airstrike: 5, mlrs: 3, shahed: 2, tel: 4, abmtruck: 3, milconvoy: 5, sf: 2, scav: 3, evacH: 4, evacT: 2, destroyer: 8, sub: 8, carrier: 14, battleship: 12, apache: 5, a10: 4, gunship: 8, reaper: 2, tsar: 20 };
+const _payZ = pay;
+pay = function (kind, team) {
+  const o = ZM.on && team === ZM.team ? OILC[kind] : 0;
+  if (o && ZM.res.oil < o) { flashTip(`Niet genoeg olie: ⛽ ${o} nodig, je hebt ${Math.floor(ZM.res.oil)} · je oliepompen leveren 6 per minuut, bevoorradingsteams brengen meer`); return false; }
+  const ok = _payZ(kind, team); if (ok && o) ZM.res.oil -= o; return ok;
+};
+function zmEconomySecond() {
+  const R = ZM.res, T = ZM.team, sold = units.reduce((a, u) => a + (u.alive && u.team === T && u.type === 'soldier' ? 1 : 0), 0), civ = EVM.st['isle' + T] ? EVM.st['isle' + T].saved : 0;
+  R.food = clamp(R.food + 12 / 60 - (sold * .2 + civ * .08) / 60, 0, 600); R.oil = Math.min(300, R.oil + 6 / 60); R.coal = Math.min(300, R.coal + 6 / 60);
+  ZM.need = (sold * .2 + civ * .08);
+  if (ZM.cured) return;
+  const L = ISL.lab; ZM.stat = L.hp <= 0 ? 'labo vernietigd' : R.med <= 0 ? 'geen medische voorraad · stuur een 🔍 bevoorradingsteam' : R.coal <= 0 ? 'geen kolen voor de stroom' : R.food <= 0 ? 'geen eten · de onderzoekers kunnen niet werken' : ZM.list.some(z => z.alive && z.isle) ? 'zombies op het eiland · onderzoek ligt stil' : '';
+  if (!ZM.stat) { ZM.cure = Math.min(100, ZM.cure + 100 / 420); R.med = Math.max(0, R.med - 60 / 420); R.coal = Math.max(0, R.coal - 3 / 60); }
+  if (R.food <= 0 && noteOnce('food', 60)) addFeed(null, null, '🍞 Het eten is op! Je inkomen halveert en het onderzoek ligt stil · stuur een 🔍 bevoorradingsteam');
+  if (ZM.cure >= 100) {
+    ZM.cured = SIMT; addFeed(null, null, '🧪 HET GENEESMIDDEL IS KLAAR! Vliegtuigen sproeien het over het hele land'); siren();
+    for (let i = 0; i < 4; i++) { const g = buildCargoPlane(T), dir = new V3(1, 0, rnd(-.3, .3)).normalize(); g.position.set(cam.x - 1500 - i * 260, Math.max(cam.y, 0) + 230, cam.z + (i - 1.5) * 220); g.rotation.y = Math.atan2(dir.x, dir.z); transports.push({ g, vel: dir.multiplyScalar(95), drop: new V3(cam.x, 0, cam.z), dropped: true, team: T, variant: 'mbt' }); }
+  }
+}
+const _incomeZ = income;
+income = function (t) { let v = _incomeZ(t); if (ZM.on) { if (t !== ZM.team) return 0; v *= .22; if (ZM.res.food <= 0) v *= .5; } else if (ECO.on && t === ISL.team) v += 6; return v; };
+// ---------- supply teams: a Blackhawk drops four soldiers in a city, they search and fly back with what they found ----------
+function startScav(C, team) {
+  const pad = ISL.pads[3 + (ZM.scavN++ % 3)], M = { C, S: { x: ISLE.x, z: ISLE.z }, team }; pickSetup(M); const L = atPick(M, 44, rnd(-18, 18));
+  const h = new Heli(team, new V3(L.x, 0, L.z), []); h.hp = h.maxHp = 800; h.noTarget = false;
+  h.SC = { C, phase: 'out', men: [], t: 0, pad, loot: { food: 0, med: 0, oil: 0, coal: 0 }, n: 0 };
+  h.pos.set(pad.x, getH(pad.x, pad.z) + 18, pad.z); h.start = new V3(pad.x, 0, pad.z); h.yaw = Math.atan2(L.x - pad.x, L.z - pad.z);
+  addFeed(null, null, `🔍 Bevoorradingsteam vliegt naar ${cityName(C)} om voorraden te zoeken`);
+  return h;
+}
+function scavSpots(C, L) {
+  const out = []; if (!C.X.length) return [{ x: (C.x0 + C.x1) / 2 + rnd(-20, 20), z: (C.z0 + C.z1) / 2 + rnd(-20, 20) }];
+  for (let i = 0; i < 14; i++) out.push({ x: C.X[(Math.random() * C.X.length) | 0] + (Math.random() < .5 ? -6.8 : 6.8), z: C.Z[(Math.random() * C.Z.length) | 0] + (Math.random() < .5 ? -6.8 : 6.8) });
+  return out.sort((a, b) => Math.hypot(a.x - L.x, a.z - L.z) - Math.hypot(b.x - L.x, b.z - L.z)).slice(0, 6);
+}
+const _heliUpdS = Heli.prototype.update;
+Heli.prototype.update = function (dt) {
+  const S = this.SC; if (!S || !this.alive || this.isPlayerUnit()) return _heliUpdS.call(this, dt);
+  if (this.state === 'unload') this.t = 0;
+  _heliUpdS.call(this, dt); if (!this.alive || this.removed) return;
+  if (this.state === 'out' && S.phase !== 'done') this.state = 'in';
+  if (this.state !== 'unload') return;
+  const f = this.forward(), door = new V3(this.pos.x + f.z * 3, 0, this.pos.z - f.x * 3);
+  if (S.phase === 'out') {
+    S.phase = 'search'; S.t = 0; const spots = scavSpots(S.C, this.pos);
+    for (let i = 0; i < 4; i++) { const s = new Soldier(this.team, door.x + rnd(-2, 2), door.z + rnd(-2, 2), i === 2 ? 'mg' : 'rifle'); s.sc = { spots: [spots[i % spots.length], spots[(i + 2) % spots.length]], i: 0, wait: 0, back: false, loot: { food: 0, med: 0, oil: 0, coal: 0 } }; S.men.push(s); }
+  } else if (S.phase === 'search') {
+    S.t += dt; let out = 0;
+    for (const s of S.men) {
+      if (!s.alive || s.inHeli) continue; out++; const c = s.sc;
+      if (S.t > 150) c.back = true;
+      if (!c.back) {
+        const q = c.spots[c.i];
+        if (Math.hypot(q.x - s.pos.x, q.z - s.pos.z) < 3) { c.wait += dt; if (c.wait > 7) { c.loot.food += rnd(3, 6); c.loot.med += rnd(2, 3.6); c.loot.oil += rnd(1, 2.2); c.loot.coal += rnd(0, 1.5); c.wait = 0; c.i++; if (c.i >= c.spots.length) c.back = true; } }
+        else if (!s.order) s.order = { type: 'move', p: new V3(q.x, 0, q.z), run: true };
+      } else if (Math.hypot(door.x - s.pos.x, door.z - s.pos.z) < 4) { s.inHeli = true; liftHidden(s); for (const k in c.loot) S.loot[k] += c.loot[k]; S.n++; out--; }
+      else if (!s.order || Math.hypot(s.order.p.x - door.x, s.order.p.z - door.z) > 3) s.order = { type: 'move', p: door.clone(), run: true };
+    }
+    if (!out || S.t > 200) { S.phase = 'back'; this.dest.set(S.pad.x, 0, S.pad.z); this.state = 'up'; for (const s of S.men) if (s.alive && !s.inHeli) s.sc = null; }
+  } else if (S.phase === 'back') {
+    S.phase = 'done'; const L = S.loot, r = v => Math.round(v);
+    S.men.filter(s => s.inHeli).forEach((s, i) => { liftShow(s, this.pos.x + f.z * (5 + i * 2), this.pos.z - f.x * (5 + i * 2)); s.inHeli = false; s.sc = null; });
+    if (ZM.on) { for (const k in L) ZM.res[k] += L[k]; addFeed(null, null, S.n ? `📦 Bevoorradingsteam terug (${S.n} van 4): +${r(L.food)} eten · +${r(L.med)} medisch · +${r(L.oil)} olie · +${r(L.coal)} kolen` : '📦 De heli komt leeg terug · het bevoorradingsteam heeft het niet gehaald'); }
+    else { const m = r(L.food * 5 + L.med * 14 + L.oil * 8 + L.coal * 4); if (ECO.on) ECO.money[this.team] += m; addFeed(null, null, S.n ? `📦 Bevoorradingsteam terug (${S.n} van 4)${ECO.on ? ` · voorraden ter waarde van ◆ ${m}` : ''}` : '📦 De heli komt leeg terug'); }
+    this.start = new V3(ISLE.x + 520, 0, ISLE.z + 200); this.state = 'up';
+  }
+};
+// ---------- guards at every evacuation: zombies do not get on board ----------
+const _startEvacZ = startEvac;
+startEvac = function (C, how, to, team, list) {
+  const M = _startEvacZ(C, how, to, team, list); if (!M || !ZM.on) return M;
+  const post = (x, z, i) => { const s = new Soldier(team, x, z, i === 1 ? 'mg' : 'rifle'); s.guard = new V3(x, 0, z); return s; };
+  M.guards = [0, 1, 2, 3].map(i => { const P = atPick(M, 6 + (i % 2) * 14, (i < 2 ? -1 : 1) * 20); return post(P.x, P.z, i); });
+  const S = M.S; if (S.kind !== 'base' && !S.guards) S.guards = [0, 1, 2, 3].map(i => post(S.wait.x + (i % 2 ? 9 : -9), S.wait.z + (i < 2 ? -7 : 7), i));
+  if (noteOnce('guards', 90)) addFeed(null, null, '🪖 Bewakers houden zombies weg bij het verzamelpunt terwijl de burgers instappen');
+  return M;
+};
+// ---------- turning zombie mode on ----------
+function zmSetup() {
+  ZM.on = true; ZM.team = SET.side; ZM.zt = 1 - SET.side; ZM.cap = QUALITY.low ? 110 : 200; ZM.diff = { makkelijk: .7, normaal: 1, moeilijk: 1.35, brutaal: 1.8 }[SET.diff] || 1; ZM.spMul = SET.diff === 'makkelijk' ? .9 : 1;
+  for (const u of units.slice()) if (u.team === ZM.zt) u.remove();
+  POINTS.forEach(p => { p.owner = ZM.team; p.prog = ZM.team ? 1 : -1; p.lastOwner = p.owner; paintPoint(p); });
+  ECO.money[ZM.zt] = 0; if (typeof HSTG !== 'undefined') HSTG.nextT = 1e12;
+  document.body.classList.add('zm'); zGrid(); zAttractors(); CIV.max = 0; if (typeof LIFT !== 'undefined') LIFT.min = true;
+  setTimeout(zmIntro, 600);
+}
+const _setupBattleZ = setupBattle;
+setupBattle = function (battle) {
+  _setupBattleZ(battle);
+  ISL.team = SET.side; ISL.gun.team = SET.side;
+  for (const [x, z] of [[-78, -30], [-78, 30], [-66, 0]]) { const t = new Tank(SET.side, ISLE.x + x, ISLE.z + z, -Math.PI / 2, 'mbt'); t.driver = 'ai'; }
+  if (SET.mode === 'zombie') zmSetup();
+};
+const _startHostageZ = startHostage;
+startHostage = function () { if (ZM.on) return; return _startHostageZ(); };
+const _sendConvoyZ = sendConvoy;
+sendConvoy = function (team) { if (ZM.on && team !== ZM.team) return; return _sendConvoyZ(team); };
+// in zombie mode there is no enemy army and no ticket race: only you, the dead and the cure
+const _updateEconomyZ = updateEconomy;
+updateEconomy = function (dt) {
+  if (!ZM.on) return _updateEconomyZ(dt);
+  if (ECO.over) return; const T = ZM.team; ECO.money[T] = Math.min(1e14, ECO.money[T] + income(T) * dt); ECO.money[ZM.zt] = 0; ECO.tickets[0] = ECO.tickets[1] = 400;
+};
+function zmUpdate(dt) {
+  if (!ZM.on || ECO.over) return;
+  ZM.t += dt; zGrid();
+  for (let i = NOISE.length - 1; i >= 0; i--) { NOISE[i].t -= dt; if (NOISE[i].t <= 0) NOISE.splice(i, 1); }
+  if (ZM.cured) {
+    // the cure rains down: the dead fall where they stand
+    let k = 0; for (const z of ZM.list) if (z.alive && Math.random() < dt * 1.2) { z.damage(1e6, null, 'cure'); if (++k > 12) break; }
+    if (Math.random() < dt * 30) { const a = rnd(0, TAU), r = rnd(0, 500); spawnP(new V3(cam.x + Math.cos(a) * r, cam.y + rnd(60, 160), cam.z + Math.sin(a) * r), { add: true, color: 0x8fe8ff, size: rnd(3, 6), grow: 0, life: 4, op: .5, vel: new V3(0, -14, 0) }); }
+    if (SIMT - ZM.cured > 9) { ZM.why = 'cure'; endGame(true); }
+    return;
+  }
+  if (ZM.outT > 0) { ZM.outT -= dt; if (ZM.outT <= 0) zOutbreak(); return; }
+  ZM.sT -= dt; if (ZM.sT <= 0) { ZM.sT = 1; zmSecond(); }
+  ZM.waveT -= dt; if (ZM.waveT <= 0) { ZM.waveT = Math.max(16, 40 - ZM.t / 45) / Math.sqrt(ZM.diff); zHorde(); }
+  ZM.isleT -= dt; if (ZM.isleT <= 0) { ZM.isleT = Math.max(75, 170 - ZM.t / 12) / Math.sqrt(ZM.diff); zIsleAssault(); }
+}
+// ---------- the island's guns ----------
+ISL.gun = { team: 0, type: 'struct', alive: true, hidden: false, removed: false, pos: new V3(ISLE.x, 0, ISLE.z), label: () => 'Eilandverdediging', kind: () => 'tower' };
+function islTurrets(dt) {
+  ISL.fT = (ISL.fT || 0) - dt; if (ISL.fT <= 0) { ISL.fT = .4; ISL.foes = units.filter(u => u.alive && u.team !== ISL.team && u.team !== undefined && u.pos.x > WORLD && (u.type === 'zombie' || u.type === 'soldier' || u.type === 'tank')); }
+  for (const pj of ISL.pumps) pj.beam.rotation.x = Math.sin(SIMT * 1.1 + pj.ph) * .32;
+  const F = ISL.foes; if (!F || !F.length) return;
+  for (const T of ISL.tur) {
+    T.cd -= dt; if (T.cd > 0) continue;
+    let t = null, bd = T.r * T.r; for (const u of F) { if (!u.alive) continue; const d = (u.pos.x - T.x) ** 2 + (u.pos.z - T.z) ** 2; if (d < bd) { bd = d; t = u; } }
+    if (!t) { T.cd = .4; continue; }
+    T.cd = .11; if (++T.burst > 14) { T.burst = 0; T.cd = .8; }
+    const from = new V3(T.x, T.y, T.z), dir = t.center().clone().sub(from).normalize();
+    fireBullet(ISL.gun, from, dir, { dmg: 36, range: T.r + 40, spread: .013, ap: .1, tracer: T.burst % 2 === 0, from, tcol: 0xffe08a }); if (T.burst % 5 === 0) Snd.shot(from, 'mg');
+  }
+}
+const _updateWavesZ = updateWaves;
+updateWaves = function (dt) { _updateWavesZ(dt); islTurrets(dt); zmUpdate(dt); updateZmBox(dt); };
+// ---------- tools: supply team and lure ----------
+const _placeAtZ = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'scav') {
+    const C = cityOf(p, 40); if (!C) { flashTip('Tik op een stad waar het team voorraden moet zoeken'); return; }
+    const team = tool.team; if (!pay('scav', team)) return; startScav(C, team); setTool(null); return;
+  }
+  if (tool && tool.kind === 'lure') {
+    const team = tool.team; if (!pay('lure', team)) return;
+    const y = Math.max(getH(p.x, p.z), WATER), g = new THREE.Group(); mesh(new THREE.CylinderGeometry(.12, .16, 5, 6), mat(0x55585a), 0, 2.5, 0, g); mesh(new THREE.ConeGeometry(.7, 1.2, 10).rotateX(Math.PI / 2), mat(0xc62828), 0, 5, .4, g); mesh(new THREE.SphereGeometry(.3, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b2a }), 0, 5.7, 0, g);
+    g.position.set(p.x, y, p.z); scene.add(g); ZM.lures.push({ x: p.x, z: p.z, t: 45, m: g }); zNoise(p.x, p.z, 650, 2); siren(); addFeed(null, null, '🔊 Lokker geplaatst · 45 seconden lang komen zombies op de sirene af'); setTool(null); return;
+  }
+  _placeAtZ(p);
+};
+// ---------- HUD ----------
+{
+  const st = document.createElement('style');
+  st.textContent = `.zmOnly{display:none!important} body.zm .zmOnly{display:flex!important}
+#zmBox{background:var(--panel);border-left:2px solid #9be04a;padding:6px 8px;font:500 12px/1.4 var(--display);color:#e4f0d6;pointer-events:auto}
+#zmBox .hd{display:flex;justify-content:space-between;font-weight:700;color:#b6f06a;letter-spacing:.05em;cursor:pointer}
+#zmBox .bar{display:block;height:6px;background:rgba(255,255,255,.12);margin:3px 0} #zmBox .bar i{display:block;height:100%;background:#6fd0e8}
+#zmBox .res{display:flex;gap:8px;flex-wrap:wrap;font:700 12px var(--mono);margin-top:3px} #zmBox .res span.low{color:#ff8a6a}
+#zmBox .w{color:#ffb38a} #zmBox b{color:#fff}`;
+  document.head.appendChild(st);
+  const box = document.createElement('div'); box.id = 'zmBox'; box.hidden = true; const side = document.getElementById('side'); if (side) side.insertBefore(box, side.children[2] || null); else document.body.appendChild(box);
+  box.addEventListener('click', e => { if (e.target.closest('.hd')) { ZM.min = !ZM.min; ZM.sig = ''; } });
+  ZM.box = box;
+}
+function updateZmBox(dt) {
+  if (!ZM.on) return; ZM.boxT = (ZM.boxT || 0) - dt; if (ZM.boxT > 0) return; ZM.boxT = .5;
+  const R = ZM.res, f = v => Math.floor(v), mm = Math.floor(ZM.t / 60), ss = String(Math.floor(ZM.t % 60)).padStart(2, '0'), L = ISL.lab;
+  const bad = POINTS.filter(p => p.zom).length;
+  const html = `<div class="hd"><span>🧟 ZOMBIE-UITBRAAK · ${mm}:${ss}</span><span>${ZM.min ? '▸' : '▾'}</span></div>${ZM.min ? '' : `
+<div>🧪 Geneesmiddel <b>${Math.floor(ZM.cure)}%</b><span class="bar"><i style="width:${ZM.cure}%"></i></span>${ZM.cured ? 'wordt verspreid…' : ZM.stat ? `<span class="w">⚠ ${ZM.stat}</span>` : 'onderzoek loopt'}</div>
+<div class="res"><span class="${R.food < 10 ? 'low' : ''}">🍞 ${f(R.food)}</span><span class="${R.oil < 6 ? 'low' : ''}">⛽ ${f(R.oil)}</span><span class="${R.coal < 5 ? 'low' : ''}">⛏ ${f(R.coal)}</span><span class="${R.med < 3 ? 'low' : ''}">💊 ${f(R.med)}</span></div>
+<div>🧟 <b>${zAlive()}</b> zombies · <b>${ZM.kills}</b> gedood${bad ? ` · ☣ ${bad} punten besmet` : ''}</div>
+<div>🏥 Labo ${Math.max(0, Math.round(L.hp / L.max * 100))}% · eten −${(ZM.need || 0).toFixed(0)}/+12 per min</div>`}`;
+  if (html !== ZM.sig) { ZM.sig = html; ZM.box.innerHTML = html; } ZM.box.hidden = false;
+}
+const _updateEcoHudZ = updateEcoHud;
+updateEcoHud = function () {
+  _updateEcoHudZ(); if (!ZM.on) return;
+  let civ = 0; for (const c of CIV.list) if (c.alive && c.x <= WORLD) civ++; const safe = EVM.st['isle' + ZM.team] ? EVM.st['isle' + ZM.team].saved : 0;
+  document.getElementById(ZM.team ? 'sr' : 'sb').textContent = safe; document.getElementById(ZM.team ? 'sb' : 'sr').textContent = zAlive(); document.getElementById('scoreLbl').textContent = ZM.team ? 'zombies · veilig' : 'veilig · zombies';
+};
+const _endGameZ = endGame;
+endGame = function (win) {
+  _endGameZ(win); if (!ZM.on) return;
+  const e = document.getElementById('endScreen'), safe = EVM.st['isle' + ZM.team] ? EVM.st['isle' + ZM.team].saved : 0;
+  e.querySelector('h2').textContent = win ? 'GENEESMIDDEL GEVONDEN' : 'HET EILAND IS GEVALLEN';
+  e.querySelector('p').textContent = (win ? 'Het geneesmiddel is over het land verspreid en de doden vallen neer. ' : 'De zombies hebben het labo vernietigd, er komt geen geneesmiddel meer. ') + `Je hield het ${Math.floor(ZM.t / 60)} min ${Math.floor(ZM.t % 60)} s vol, bracht ${safe} burgers veilig naar het eiland en doodde ${ZM.kills} zombies.`;
+};
+const _drawOverlayZ = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayZ(dt);
+  if (state !== 'play' || (typeof BCW !== 'undefined' && BCW.unit)) return;
+  const cp = camera.position, txt = (x, y, z, s, col, maxD) => { const P = new V3(x, y, z); if (P.distanceTo(cp) > maxD) return; const q = project(P); if (!q) return; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(s, q[0], q[1]); oc.fillStyle = col; oc.fillText(s, q[0], q[1]); };
+  txt(ISL.lab.x, WATER + 20, ISL.lab.z, ZM.on ? `🧪 LABO · geneesmiddel ${Math.floor(ZM.cure)}%` : '🧪 LABO', '#8fe8ff', 1400);
+  txt(ISL.farm.x, WATER + 14, ISL.farm.z, '🌾 BOERDERIJ', '#d8e89a', 900); txt(ISL.oil.x, WATER + 16, ISL.oil.z, '🛢 OLIE', '#d8e89a', 900); txt(ISL.mine.x, WATER + 22, ISL.mine.z, '⛏ KOLENMIJN', '#d8e89a', 900); txt(ISL.depot.x, WATER + 17, ISL.depot.z, '📦 DEPOT', '#d8e89a', 900);
+  for (const L of ZM.lures) txt(L.x, Math.max(getH(L.x, L.z), WATER) + 8, L.z, `🔊 LOKKER ${Math.ceil(L.t)} s`, '#ff9a7a', 2500);
+  for (const u of units) {
+    if (u.type === 'heli' && u.SC && u.alive && u.SC.phase === 'search') txt(u.pos.x, u.pos.y + 6, u.pos.z, `🚁 wacht op het team · ${u.SC.n}/${u.SC.men.filter(s => s.alive).length} terug`, '#e4f0d6', 1500);
+    else if (u.sc && u.alive && !u.sc.back) { const q = u.sc.spots[u.sc.i]; if (q && u.sc.wait > 0) txt(u.pos.x, u.pos.y + 2.6, u.pos.z, `🔍 ${Math.round(u.sc.wait / 7 * 100)}%`, '#e4f0d6', 500); }
+  }
+  for (const p of POINTS) if (p.zom) txt(p.x, getH(p.x, p.z) + 20, p.z, '☣ BESMET', '#9be04a', 2500);
+};
+// attack/defend set-up runs after the battle is created: afterwards the whole country is yours and the red army is gone
+const _beginGameZ = beginGame;
+beginGame = function () {
+  _beginGameZ(); if (!ZM.on) return;
+  for (const u of units.slice()) if (u.team === ZM.zt) u.remove();
+  POINTS.forEach(p => { p.owner = ZM.team; p.prog = ZM.team ? 1 : -1; p.lastOwner = p.owner; p.zom = false; paintPoint(p); }); ECO.money[ZM.zt] = 0;
+};
+function zmIntro() {
+  if (document.getElementById('zmIntro')) return;
+  const d = document.createElement('div'); d.id = 'zmIntro';
+  d.innerHTML = `<div><h3>🧟 ZOMBIE-MODUS</h3><ul>
+<li><b>Geluid lokt ze:</b> schoten, explosies, helikopters en vooral raketten.</li>
+<li><b>Wie gebeten wordt, staat weer op</b> als zombie: burgers én soldaten.</li>
+<li><b>Evacueer burgers</b> naar je eiland (Evacueer stad → 🏝 Eiland). Bewakers houden de zombies weg bij het instappen.</li>
+<li><b>🔍 Bevoorradingsteams</b> halen eten, olie, kolen en medische voorraad uit steden.</li>
+<li><b>Het labo</b> op je eiland maakt met medische voorraad het geneesmiddel. <b>100% = gewonnen.</b></li>
+<li><b>Je eiland wordt vanuit zee aangevallen.</b> Valt het labo, dan heb je verloren.</li>
+<li><b>🔊 Lokker</b> lokt zombies weg. De Tsar Bomba doodt ze, maar daarmee win je niet.</li></ul><button id="zmGo">START</button></div>`;
+  document.body.appendChild(d); paused = true;
+  d.querySelector('#zmGo').onclick = () => { d.remove(); paused = false; };
+}
+{
+  const st = document.createElement('style');
+  st.textContent = `#zmIntro{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(6,12,4,.72)}
+#zmIntro>div{width:min(520px,calc(100vw - 20px));max-height:calc(100vh - 20px);overflow:auto;box-sizing:border-box;background:#0f1a0c;border:2px solid #9be04a;padding:14px 18px;font:500 14px/1.45 var(--display);color:#e4f0d6;box-shadow:0 0 40px rgba(155,224,74,.35)}
+#zmIntro h3{margin:0 0 6px;color:#b6f06a;letter-spacing:.06em} #zmIntro ul{margin:0;padding-left:18px} #zmIntro li{margin:4px 0} #zmIntro b{color:#fff}
+#zmIntro button{margin-top:10px;width:100%;appearance:none;cursor:pointer;font:700 15px var(--display);padding:11px;border:1px solid #9be04a;background:#3f6b22;color:#fff;position:sticky;bottom:-14px}
+@media (max-height:520px){#zmIntro>div{font-size:12px;padding:10px 14px}#zmIntro li{margin:2px 0}}`;
+  document.head.appendChild(st);
+}
+
+// ================= MORE AIR POWER: attack helicopter, A-10 strafing run, AC-130 gunship, grenade quadcopters · TSAR = VICTORY =================
+Object.assign(COST, { apache: 650, a10: 350, gunship: 900, quad: 140 });
+KINDS.apache = { label: 'Aanvalsheli', sub: 'kanon · raketten' }; KINDS.a10 = { label: 'A-10 aanval', sub: 'BRRRT over de plek' }; KINDS.gunship = { label: 'AC-130 gunship', sub: 'cirkelt 60 s en vuurt' }; KINDS.quad = { label: 'Granaatdrones', sub: '3 quadcopters' };
+Object.assign(UNAME, { apache: ['aanvalshelikopter', 'aanvalshelikopters'], quad: ['granaatdrone', 'granaatdrones'], a10: ['A-10', 'A-10’s'], gunship: ['gunship', 'gunships'] });
+const AIRK = { apache: 1, a10: 1, gunship: 1, quad: 1 };
+const GROUNDW = { tank: .6, soldier: 1, zombie: 1, struct: 1.6, heli: .7, convoy: .8, ship: 1.3, jet: 99, drone: 4 };
+// ---------- attack helicopter ----------
+class AttackHeli extends Heli {
+  constructor(team, dest) {
+    super(team, dest, []); this.variant = 'apache'; this.hp = this.maxHp = 1300; this.model.visible = false; this.state = 'in'; this.cargo = 0; this.radius = 5;
+    const g = this.am = new THREE.Group(); this.group.add(g); const c = mat(team ? 0x6b5f45 : 0x4a5238), dk = mat(0x1f2020), gl = mat(0x22303a);
+    mesh(new THREE.BoxGeometry(1.3, 1.5, 6.4), c, 0, 0, .4, g); mesh(new THREE.BoxGeometry(1.1, .8, 1.5), gl, 0, 1, 2.2, g); mesh(new THREE.BoxGeometry(1.15, .9, 1.5), gl, 0, 1.35, .7, g);
+    mesh(new THREE.BoxGeometry(.9, .7, 1.2), c, 0, -.3, 4, g); mesh(new THREE.SphereGeometry(.38, 8, 6), dk, 0, -.7, 3.9, g); mesh(new THREE.CylinderGeometry(.07, .07, 1.6, 6).rotateX(Math.PI / 2), dk, 0, -1.05, 3.2, g);
+    mesh(new THREE.BoxGeometry(1.5, 1, 3), c, 0, 1.1, -1.2, g); mesh(new THREE.BoxGeometry(4.8, .14, 1.1), c, 0, -.1, .2, g);
+    for (const s of [-1, 1]) { mesh(new THREE.CylinderGeometry(.3, .3, 1.8, 8).rotateX(Math.PI / 2), dk, s * 1.6, -.45, .3, g); mesh(new THREE.BoxGeometry(.5, .3, 1.5), mat(0x8a8d90), s * 2.25, -.4, .3, g); mesh(new THREE.CylinderGeometry(.25, .25, .3, 8).rotateZ(Math.PI / 2), dk, s * .9, -1.35, 1.6, g); mesh(new THREE.BoxGeometry(.1, .9, .1), dk, s * .85, -.95, 1.6, g); }
+    mesh(new THREE.CylinderGeometry(.36, .16, 6.6, 8).rotateX(Math.PI / 2), c, 0, .5, -6.2, g); mesh(new THREE.BoxGeometry(.14, 2.2, 1.2), c, 0, 1.4, -9.2, g); mesh(new THREE.BoxGeometry(2.4, .1, .8), c, 0, 2.4, -9.3, g); mesh(new THREE.CylinderGeometry(.14, .14, .8, 6), dk, 0, 2, -1, g);
+    const r = this.r2 = new THREE.Group(); r.position.set(0, 2.45, -1); g.add(r); for (let i = 0; i < 4; i++) { const b = mesh(new THREE.BoxGeometry(.34, .05, 7.4), dk, 0, 0, 0, r); b.rotation.y = i * Math.PI / 4; }
+    const tr = this.t2 = new THREE.Group(); tr.position.set(.3, 1.5, -9.3); g.add(tr); mesh(new THREE.BoxGeometry(.05, 1.7, .14), dk, 0, 0, 0, tr); mesh(new THREE.BoxGeometry(.05, .14, 1.7), dk, 0, 0, 0, tr);
+    collapse(r, null, 'apR'); collapse(tr, null, 'apT'); collapse(g, [r, tr], 'apB' + team);
+    this.gunT = 0; this.burstN = 0; this.rkT = 3; this.mslT = 5; this.orb = Math.random() < .5 ? 1 : -1; this.thinkT = 0;
+  }
+  kind() { return 'apache'; }
+  update(dt) {
+    this.r2.rotation.y += (this.alive ? 24 : 6) * dt; this.t2.rotation.x += 38 * dt;
+    if (!this.alive || this.isPlayerUnit()) return super.update(dt);
+    const p = this.pos; this.thinkT -= dt;
+    if (this.thinkT <= 0) { this.thinkT = .7; const o = this.order; if (o && o.type === 'attack' && !(o.u.alive && !o.u.removed)) this.order = null; this.target = this.order && this.order.type === 'attack' ? this.order.u : findTarget(this, 560, GROUNDW); }
+    const t = this.target && this.target.alive && !this.target.hidden ? this.target : null, gh = Math.max(getH(p.x, p.z), WATER);
+    let wx = 0, wz = 0, face = this.yaw;
+    if (t) { const dx = t.pos.x - p.x, dz = t.pos.z - p.z, d = Math.hypot(dx, dz) || 1, vr = clamp((d - 210) * .3, -18, 36); face = Math.atan2(dx, dz); wx = dx / d * vr - dz / d * 9 * this.orb; wz = dz / d * vr + dx / d * 9 * this.orb; }
+    else { const dx = this.dest.x - p.x, dz = this.dest.z - p.z, d = Math.hypot(dx, dz) || 1, v = Math.min(44, d * .5); if (d > 6) { face = Math.atan2(dx, dz); wx = dx / d * v; wz = dz / d * v; } }
+    const k = Math.min(1, dt * 1.3); this.vel.x = lerp(this.vel.x, wx, k); this.vel.z = lerp(this.vel.z, wz, k);
+    let alt = gh + 42; const b = cityBoxAt(p.x + this.vel.x * 2, p.z + this.vel.z * 2) || cityBoxAt(p.x, p.z); if (b) alt = Math.max(alt, b.top + 14);
+    this.vel.y = clamp((alt - p.y) * 1.2, -9, 12); p.addScaledVector(this.vel, dt);
+    this.yaw += angDiff(this.yaw, face) * Math.min(1, dt * 2.2); this.speed = Math.hypot(this.vel.x, this.vel.z);
+    const f = this.forward(), fs = this.vel.x * f.x + this.vel.z * f.z, ls = this.vel.x * f.z - this.vel.z * f.x; this.tilt = lerp(this.tilt, clamp(fs / 44, -1, 1) * .22, Math.min(1, dt * 2));
+    this.group.rotation.set(this.tilt, this.yaw, clamp(-ls / 30, -.3, .3), 'YXZ');
+    if (t) {
+      const gun = this.group.localToWorld(new V3(0, -1.05, 4)), tc = t.center(), d3 = tc.distanceTo(gun), aim = tc.clone().addScaledVector(t.velocity(), d3 / 600).sub(gun).normalize(), off = Math.abs(angDiff(this.yaw, face));
+      if (d3 < 500 && off < .4) { this.gunT -= dt; if (this.gunT <= 0) { fireBullet(this, gun, aim, { dmg: 75, range: 620, spread: .012, ap: .3, air: .6, tracer: true, from: gun, tcol: 0xffd27a }); this.burstN++; this.gunT = this.burstN % 12 === 0 ? 1.3 : .09; if (this.burstN % 3 === 0) Snd.shot(gun, 'cannon30'); } }
+      this.rkT -= dt; if (this.rkT <= 0 && d3 < 430 && off < .22 && !isAirT(t)) { this.rkT = 6.5; for (let i = 0; i < 4; i++) setTimeout(() => { if (!this.alive || paused) return; const pod = this.group.localToWorld(new V3((i % 2 ? 1 : -1) * 1.6, -.45, 1.4)), dir = t.center().clone().add(new V3(rnd(-5, 5), 0, rnd(-5, 5))).sub(pod).normalize(); launch('rocket', pod, dir.multiplyScalar(165), this); Snd.shot(pod, 'tank'); }, i * 170); }
+      this.mslT -= dt; if (this.mslT <= 0 && d3 < 540 && (t.type === 'tank' || t.type === 'struct' || t.type === 'ship' || isAirT(t))) { this.mslT = 8; const pod = this.group.localToWorld(new V3(2.25 * this.orb, -.4, 1)); launch('missile', pod, aim.clone().multiplyScalar(90), this, t); }
+    }
+    if (this.hp < this.maxHp * .5 && Math.random() < dt * 12) smokePuff(this.group.localToWorld(new V3(0, 1.5, -1)), false);
+  }
+}
+// ---------- A-10: one low pass with the cannon and rockets ----------
+const A10S = [], GUNS = [];
+function buildA10(team) {
+  const g = new THREE.Group(), c = mat(team ? 0x77705f : 0x6b7275), dk = mat(0x24262a);
+  mesh(new THREE.CylinderGeometry(.95, .8, 13, 10).rotateX(Math.PI / 2), c, 0, 0, 0, g); mesh(new THREE.ConeGeometry(.95, 3, 10).rotateX(Math.PI / 2), c, 0, 0, 8, g); mesh(new THREE.SphereGeometry(.7, 8, 6), mat(0x22303a), 0, .75, 4.4, g).scale.set(1, .8, 2);
+  mesh(new THREE.BoxGeometry(17.5, .26, 2.7), c, 0, -.3, .6, g); mesh(new THREE.CylinderGeometry(.16, .16, 2.2, 8).rotateX(Math.PI / 2), dk, 0, -.5, 9.6, g);
+  for (const s of [-1, 1]) { mesh(new THREE.CylinderGeometry(.85, .85, 3.4, 10).rotateX(Math.PI / 2), c, s * 1.7, 1.25, -3.6, g); mesh(new THREE.CylinderGeometry(.7, .7, .2, 10).rotateX(Math.PI / 2), dk, s * 1.7, 1.25, -1.85, g); mesh(new THREE.BoxGeometry(.16, 2.4, 1.8), c, s * 2.9, 1, -6.4, g); for (const x of [3.5, 5.5]) mesh(new THREE.CylinderGeometry(.2, .2, 2, 6).rotateX(Math.PI / 2), dk, s * x, -.7, .8, g); }
+  mesh(new THREE.BoxGeometry(6, .16, 1.7), c, 0, .1, -6.4, g);
+  collapse(g, null, 'a10' + team); scene.add(g); return g;
+}
+const flyer = (team, name) => ({ team, type: 'jet', alive: true, hidden: false, removed: false, pos: new V3(), label: () => (team ? 'Rood ' : 'Blauw ') + name, kind: () => name });
+function a10Run(team, p) {
+  const c = new V3(p.x, Math.max(getH(p.x, p.z), WATER), p.z), sz = team ? -WORLD - 250 : WORLD + 250, sx = clamp(p.x * .6 + rnd(-300, 300), -WORLD * .85, WORLD * .85);
+  const pos = new V3(sx, Math.max(c.y + 240, getH(sx, clamp(sz, -WORLD, WORLD)) + 140), sz), g = buildA10(team); g.position.copy(pos);
+  A10S.push({ g, pos, c, team, t: 0, st: 'in', dir: new V3(c.x - sx, 0, c.z - sz).normalize(), cd: 0, n: 0, rk: 4, owner: flyer(team, 'A-10') });
+  if (team === CMD.team) addFeed(null, null, '✈ A-10 duikt naar het doel'); else if (typeof radarNote === 'function') radarNote('📡 RADAR: vijandelijke A-10 in aantocht', c);
+}
+function updateA10s(dt) {
+  for (let i = A10S.length - 1; i >= 0; i--) {
+    const A = A10S[i], p = A.pos, hd = Math.hypot(A.c.x - p.x, A.c.z - p.z); A.t += dt; A.owner.pos.copy(p);
+    let want;
+    if (A.st === 'in') { const gnd = Math.max(getH(p.x, p.z), getH(p.x + A.dir.x * 150, p.z + A.dir.z * 150), WATER); want = hd < 950 ? A.c.clone().add(new V3(0, 6, 0)).sub(p).normalize() : new V3(A.c.x - p.x, (Math.max(A.c.y + 240, gnd + 120) - p.y) * 2, A.c.z - p.z).normalize(); if (hd < 190 || (hd < 600 && p.y < gnd + 40)) A.st = 'out'; }
+    else want = new V3(A.dir.x, .32, A.dir.z).normalize();
+    A.dir.lerp(want, Math.min(1, dt * (A.st === 'in' ? 1.6 : 1.1))).normalize(); p.addScaledVector(A.dir, 125 * dt);
+    const floor = Math.max(getH(p.x, p.z), WATER) + 30; if (p.y < floor) p.y = floor;
+    A.g.position.copy(p); A.g.rotation.set(-Math.asin(clamp(A.dir.y, -1, 1)), Math.atan2(A.dir.x, A.dir.z), 0, 'YXZ');
+    if (A.st === 'in' && hd < 640 && hd > 170) {
+      if (!A.brrt) { A.brrt = true; Snd.burst(p, { f: 130, type: 'lowpass', dur: 2.2, vol: 1.5, thump: .4, tf: 60, brown: true, rng: 3000 }); A.foes = units.filter(u => u.alive && u.team !== A.team && !u.hidden && !isAirT(u) && u.type !== 'drone' && Math.hypot(u.pos.x - A.c.x, u.pos.z - A.c.z) < 70); }
+      A.cd -= dt;
+      while (A.cd <= 0) {
+        A.cd += .03; A.n++; const gun = p.clone().addScaledVector(A.dir, 9); let aimP;
+        const f = A.foes.filter(u => u.alive); if (f.length && Math.random() < .7) { const u = f[(Math.random() * f.length) | 0]; aimP = u.center().clone().add(new V3(rnd(-2.5, 2.5), 0, rnd(-2.5, 2.5))); } else aimP = A.c.clone().add(new V3(rnd(-28, 28), 0, rnd(-28, 28)));
+        const r = fireBullet(A.owner, gun, aimP.sub(gun).normalize(), { dmg: 130, range: 1000, spread: .006, ap: .55, tracer: A.n % 3 === 0, from: gun, tcol: 0xffd27a });
+        if (A.n % 6 === 0 && r.kind !== 'none') { explosion(r.point.clone(), .55, { r: 2 }); applyBlast(r.point, 5, 70, A.owner); }
+      }
+      if (A.rk > 0 && hd < 420 && A.n % 12 === 0) { A.rk--; const pod = p.clone().add(new V3(rnd(-4, 4), -1, 0)); launch('rocket', pod, A.c.clone().add(new V3(rnd(-14, 14), 0, rnd(-14, 14))).sub(pod).normalize().multiplyScalar(190), A.owner); }
+    }
+    if (A.t > 60 || (A.st === 'out' && hd > 2600)) { scene.remove(A.g); A10S.splice(i, 1); }
+  }
+}
+// ---------- AC-130 gunship: circles the target for a minute ----------
+function gunship(team, p) {
+  const c = new V3(p.x, Math.max(getH(p.x, p.z), WATER), p.z), g = buildCargoPlane(team); g.scale.setScalar(1.25);
+  const a = team ? -Math.PI / 2 : Math.PI / 2, G = { g, c, team, a: a + 1.2, t: -14, cd25: 0, n25: 0, cd40: 1, cd105: 3, imp: [], owner: flyer(team, 'gunship'), foes: [], fT: 0 };
+  GUNS.push(G); gunPos(G);
+  if (team === CMD.team) addFeed(null, null, '✈ AC-130 gunship onderweg · het cirkelt 60 seconden boven het doel'); else if (typeof radarNote === 'function') radarNote('📡 RADAR: vijandelijk gunship in aantocht', c);
+}
+function gunPos(G) {
+  const R = 330, far = G.t < 0 ? -G.t * 95 : G.t > 60 ? (G.t - 60) * 95 : 0, tang = new V3(-Math.sin(G.a), 0, Math.cos(G.a));
+  const p = new V3(G.c.x + Math.cos(G.a) * R, G.c.y + 285, G.c.z + Math.sin(G.a) * R).addScaledVector(tang, G.t < 0 ? -far : far);
+  G.g.position.copy(p); G.g.rotation.set(0, Math.atan2(tang.x, tang.z), far ? 0 : .38, 'YXZ'); G.owner.pos.copy(p); return p;
+}
+function updateGunships(dt) {
+  for (let i = GUNS.length - 1; i >= 0; i--) {
+    const G = GUNS[i]; G.t += dt; if (G.t >= 0 && G.t <= 60) G.a += 95 / 330 * dt; const p = gunPos(G);
+    for (let k = G.imp.length - 1; k >= 0; k--) { const I = G.imp[k]; I.t -= dt; if (I.t <= 0) { G.imp.splice(k, 1); explosion(I.p.clone().add(new V3(0, 1, 0)), 2.3, { r: 10 }); applyBlast(I.p, 17, 430, G.owner); } }
+    if (G.t > 80) { scene.remove(G.g); GUNS.splice(i, 1); continue; }
+    if (G.t < 1 || G.t > 60) continue;
+    G.fT -= dt; if (G.fT <= 0) { G.fT = .5; G.foes = units.filter(u => u.alive && u.team !== G.team && !u.hidden && !isAirT(u) && u.type !== 'drone' && !(u.type === 'struct' && u.noTarget) && Math.hypot(u.pos.x - G.c.x, u.pos.z - G.c.z) < 210); }
+    const F = G.foes.filter(u => u.alive); if (!F.length) continue;
+    const from = p.clone().add(new V3(0, -2, 0));
+    G.cd25 -= dt; if (G.cd25 <= 0) { const u = F[G.n25 % F.length]; fireBullet(G.owner, from, u.center().clone().add(new V3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5))).sub(from).normalize(), { dmg: 48, range: 1000, spread: .008, ap: .15, tracer: G.n25 % 2 === 0, from, tcol: 0xff9a5a }); G.n25++; G.cd25 = G.n25 % 20 === 0 ? .7 : .06; if (G.n25 % 4 === 0) Snd.shot(from, 'mg'); }
+    G.cd40 -= dt; if (G.cd40 <= 0) { G.cd40 = .75; const u = F[(Math.random() * F.length) | 0], tp = u.center().clone().addScaledVector(u.velocity(), 1.3).add(new V3(rnd(-3, 3), 4, rnd(-3, 3))); launch('shell', from, tp.sub(from).normalize().multiplyScalar(320), G.owner); Snd.shot(from, 'cannon30'); }
+    G.cd105 -= dt; if (G.cd105 <= 0) { G.cd105 = 5; const u = F.slice().sort((a, b) => (b.type === 'tank' ? 1 : 0) - (a.type === 'tank' ? 1 : 0))[0], tp = new V3(u.pos.x + rnd(-3, 3), Math.max(getH(u.pos.x, u.pos.z), WATER), u.pos.z + rnd(-3, 3)); G.imp.push({ p: tp, t: 1 }); tracer(from, tp, 0xfff0c0); Snd.burst(from, { f: 200, type: 'lowpass', dur: 1.2, vol: 1.2, thump: 1, tf: 40, brown: true, rng: 3000 }); }
+  }
+}
+// ---------- grenade quadcopters ----------
+class Quad extends Unit {
+  constructor(team, x, y, z, station) {
+    super(team, 'drone'); this.variant = 'quad'; this.hp = this.maxHp = 80; this.radius = .9; this.drop = true; this.station = station; this.gren = 8; this.cd = 2; this.thinkT = rnd(0, 1); this.yaw = 0; this.life = 150;
+    const g = new THREE.Group(); this.group.add(g); const dk = mat(0x202224);
+    for (const a of [Math.PI / 4, -Math.PI / 4]) { const b = mesh(new THREE.BoxGeometry(1.9, .08, .14), dk, 0, 0, 0, g); b.rotation.y = a; }
+    mesh(new THREE.BoxGeometry(.45, .22, .6), mat(team ? 0x8a5a4a : 0x4a6a8a), 0, -.05, 0, g); mesh(new THREE.SphereGeometry(.12, 6, 5), mat(0x3d4430), 0, -.28, 0, g);
+    for (const [a, b] of [[.67, .67], [-.67, .67], [.67, -.67], [-.67, -.67]]) mesh(new THREE.CylinderGeometry(.42, .42, .03, 10), mat(0x9aa0a4), a, .1, b, g);
+    collapse(g, null, 'quad' + team); this.pos.set(x, y, z); this._hs = [{ c: this.pos, r: .9 }];
+  }
+  center() { return this.pos; }
+  hitSpheres() { return this.alive ? this._hs : []; }
+  forward() { return new V3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  damage(n, src, kind, p) { if (kind === 'bullet' && Math.random() < .9) return; return super.damage(n, src, kind, p); } // small and hard to hit
+  die() { explosion(this.pos.clone(), .6, { air: true }); }
+  update(dt) {
+    const p = this.pos;
+    if (!this.alive) { p.y -= 22 * dt; this.group.rotation.x += 6 * dt; if (p.y < Math.max(getH(p.x, p.z), WATER) + .3 || (this.deadT += dt) > 8) this.remove(); return; }
+    this.life -= dt; this.thinkT -= dt; this.cd -= dt; this.drT = (this.drT || 0) + dt;
+    if (this.thinkT <= 0) {
+      this.thinkT = .8; let b = null, bd = 150;
+      if (this.gren > 0) for (const u of units) { if (!u.alive || u.team === this.team || u.hidden || isAirT(u) || u.type === 'drone' || u.type === 'ship' || (u.type === 'struct' && u.noTarget)) continue; const d = Math.hypot(u.pos.x - this.station.x, u.pos.z - this.station.z) * (u.type === 'tank' ? 1.6 : 1); if (d < bd) { bd = d; b = u; } }
+      this.tgt = b;
+    }
+    const t = this.tgt && this.tgt.alive ? this.tgt : null, out = this.gren <= 0 || this.life <= 0, gx = out ? BASES[this.team].x : t ? t.pos.x + t.velocity().x * 2.5 : this.station.x + Math.cos(SIMT * .5 + this.hp) * 14, gz = out ? BASES[this.team].z : t ? t.pos.z + t.velocity().z * 2.5 : this.station.z + Math.sin(SIMT * .5 + this.hp) * 14;
+    const dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz) || 1, v = Math.min(20, d * 1.2 + 3);
+    this.vel.x = lerp(this.vel.x, dx / d * v, Math.min(1, dt * 2)); this.vel.z = lerp(this.vel.z, dz / d * v, Math.min(1, dt * 2));
+    let alt = Math.max(getH(p.x, p.z), WATER) + 34; const bx = cityBoxAt(p.x, p.z); if (bx) alt = Math.max(alt, bx.top + 10);
+    this.vel.y = clamp((alt - p.y) * 1.5, -8, 9); p.addScaledVector(this.vel, dt); if (d > 2) this.yaw = Math.atan2(dx, dz);
+    this.group.rotation.set(clamp(v / 60, 0, .3), this.yaw, 0, 'YXZ');
+    if (t && !out && d < 5 && this.cd <= 0) { this.cd = 2.4; this.gren--; launch('grenade', new V3(p.x, p.y - .5, p.z), new V3(this.vel.x * .5, -2, this.vel.z * .5), this); Snd.shot(p, 'click'); }
+    if (out && (d < 40 || this.life < -40)) this.remove();
+  }
+}
+function quads(team, p) {
+  const b = BASES[team], st = new V3(p.x, 0, p.z);
+  for (let i = 0; i < 3; i++) { const x = b.x + rnd(-10, 10), z = b.z + rnd(-10, 10); const q = new Quad(team, x, getH(x, z) + 6 + i * 3, z, new V3(st.x + Math.cos(i * 2.1) * 9, 0, st.z + Math.sin(i * 2.1) * 9)); if (onIsleSide(p)) { q.pos.set(ISLE.x + rnd(-10, 10), WATER + 14 + i * 3, ISLE.z + 110); } }
+  if (team === CMD.team) addFeed(null, null, '🚁 3 granaatdrones onderweg · elk 8 granaten');
+}
+const onIsleSide = p => p.x > WORLD;
+// ---------- wiring ----------
+const _deliverA = deliver;
+deliver = function (kind, team, p) {
+  if (kind === 'apache') { const h = new AttackHeli(team, new V3(p.x, 0, p.z)); if (team === CMD.team) addFeed(null, null, '🚁 Aanvalshelikopter onderweg · selecteer hem en tik om hem te verplaatsen'); return h; }
+  if (kind === 'a10') return a10Run(team, p);
+  if (kind === 'gunship') return gunship(team, p);
+  if (kind === 'quad') return quads(team, p);
+  return _deliverA(kind, team, p);
+};
+const _placeAtA = placeAt;
+placeAt = function (p) {
+  if (tool && AIRK[tool.kind]) { const { kind, team } = tool; if (!pay(kind, team)) return; deliver(kind, team, p); markers.push({ p: p.clone(), t: 0, col: team ? '#e2543c' : '#6fb2dc' }); if (!(keys.ShiftLeft || keys.ShiftRight)) setTool(null); return; }
+  _placeAtA(p);
+};
+// the enemy commander uses the new aircraft too
+const _aiChooseA = aiChoose;
+aiChoose = function (ai) { const r = Math.random(); if (r < .05) return 'apache'; if (r < .08) return 'a10'; if (r < .1) return 'quad'; return _aiChooseA(ai); };
+// ---------- dropping the Tsar Bomba wins the war (not in zombie mode: there only the cure counts) ----------
+const TSW = { t: 0 };
+const _tsarAtW = tsarAt;
+tsarAt = function (p, team) {
+  const r = _tsarAtW(p, team);
+  if (ECO.on && !ECO.over && SET.mode === 'battle' && team === CMD.team) { TSW.t = SIMT + 15; addFeed(null, null, '☢ De vijand kan dit niet overleven · de oorlog is voorbij'); }
+  if (ZM.on) { zNoise(p.x, p.z, 6000, 40); addFeed(null, null, '☢ De Tsar Bomba veegt het vasteland schoon, maar nieuwe hordes blijven komen · alleen het geneesmiddel stopt ze'); ZM.waveT = Math.max(ZM.waveT, 70); }
+  return r;
+};
+const _askTsarW = askTsar;
+askTsar = function (p, team) {
+  _askTsarW(p, team); const d = document.getElementById('tsarAsk'); if (!d) return; const row = d.querySelector('.row'), n = document.createElement('p'); n.style.cssText = 'margin:10px 0 0;color:#ffd27a;font-weight:700';
+  n.textContent = ZM.on ? '🧟 In zombie-modus win je hier niet mee. De bom doodt alle zombies op het vasteland, maar alleen het geneesmiddel uit je labo wint het spel.' : ECO.on ? '🏆 Wie de Tsar Bomba laat vallen, wint de oorlog meteen.' : '';
+  if (n.textContent) row.parentNode.insertBefore(n, row);
+};
+const _updateWavesA = updateWaves;
+updateWaves = function (dt) {
+  _updateWavesA(dt); if (A10S.length) updateA10s(dt); if (GUNS.length) updateGunships(dt);
+  if (TSW.t && SIMT >= TSW.t && !ECO.over) { TSW.t = 0; endGame(true); const e = document.getElementById('endScreen'); e.querySelector('h2').textContent = 'OVERWINNING'; e.querySelector('p').textContent = `De Tsar Bomba heeft de oorlog beslist: niets op het vasteland heeft het overleefd. Blauw maakte ${score[0]} doden, rood ${score[1]}.`; }
 };
 
 </script>
