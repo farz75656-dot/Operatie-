@@ -11099,4 +11099,267 @@ applyBlast = function (p, radius, dmg, owner, direct) {
   const f = 1 - Math.max(0, d) / radius; z.damage(dmg * f * f, owner, 'blast', p);
 };
 
+// ================= DETAILED MODELS: helicopters, fighter, bomber, A-10, transport plane and ships =================
+// Every unit class merges its parts into one cached geometry (GEO_CACHE[key]). Here we build much richer
+// geometry for those same keys, in the same local frame, so every unit of that type uses the new model.
+const MDL = {};
+function mdlKit(g) {
+  const put = (geo, c, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  return {
+    box: (w, h, d, c, x, y, z, rx, ry, rz) => put(new THREE.BoxGeometry(w, h, d), c, x, y, z, rx, ry, rz),
+    cyl: (r0, r1, h, c, x, y, z, rx, ry, rz, seg = 14) => put(new THREE.CylinderGeometry(r0, r1, h, seg), c, x, y, z, rx, ry, rz),
+    // a cylinder lying along z: r0 at the front (+z), r1 at the back
+    tube: (r0, r1, len, c, x, y, z, seg = 14, sx = 1, sy = 1) => { const m = put(new THREE.CylinderGeometry(r0, r1, len, seg).rotateX(Math.PI / 2), c, x, y, z); m.scale.set(sx, sy, 1); return m; },
+    sph: (r, c, x, y, z, sx = 1, sy = 1, sz = 1, seg = 14) => { const m = put(new THREE.SphereGeometry(r, seg, Math.max(6, seg * .6 | 0)), c, x, y, z); m.scale.set(sx, sy, sz); return m; },
+    // a body of revolution along z from [radius, z] pairs, squashed to an oval with sx/sy
+    lathe: (pts, c, x, y, z, sx = 1, sy = 1, seg = 18) => { const m = put(new THREE.LatheGeometry(pts.map(([r, zz]) => new THREE.Vector2(Math.max(.001, r), zz)), seg).rotateX(Math.PI / 2), c, x, y, z); m.scale.set(sx, sy, 1); return m; },
+    // a flat plate seen from above: points [x, z], thickness going down from y
+    plate: (pts, t, c, x = 0, y = 0, z = 0, bev = 0) => put(shapeGeoB(pts, t, bev).rotateX(Math.PI / 2), c, x, y, z),
+    // a fin seen from the side: points [z, y], thickness across x
+    fin: (pts, t, c, x = 0, y = 0, z = 0, rz = 0, bev = 0) => { const m = put(shapeGeoB(pts, t, bev).rotateY(-Math.PI / 2).translate(t / 2, 0, 0), c, x, y, z); m.rotation.z = rz; return m; },
+    put
+  };
+}
+function shapeGeoB(pts, depth, bev) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]); return new THREE.ExtrudeGeometry(s, bev ? { depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 1 } : { depth, bevelEnabled: false }); }
+const mirrorX = pts => pts.map(([x, z]) => [-x, z]).reverse();
+const shade = (hex, f) => { const c = new THREE.Color(hex); c.r = Math.min(1, c.r * f); c.g = Math.min(1, c.g * f); c.b = Math.min(1, c.b * f); return c.getHex(); };
+function mdlBake(key, build) {
+  const g = new THREE.Group(); build(mdlKit(g), g);
+  const ms = []; g.traverse(o => { if (o.isMesh) ms.push(o); });
+  const old = GEO_CACHE[key], geo = mergeRel(g, ms); GEO_CACHE[key] = geo; ms.forEach(m => m.geometry.dispose());
+  // things already built with the old geometry (parked decor jets) switch over too
+  if (old) scene.traverse(o => { if (o.isMesh && o.geometry === old) o.geometry = geo; });
+}
+// a ship hull lofted through cross sections; every face is turned to point outwards
+function hullMesh(secs, i0, i1, deck, transom) {
+  const P = [], v = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+  const tri = (a, b, c, ref) => { const A = v(a), B = v(b), C = v(c), n = B.clone().sub(A).cross(C.clone().sub(A)); if (n.dot(ref) < 0) P.push(...a, ...c, ...b); else P.push(...a, ...b, ...c); };
+  for (let s = 0; s < secs.length - 1; s++) {
+    const A = secs[s], B = secs[s + 1];
+    for (let k = i0; k < i1; k++) for (const sd of [1, -1]) {
+      const pa0 = A.p[k], pa1 = A.p[k + 1], pb0 = B.p[k], pb1 = B.p[k + 1];
+      const a0 = [pa0[0] * sd, pa0[1], A.z + (pa0[2] || 0)], a1 = [pa1[0] * sd, pa1[1], A.z + (pa1[2] || 0)], b0 = [pb0[0] * sd, pb0[1], B.z + (pb0[2] || 0)], b1 = [pb1[0] * sd, pb1[1], B.z + (pb1[2] || 0)];
+      const ref = new THREE.Vector3(sd * (Math.abs(a0[0]) + Math.abs(b1[0]) + .05), ((pa0[1] + pb1[1]) / 2 < -1 ? -.6 : 0), 0);
+      tri(a0, b0, b1, ref); tri(a0, b1, a1, ref);
+    }
+    if (deck) { const a = A.p[0], b = B.p[0], up = new THREE.Vector3(0, 1, 0); const ar = [a[0], a[1], A.z + (a[2] || 0)], al = [-a[0], a[1], A.z + (a[2] || 0)], br = [b[0], b[1], B.z + (b[2] || 0)], bl = [-b[0], b[1], B.z + (b[2] || 0)]; tri(ar, br, bl, up); tri(ar, bl, al, up); }
+  }
+  if (transom) { const S = secs[0], back = new THREE.Vector3(0, 0, -1); for (let k = i0; k < i1; k++) { const p0 = S.p[k], p1 = S.p[k + 1]; tri([p0[0], p0[1], S.z], [p1[0], p1[1], S.z], [-p1[0], p1[1], S.z], back); tri([p0[0], p0[1], S.z], [-p1[0], p1[1], S.z], [-p0[0], p0[1], S.z], back); } }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.computeVertexNormals(); return geo;
+}
+// sections for a warship: [deck edge, upper hull, boot-top, bilge, lower, keel]
+function warshipSecs(len, beam, depth, deckY, bowRise, overhang, n = 26, sternW = .82, bowStart = .62) {
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, z = -len / 2 + t * len, bt = t < bowStart ? 1 : 1 - Math.pow((t - bowStart) / (1 - bowStart), 1.55), st = t < .12 ? lerp(sternW, 1, t / .12) : 1;
+    const hb = beam / 2 * Math.max(0, bt) * st, flare = 1 + .14 * smooth(.6, 1, t), dy = deckY + bowRise * smooth(.55, 1, t), ov = overhang * smooth(.82, 1, t), keel = -depth * (1 - .85 * smooth(.88, 1, t)) * (t < .06 ? .8 : 1);
+    out.push({ z, p: [[hb * flare + (t > .99 ? 0 : 0), dy, ov], [hb * (1 + .05 * smooth(.6, 1, t)), .6, ov * .35], [hb, -.25, ov * .1], [hb * .94, keel * .45, 0], [hb * .6, keel * .85, 0], [0, keel, 0]] });
+  }
+  return out;
+}
+function hullParts(K, g, secs, col, deckCol) {
+  const add = (geo, c) => { const m = new THREE.Mesh(geo, mat(c)); g.add(m); return m; };
+  add(hullMesh(secs, 0, 1, true, true), col.top); add(hullMesh(secs, 1, 2, false, true), col.band); add(hullMesh(secs, 2, 5, false, true), col.low);
+  // the deck surface gets its own colour by laying a thin copy on top
+  const d = add(hullMesh(secs.map(s => ({ z: s.z, p: [[s.p[0][0] - .25, s.p[0][1] + .02, s.p[0][2]], [s.p[0][0] - .25, s.p[0][1] + .01, s.p[0][2]]] })), 0, 1, true, false), deckCol);
+  return d;
+}
+// ---------- UH-60 Black Hawk ----------
+for (const team of [0, 1]) mdlBake('hb' + team, K => {
+  const c = HELI_COL[team], c2 = shade(c, .82), c3 = shade(c, 1.12), gl = 0x1b2833, dk = 0x1e1f1e, mt = 0x55595b;
+  K.box(2.2, 1.6, 4.9, c, 0, -.2, -.2); K.tube(1.1, 1.1, 4.9, c, 0, .55, -.2, 18, 1, .5); K.box(1.9, .35, 4.6, c2, 0, -1.05, -.2);
+  K.lathe([[1.08, 0], [1.06, .4], [.96, 1.0], [.8, 1.45], [.56, 1.82], [.28, 2.05], [0, 2.12]], c, 0, -.16, 2.25, 1.0, .82);
+  K.box(.95, .78, .07, gl, .48, .62, 3.15, -.8, .28, 0); K.box(.95, .78, .07, gl, -.48, .62, 3.15, -.8, -.28, 0);
+  K.box(.06, .7, 1.15, gl, 1.06, .38, 2.65); K.box(.06, .7, 1.15, gl, -1.06, .38, 2.65); K.box(.55, .3, .06, gl, .42, -.45, 3.85, .5, 0, 0); K.box(.55, .3, .06, gl, -.42, -.45, 3.85, .5, 0, 0);
+  for (const s of [-1, 1]) {
+    K.box(.05, 1.4, 1.75, shade(c, .7), s * 1.12, -.12, .55); K.box(.06, .42, .62, gl, s * 1.13, .3, .55); K.box(.06, .45, .45, gl, s * 1.12, .32, 1.55);
+    K.tube(.07, .07, 1.1, dk, s * 1.32, .1, 1.55); K.box(.24, .26, .4, dk, s * 1.2, .12, 1.55); for (let k = 0; k < 3; k++) K.box(.06, .3, .3, gl, s * 1.12, .3, -1.1 - k * .55);
+    K.tube(.38, .34, 2.6, c3, s * .58, 1.18, -.55); K.cyl(.36, .36, .06, dk, s * .58, 1.18, .78, Math.PI / 2, 0, 0); K.box(.42, .36, 1.0, dk, s * .86, 1.22, -2.15, 0, s * .38, 0);
+    K.box(.12, .82, .12, mt, s * 1.0, -1.45, 1.15, 0, 0, s * .3); K.cyl(.32, .32, .22, dk, s * 1.25, -1.33, 1.15, 0, 0, Math.PI / 2); K.cyl(.14, .14, .26, mt, s * 1.25, -1.33, 1.15, 0, 0, Math.PI / 2);
+    K.box(.04, .04, 2.6, mt, s * .7, 1.0, 3.15, -.55, 0, 0);
+  }
+  K.box(1.35, .58, 2.6, c, 0, 1.25, -.25); K.sph(.75, c, 0, 1.18, 1.0, .9, .45, .9); K.cyl(.16, .2, .9, mt, 0, 1.95, -.3); K.cyl(.36, .36, .18, dk, 0, 2.36, -.3, 0, 0, 0, 10);
+  K.tube(.5, .26, 6.9, c, 0, .66, -5.95, 16); K.box(.05, .4, 5.5, c2, 0, .95, -5.6, -.03, 0, 0);
+  K.fin([[-8.75, .3], [-9.75, .3], [-10.55, 2.35], [-9.95, 2.45]], .28, c, 0, 0, 0, 0, .03); K.box(3.2, .08, .72, c, 0, .5, -9.55);
+  K.cyl(.17, .17, .32, mt, .2, 1.35, -9.8, 0, 0, Math.PI / 2); K.box(.08, 1.7, .12, mt, 0, -.5, -8.45); K.cyl(.2, .2, .14, dk, 0, -1.42, -8.45, 0, 0, Math.PI / 2);
+  K.box(.04, .55, .04, dk, 0, 1.0, 2.2, .4, 0, 0); K.box(.04, .45, .04, dk, 0, -1.4, -1.5); K.box(.36, .05, .2, 0xe8e6dc, 0, -.36, -6.5);
+  K.box(.9, .05, .9, 0xe8e6dc, 0, .95, -3.0); K.cyl(.12, .12, .05, team ? 0xb3301f : 0x2c5d8f, 0, .99, -3.0, 0, 0, 0, 10);
+});
+mdlBake('hr', K => {
+  K.cyl(.42, .42, .3, 0x2a2b2a, 0, 0, 0, 0, 0, 0, 12); K.cyl(.18, .18, .5, 0x55595b, 0, .25, 0);
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); K.box(6.6, .07, .52, 0x2b2c2c, ca * 3.75, -.06, -sa * 3.75, 0, a, -.012); K.box(.5, .08, .54, 0xd8c040, ca * 6.85, -.1, -sa * 6.85, 0, a, 0); K.box(.6, .14, .3, 0x55595b, ca * .6, 0, -sa * .6, 0, a, 0); }
+});
+mdlBake('htr', K => { K.cyl(.14, .14, .18, 0x55595b, 0, 0, 0, 0, 0, Math.PI / 2); for (let i = 0; i < 4; i++) { const m = K.put(new THREE.BoxGeometry(.05, 1.25, .2).translate(0, .72, 0), 0x2b2c2c, .05, 0, 0); m.rotation.x = i * Math.PI / 2; } });
+// ---------- AH-64 Apache ----------
+for (const team of [0, 1]) mdlBake('apB' + team, K => {
+  const c = team ? 0x6b5f45 : 0x4a5238, c2 = shade(c, .8), c3 = shade(c, 1.1), dk = 0x1c1d1d, gl = 0x1c2a33, mt = 0x55595b;
+  K.box(1.15, 1.45, 6.1, c, 0, .05, .2); K.box(1.95, .75, 3.3, c2, 0, -.42, .1); K.box(.95, .3, 3.8, c3, 0, .9, -.5);
+  K.lathe([[.62, 0], [.6, .5], [.5, 1.0], [.38, 1.35], [0, 1.45]], c, 0, -.1, 3.2, 1, 1.05, 12);
+  K.box(1.0, .72, 1.25, gl, 0, .78, 2.55); K.box(.98, .08, .95, gl, 0, .9, 3.3, .78, 0, 0); K.box(1.04, .85, 1.25, gl, 0, 1.15, 1.25); K.box(1.0, .08, .95, gl, 0, 1.25, 1.98, .78, 0, 0);
+  for (const z of [1.9, 3.15]) K.box(1.06, .06, .06, dk, 0, z > 3 ? 1.15 : 1.58, z - .6);
+  K.cyl(.36, .36, .78, c2, 0, -.28, 4.35, 0, 0, Math.PI / 2, 12); K.box(.5, .32, .06, gl, -.18, -.28, 4.72); K.box(.24, .24, .06, gl, .22, -.2, 4.72); K.sph(.2, c2, 0, .35, 4.15, 1, 1, 1.2, 10);
+  K.sph(.24, dk, 0, -.86, 2.9, 1, 1, 1, 10); K.tube(.055, .07, 1.9, dk, 0, -.95, 3.7, 8); K.box(.3, .3, .5, mt, 0, -.75, 2.6);
+  for (const s of [-1, 1]) {
+    K.tube(.44, .4, 2.7, c3, s * .95, .78, -1.05); K.cyl(.38, .38, .06, dk, s * .95, .78, .3, Math.PI / 2, 0, 0); K.box(.55, .5, .7, dk, s * 1.12, .82, -2.6, 0, s * .5, 0);
+    K.box(2.45, .12, 1.1, c, s * 1.45, -.05, .05, 0, 0, s * -.05);
+    K.box(.14, .38, .62, mt, s * 1.55, -.28, .05); K.tube(.3, .3, 1.7, c2, s * 1.55, -.63, .1, 12); K.cyl(.28, .28, .04, dk, s * 1.55, -.63, .96, Math.PI / 2, 0, 0);
+    K.box(.14, .38, .62, mt, s * 2.35, -.28, .05); K.box(.5, .08, 1.5, mt, s * 2.35, -.48, .05);
+    for (const [ox, oy] of [[-.15, -.62], [.15, -.62], [-.15, -.86], [.15, -.86]]) { K.tube(.09, .09, 1.35, 0x5d6247, s * 2.35 + ox, oy, .1, 8); K.cyl(0, .09, .25, 0xd9d6c8, s * 2.35 + ox, oy, .9, Math.PI / 2, 0, 0, 8); }
+    K.box(.12, .24, .4, dk, s * 2.72, -.05, .05);
+    K.box(.1, .62, .1, mt, s * .98, -.95, 1.7, 0, 0, s * .25); K.cyl(.28, .28, .22, dk, s * 1.08, -1.33, 1.7, 0, 0, Math.PI / 2); K.cyl(.12, .12, .25, mt, s * 1.08, -1.33, 1.7, 0, 0, Math.PI / 2);
+  }
+  K.box(1.0, .72, 2.3, c, 0, 1.15, -.95); K.cyl(.14, .17, 1.3, mt, 0, 1.85, -1); K.box(.4, .3, .5, dk, 0, 1.42, -2.45);
+  K.tube(.46, .2, 6.6, c, 0, .45, -6.2, 14); K.box(.06, .4, 5.4, c2, 0, .76, -5.8, -.04, 0, 0);
+  K.fin([[-8.5, .3], [-9.45, .3], [-9.95, 2.15], [-9.35, 2.2]], .2, c, 0, 0, 0, 0, .03); K.box(2.6, .08, .78, c, 0, .32, -9.05);
+  K.cyl(.14, .14, .3, mt, .26, 1.5, -9.3, 0, 0, Math.PI / 2); K.box(.08, 1.35, .1, mt, 0, -.6, -8.35); K.cyl(.2, .2, .14, dk, 0, -1.4, -8.35, 0, 0, Math.PI / 2);
+  K.box(.04, .5, .04, dk, 0, 1.0, 3.1, .35, 0, 0); K.box(.04, .05, .9, dk, 0, .3, 4.5);
+});
+mdlBake('apR', K => {
+  K.cyl(.4, .4, .28, 0x262727, 0, 0, 0, 0, 0, 0, 12); K.cyl(.12, .12, .45, 0x55595b, 0, .3, 0); K.sph(.5, 0x4a5238, 0, .72, 0, 1, .55, 1, 12);
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); K.box(6.6, .07, .5, 0x262727, ca * 3.7, -.05, -sa * 3.7, 0, a, -.012); K.box(.45, .08, .52, 0xd8c040, ca * 6.8, -.08, -sa * 6.8, 0, a, 0); }
+});
+mdlBake('apT', K => { K.cyl(.13, .13, .16, 0x55595b, 0, 0, 0, 0, 0, Math.PI / 2); for (const a of [0, .95, Math.PI, Math.PI + .95]) { const m = K.put(new THREE.BoxGeometry(.05, 1.15, .18).translate(0, .66, 0), 0x262727, -.04, 0, 0); m.rotation.x = a; } });
+// ---------- fighter jet (stealthy single-engine) ----------
+for (const team of [0, 1]) mdlBake('jm' + team, K => {
+  const c = JET_COL[team], c2 = shade(c, .86), c3 = shade(c, 1.08), dk = 0x2f3236, gl = 0x1f3445, ins = team ? 0xa3271b : 0x2c5d8f;
+  K.lathe([[0, -6.0], [.72, -5.9], [.92, -5.1], [1.02, -3.3], [1.06, -.8], [1.0, 1.6], [.86, 3.6], [.66, 5.4], [.44, 7.0], [.22, 8.3], [0, 9.2]], c, 0, 0, 0, 1.38, .76, 20);
+  K.lathe([[0, 7.1], [.44, 7.15], [.22, 8.32], [0, 9.22]], shade(c, .72), 0, 0, 0, 1.39, .77, 20);
+  K.lathe([[0, -5.4], [.42, -5.1], [.55, -2.5], [.55, 1.0], [.4, 2.6], [0, 3.2]], c3, 0, .58, 0, 1.6, .9, 14);
+  K.sph(.62, gl, 0, .7, 4.15, .82, .72, 2.35, 16); K.box(.05, .1, 1.1, dk, 0, 1.18, 3.55, .1, 0, 0); K.box(1.0, .08, .08, dk, 0, .95, 2.75);
+  K.plate([[.85, 7.2], [1.75, 3.0], [1.62, 1.0], [.9, 1.0]], .07, c2, 0, .02, 0); K.plate(mirrorX([[.85, 7.2], [1.75, 3.0], [1.62, 1.0], [.9, 1.0]]), .07, c2, 0, .02, 0);
+  for (const s of [-1, 1]) { K.box(.62, .78, 2.5, c, s * 1.42, .02, .85); K.box(.5, .6, .06, dk, s * 1.44, .02, 2.1, 0, s * .2, 0); K.sph(.32, c3, s * 1.2, .25, 2.2, .6, .55, 1); }
+  const W = [[.95, 1.7], [6.8, -2.15], [6.8, -3.1], [1.05, -4.05]];
+  K.plate(W, .24, c, 0, -.04, 0, .02); K.plate(mirrorX(W), .24, c, 0, -.04, 0, .02);
+  for (const s of [-1, 1]) { K.box(5.4, .02, .05, c2, s * 3.9, -.02, -3.0, 0, s * -.05, 0); K.box(.18, .1, .6, s < 0 ? 0xc0392b : 0x2e9e4f, s * 6.8, -.12, -2.6); K.cyl(.62, .62, .02, ins, s * 4.5, -.01, -2.0, 0, 0, 0, 16); if (!team) K.cyl(.28, .28, .025, 0xe8e8e2, s * 4.5, 0, -2.0, 0, 0, 0, 12); }
+  const H = [[.9, -4.25], [3.45, -5.55], [3.45, -6.35], [.9, -6.6]];
+  K.plate(H, .13, c, 0, 0, 0, .01); K.plate(mirrorX(H), .13, c, 0, 0, 0, .01);
+  const F = [[-3.35, 0], [-5.0, 2.35], [-5.95, 2.35], [-6.15, 0]];
+  for (const s of [-1, 1]) { K.fin(F, .14, c, s * 1.05, .45, 0, s * -.42, .01); K.fin([[-4.82, 2.0], [-5.0, 2.37], [-5.97, 2.37], [-6.02, 2.0]], .17, team ? 0xa3271b : c2, s * 1.05, .45, 0, s * -.42); }
+  K.tube(.86, .72, 1.25, 0x3a3b3d, 0, 0, -6.0, 18); K.tube(.62, .62, .2, 0x151515, 0, 0, -6.55, 16);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; K.box(.06, .3, 1.0, 0x2a2b2d, Math.cos(a) * .76, Math.sin(a) * .76, -6.3, 0, 0, a + Math.PI / 2); }
+  K.box(.5, .35, .7, gl, 0, -.55, 6.1); K.box(1.3, .04, 4.2, c2, 0, -.62, .3); K.box(.06, .02, 4.2, dk, .45, -.64, .3); K.box(.06, .02, 4.2, dk, -.45, -.64, .3);
+  for (const s of [-1, 1]) { K.box(.08, .35, .9, dk, s * 3.4, -.32, -1.0); K.box(.08, .35, .9, dk, s * 5.0, -.32, -1.0); }
+});
+// ---------- bomber: a flying wing ----------
+for (const team of [0, 1]) mdlBake('bm' + team, K => {
+  const c = team ? 0x4a4038 : 0x3f4347, c2 = shade(c, .8), c3 = shade(c, 1.15), gl = 0x1a2630, dk = 0x1b1c1d;
+  const Wg = [[0, 11.2], [21, -2.6], [21, -4.8], [14, -1.3], [9.2, -6.3], [4.3, -3.8], [0, -8.7], [-4.3, -3.8], [-9.2, -6.3], [-14, -1.3], [-21, -4.8], [-21, -2.6]];
+  K.plate(Wg, .55, c, 0, .35, 0, .18);
+  K.lathe([[0, -7.5], [1.3, -6.2], [2.2, -2], [2.4, 2], [2.0, 6], [1.3, 8.8], [0, 10.8]], c3, 0, .3, 0, 1.3, .62, 20);
+  for (const x of [-.75, -.25, .25, .75]) K.box(.42, .26, .06, gl, x, 1.38, 7.35, -1.0, x * .25, 0);
+  for (const s of [-1, 1]) for (const x of [3.3, 5.2]) { K.sph(.9, c3, s * x, .55, 1.2, .62, .42, 3.6, 12); K.box(1.0, .3, .12, dk, s * x, .78, 3.4, -.3, 0, 0); K.box(1.1, .1, 1.6, dk, s * x, .5, -2.8); }
+  for (const s of [-1, 1]) { K.cyl(.85, .85, .02, team ? 0xa3271b : 0x2c5d8f, s * 12, .42, -1.2, 0, 0, 0, 16); K.box(.2, .08, .5, s < 0 ? 0xc0392b : 0x2e9e4f, s * 21, .2, -3.6); K.box(13, .02, .06, c2, s * 10.5, .41, -2.5, 0, s * -.58, 0); }
+  K.box(2.2, .25, 5.8, dk, 0, -.35, 1);
+});
+// ---------- A-10 Warthog ----------
+for (const team of [0, 1]) mdlBake('a10' + team, K => {
+  const c = team ? 0x77705f : 0x6b7275, c2 = shade(c, .82), c3 = shade(c, 1.1), dk = 0x24262a, gl = 0x22303a;
+  K.lathe([[0, -6.7], [.5, -6.3], [.82, -4.2], [.96, -1], [1.0, 2], [.96, 4.6], [.86, 6.6], [.62, 8.4], [.34, 9.3], [0, 9.6]], c, 0, 0, 0, .95, 1.08, 18);
+  K.sph(.66, gl, 0, .9, 5.7, .78, .62, 1.45, 14); K.box(.06, .08, 1.2, dk, 0, 1.4, 5.5); K.tube(.2, .22, 1.6, dk, 0, -.42, 9.8, 10); K.cyl(.22, .22, .04, 0x111111, 0, -.42, 10.6, Math.PI / 2, 0, 0, 10);
+  for (const s of [-1, 1]) { K.box(.05, .22, .9, 0xb3301f, s * .78, -.32, 8.2, 0, s * .2, 0); for (let k = 0; k < 4; k++) K.box(.05, .08, .1, 0xf2f1ec, s * .8, -.24, 7.85 + k * .22, 0, s * .2, 0); }
+  const W = [[.9, 2.5], [8.9, 1.55], [8.9, -.45], [.9, -.85]];
+  K.plate(W, .36, c, 0, -.12, 0, .03); K.plate(mirrorX(W), .36, c, 0, -.12, 0, .03);
+  for (const s of [-1, 1]) {
+    K.box(.6, .08, 1.9, c2, s * 9.15, -.05, .55, 0, 0, s * -.35); K.box(.75, .55, 1.7, c2, s * 3.0, -.62, .9);
+    K.tube(.85, .8, 3.4, c3, s * 1.75, 1.25, -3.6, 16); K.cyl(.72, .72, .06, dk, s * 1.75, 1.25, -1.88, Math.PI / 2, 0, 0); K.cyl(.32, .32, .3, 0x3a3d40, s * 1.75, 1.25, -1.75, Math.PI / 2, 0, 0, 10); K.box(.25, .55, 1.6, c, s * 1.15, .78, -3.5);
+    for (const x of [4.2, 5.6, 7.0]) { K.box(.12, .3, .9, dk, s * x, -.44, .9); K.tube(.16, .16, 2.1, x === 4.2 ? 0x5d6247 : 0xd8d6cc, s * x, -.74, .95, 10); K.cyl(0, .16, .3, 0x5d6247, s * x, -.74, 2.15, Math.PI / 2, 0, 0, 10); }
+    K.fin([[-5.55, 0], [-7.3, 0], [-7.5, 2.75], [-6.45, 2.75]], .14, c, s * 3.1, .85, 0, 0, .02);
+  }
+  K.box(6.6, .16, 1.85, c, 0, 1.0, -6.6); K.box(.05, .05, 2.3, dk, 0, 1.05, 3.2);
+});
+// ---------- C-130 transport (also the base of the gunship) ----------
+for (const team of [0, 1]) mdlBake('cargo' + team, K => {
+  const c = team ? 0x7b735e : 0x6c7266, c2 = shade(c, .82), dk = 0x2a2b28, gl = 0x1f2a33, pr = 0x1c1c1c;
+  K.tube(2.4, 2.4, 22, c, 0, 0, -1); K.lathe([[2.4, 0], [2.35, 1.2], [2.1, 2.6], [1.6, 3.6], [.8, 4.3], [0, 4.55]], c, 0, -.1, 10, 1, .95);
+  for (let i = 0; i < 4; i++) K.box(.7, .5, .06, gl, -1.05 + i * .7, 1.35, 12.9, -.9, (i - 1.5) * .22, 0);
+  K.lathe([[2.4, 0], [2.3, -3], [1.9, -6.5], [1.3, -8.4], [.7, -9]], c, 0, .35, -12, 1, .95); K.box(2.6, .1, 4.5, c2, 0, -1.35, -15, -.32, 0, 0);
+  const W = [[2.2, 4.4], [21.5, 2.7], [21.5, .4], [2.2, -.6]];
+  K.plate(W, .55, c, 0, 2.55, 0, .05); K.plate(mirrorX(W), .55, c, 0, 2.55, 0, .05);
+  for (const x of [-14, -7.5, 7.5, 14]) {
+    K.tube(.9, .75, 6.2, c, x, 1.4, 3.6, 14); K.box(.9, .7, 1.4, c2, x, 1.0, 5.6); K.sph(.42, dk, x, 1.4, 7.0, 1, 1, 1.4, 10);
+    for (let k = 0; k < 4; k++) K.box(.3, 2.0, .06, pr, x, 1.4 + Math.cos(k * Math.PI / 2) * 1.0, 7.25, 0, 0, k * Math.PI / 2 + .3);
+  }
+  K.fin([[-17, 2.0], [-21.5, 2.0], [-23, 9.2], [-20.3, 9.2]], .45, c, 0, 0, 0, 0, .04); K.plate([[0, -18.8], [7.6, -20.6], [7.6, -22.4], [0, -23]], .35, c, 0, 2.9, 0); K.plate(mirrorX([[0, -18.8], [7.6, -20.6], [7.6, -22.4], [0, -23]]), .35, c, 0, 2.9, 0);
+  for (const s of [-1, 1]) { K.box(1.0, 1.4, 6.5, c2, s * 2.25, -1.55, 0); K.cyl(.12, .12, .02, team ? 0xb3301f : 0x2c5d8f, s * 2.42, .6, -8, 0, 0, Math.PI / 2, 12); }
+  K.box(5, .3, 5, dk, 0, -2.25, 0);
+});
+// ---------- ships ----------
+const SHIPC = t => ({ top: t ? 0x6e6f67 : 0x7b858c, band: 0x1d1f20, low: 0x7a2a22 });
+function rail(K, len, x, y, z, c = 0x9aa3a8) { K.box(.05, .05, len, c, x, y + .55, z); for (let i = 0; i <= len / 2.5; i++) K.box(.05, .55, .05, c, x, y + .28, z - len / 2 + i * 2.5); }
+for (const team of [0, 1]) mdlBake('ship_destroyer' + team, (K, g) => {
+  const C = SHIPC(team), gr = C.top, gr2 = shade(gr, .88), gr3 = shade(gr, 1.08), dk = 0x2a2d30, deck = 0x4b4f52, gl = 0x1a2026, wh = 0xe8e6dc, tc = team ? 0xb3301f : 0x2c5d8f;
+  hullParts(K, g, warshipSecs(62, 9, 4, 3, .9, 2.4), C, deck);
+  K.box(3.2, 1.0, 3.6, gr3, 0, 3.55, 20.5); K.fin([[19, 0], [22.6, 0], [21.8, .9], [19.4, 1.0]], 2.8, gr3, 0, 4.0, 0); K.tube(.16, .2, 6.2, dk, 0, 4.55, 24.8, 10);
+  K.box(3.4, .12, 5.4, dk, 0, 3.06, 15.2); for (let i = 1; i < 4; i++) K.box(3.4, .13, .05, gr2, 0, 3.07, 12.5 + i * 1.35); K.box(.05, .13, 5.4, gr2, 0, 3.07, 15.2);
+  K.fin([[2, 0], [12.4, 0], [10.6, 5.2], [3.6, 5.2]], 7.2, gr, 0, 3, 0, 0, .05); K.fin([[5.6, 5.2], [11.2, 5.2], [10.2, 7.4], [6.2, 7.4]], 8.6, gr3, 0, 3, 0);
+  K.box(8.4, .7, .12, gl, 0, 9.4, 10.55, -.35, 0, 0); for (const s of [-1, 1]) K.box(.1, .6, 3.5, gl, s * 4.32, 9.45, 8.4);
+  for (const [x, z, ry] of [[2.3, 10.4, .78], [-2.3, 10.4, -.78], [2.6, -9.7, 2.36], [-2.6, -9.7, -2.36]]) K.cyl(1.55, 1.55, .14, 0x464c50, x, 6.0, z, Math.PI / 2, ry, 0, 8);
+  K.cyl(.12, .12, 12, dk, 0, 16.2, 5.2); for (const s of [-1, 1]) K.cyl(.1, .1, 9.5, dk, s * .9, 14.2, 5.8, -.1, 0, s * .1, 6); K.box(5.5, .14, .14, dk, 0, 18.2, 5.2); K.box(3.6, .14, .14, dk, 0, 20.4, 5.2);
+  K.box(1.6, 1.0, .7, gr3, 0, 21.6, 5.2); K.cyl(.45, .45, .5, wh, 0, 22.5, 5.2, 0, 0, 0, 10); K.box(.04, 4, .04, dk, 0, 24.6, 5.2); K.box(2.2, 1.4, .05, tc, 1.1, 21.2, 4.95);
+  K.cyl(.75, .85, 1.6, wh, 0, 9.2, 11.8, 0, 0, 0, 10); K.sph(.75, wh, 0, 10.0, 11.8, 1, 1.1, 1, 10); K.tube(.08, .08, 1.4, dk, 0, 9.6, 12.8, 8);
+  for (const [z, h] of [[-1.5, 8.4], [-7.6, 7.8]]) { K.fin([[z + 1.6, 0], [z - 1.6, 0], [z - 2.2, h], [z + .9, h]], 3.2, gr2, 0, 3, 0); K.box(3.3, .35, 2.9, dk, 0, 3 + h, z - .6); }
+  K.fin([[-14.5, 0], [-4.4, 0], [-5.6, 4.6], [-13.6, 4.6]], 7.0, gr, 0, 3, 0, 0, .05); K.box(5.6, 3.6, .08, shade(gr, .7), 0, 4.9, -14.55);
+  K.box(3.4, .12, 3.6, dk, 0, 7.66, -9.8); K.cyl(.7, .8, 1.4, wh, 0, 8.4, -12.6, 0, 0, 0, 10); K.sph(.7, wh, 0, 9.1, -12.6, 1, 1.1, 1, 10);
+  for (const s of [-1, 1]) { for (let k = 0; k < 4; k++) K.tube(.22, .22, 2.6, dk, s * (1.6 + k * .45), 3.6, -3.4, 8).rotation.set(-.32, 0, 0); K.tube(.55, .55, 2.6, wh, s * 3.7, 4.0, 3.5, 10); K.tube(.55, .55, 2.6, wh, s * 3.7, 4.0, -1.0, 10); }
+  K.box(8, .05, 9, 0x575b5d, 0, 3.05, -25); K.box(.12, .06, 8.4, 0xf2f1ec, 0, 3.09, -25); { const r = K.put(new THREE.TorusGeometry(2.4, .06, 4, 24).rotateX(Math.PI / 2), 0xf2f1ec, 0, 3.09, -25); }
+  for (const s of [-1, 1]) { rail(K, 14, s * 4.1, 3, 23); rail(K, 9, s * 3.95, 3, -26); K.box(.08, .45, .9, dk, s * 3.1, 3.7, 27.3, 0, s * .3, 0); }
+});
+for (const team of [0, 1]) mdlBake('ship_carrier' + team, (K, g) => {
+  const C = SHIPC(team), gr = C.top, gr2 = shade(gr, .85), dk = 0x2a2d30, deck = 0x45494b, wh = 0xe9e7dd, ye = 0xd9b43a, tc = team ? 0xb3301f : 0x2c5d8f, gl = 0x1a2026;
+  hullParts(K, g, warshipSecs(118, 22.4, 7, 6.3, .5, 4, 30, .9, .66), C, gr2);
+  const D = [[-11, 59.5], [11, 59.5], [15, 32], [16.5, -18], [15, -58], [-12.5, -58], [-20, -36], [-20, -6], [-13.5, 18]];
+  K.plate(D, .7, deck, 2, 7.0, -2);
+  for (const [x, z, w, d] of [[18.4, -12, 4.2, 9], [18.4, 4, 4.2, 9], [-22, -44, 4, 8.5]]) K.box(w, .5, d, shade(deck, .92), x, 6.7, z);
+  for (let z = -48; z <= 54; z += 6) K.box(.5, .04, 3, wh, 2, 7.04, z);
+  const ang = -.16, ax = -6.5, az = -24;
+  for (const o of [-6.5, 6.5]) K.box(.25, .04, 70, ye, ax + Math.cos(ang) * o, 7.05, az + 0 - Math.sin(ang) * o, 0, ang, 0);
+  for (let k = 0; k < 4; k++) K.box(14, .045, .12, wh, -9, 7.05, -44 + k * 3, 0, ang, 0);
+  for (const x of [-4, 6]) K.box(.35, .05, 28, dk, x, 7.05, 44); for (const x of [-12, -6]) K.box(.35, .05, 26, dk, x, 7.05, -2, 0, ang, 0);
+  K.box(6.4, 7, 16, gr, 14.5, 10.5, 8); K.box(5.6, 4.2, 11, gr, 14.5, 16, 7); K.box(5.0, 2.4, 7, gr, 14.5, 19.3, 7.6);
+  for (const [y, z, l] of [[13.6, 16.05, 6.2], [17.3, 12.55, 5.4], [19.8, 11.15, 4.8]]) K.box(l, .7, .1, gl, 14.5, y, z);
+  K.box(.1, .7, 14, gl, 11.25, 13.6, 8); K.cyl(.22, .22, 9, dk, 14.5, 25, 7.2); K.box(4.2, .2, .2, dk, 14.5, 26.5, 7.2); K.box(2.8, 1.2, .25, 0x3a3f44, 14.5, 28, 7.2); K.sph(1.0, wh, 13, 21.2, 4.5, 1, 1, 1, 10); K.sph(.8, wh, 16, 21, 4.8, 1, 1, 1, 10);
+  K.box(2.4, 1.4, .05, tc, 15.7, 30, 7.2); K.box(.8, .05, .8, ye, 14.5, 20.55, 7.6);
+  const jet = (x, z, ry) => { const j = new THREE.Group(); j.position.set(x, 7.2, z); j.rotation.y = ry; g.add(j); const jc = shade(JET_COL[team], 1);
+    const p = (geo, cc, a, b, d) => { const m = new THREE.Mesh(geo, mat(cc)); m.position.set(a, b, d); j.add(m); return m; };
+    p(new THREE.CylinderGeometry(.55, .7, 8.5, 10).rotateX(Math.PI / 2), jc, 0, .9, 0); p(new THREE.ConeGeometry(.55, 2, 10).rotateX(Math.PI / 2), shade(jc, .8), 0, .9, 5.2); p(new THREE.SphereGeometry(.42, 10, 6), gl, 0, 1.35, 2.2).scale.set(.9, .7, 2);
+    p(shapeGeoB([[0, 1.4], [3.8, -1.6], [3.8, -2.4], [0, -2.6]], .15).rotateX(Math.PI / 2), jc, .4, .9, 0); p(shapeGeoB(mirrorX([[0, 1.4], [3.8, -1.6], [3.8, -2.4], [0, -2.6]]), .15).rotateX(Math.PI / 2), jc, -.4, .9, 0);
+    for (const s of [-1, 1]) { const f = p(new THREE.BoxGeometry(.1, 1.6, 1.4), jc, s * .6, 1.8, -3.4); f.rotation.z = -s * .35; } };
+  for (const [x, z, ry] of [[9, -28, -.4], [9, -38, -.4], [9, -48, -.4], [6, 30, Math.PI + .3], [-6, 36, Math.PI - .3], [10, 42, Math.PI]]) jet(x, z, ry);
+  for (const s of [-1, 1]) K.box(.6, .6, 100, dk, s * (s > 0 ? 16 : 13.5), 6.5, -2);
+  for (let k = 0; k < 5; k++) K.box(.08, 2.2, 5, gl, 11.15, 3.6, -30 + k * 10);
+  K.box(1.2, .6, 1.2, wh, 15.5, 7.5, -56); K.box(1.2, .6, 1.2, wh, -12.5, 7.5, 57);
+});
+for (const team of [0, 1]) mdlBake('ship_sub' + team, K => {
+  const c = 0x1d1f21, c2 = 0x2a2d30, dk = 0x111213, tc = team ? 0xb3301f : 0x2c5d8f;
+  K.lathe([[0, -26], [1.1, -25], [2.4, -21.5], [3.35, -15], [3.6, -6], [3.6, 10], [3.35, 17], [2.6, 22], [1.4, 25], [0, 26]], c, 0, 0, 0, 1, 1, 22);
+  K.box(2.6, .35, 24, c2, 0, 3.45, -3); for (let k = 0; k < 8; k++) for (const s of [-1, 1]) { K.cyl(.48, .48, .06, dk, s * .65, 3.66, 1.5 - k * 2.6, 0, 0, 0, 12); K.cyl(.4, .4, .07, c2, s * .65, 3.67, 1.5 - k * 2.6, 0, 0, 0, 12); }
+  K.box(2.0, 4.8, 6.6, c, 0, 5.5, 8.2); K.cyl(1.0, 1.0, 4.8, c, 0, 5.5, 11.5, 0, 0, 0, 14); K.fin([[4.9, 0], [5.0, 4.8], [3.4, 4.8], [2.2, 0]], 2.0, c, 0, 3.1, 0); K.box(2.0, .2, 7.3, c2, 0, 7.95, 8.6);
+  for (const s of [-1, 1]) K.plate([[0, 1], [2.6, .6], [2.6, -.3], [0, -.8]].map(([x, z]) => [x * s, z]), .18, c, s * 1.0, 6.4, 9.4);
+  K.box(.12, 2.6, .12, dk, 0, 9.2, 9.2); K.box(.12, 2.0, .12, dk, .4, 8.9, 8.2); K.box(1.4, .9, .05, tc, .75, 9.9, 9.2);
+  K.fin([[-19, 0], [-23.5, 0], [-24.4, 4.3], [-21.8, 4.3]], .22, c, 0, .4, 0); K.fin([[-19, 0], [-23.5, 0], [-24.4, -3.8], [-21.8, -3.8]], .22, c, 0, -.4, 0);
+  for (const s of [-1, 1]) { K.plate([[0, -19.5], [4.4 * s, -22], [4.4 * s, -23.8], [0, -24.2]].map(([x, z]) => [x, z]), .2, c, 0, .1, 0); K.box(.15, 1.4, 1.8, c, s * 4.4, 0, -22.9); }
+  K.tube(.85, .55, 1.6, c2, 0, 0, -25.6, 14); for (let k = 0; k < 7; k++) { const a = k / 7 * TAU; K.box(.1, 1.7, .5, 0x3a3020, Math.cos(a) * .9, Math.sin(a) * .9, -26.2, 0, 0, a + Math.PI / 2); }
+  for (const s of [-1, 1]) for (let k = 0; k < 4; k++) K.box(.04, .45, .06, 0xe8e6dc, s * 3.3, -.5 - k * .6, 22.3);
+});
+// the battleship gets its own big-gun model (it is built on the destroyer and scaled 1.55)
+for (const team of [0, 1]) mdlBake('ship_battleship' + team, (K, g) => {
+  const C = SHIPC(team), gr = C.top, gr2 = shade(gr, .86), gr3 = shade(gr, 1.08), dk = 0x2a2d30, wood = 0x8a7652, gl = 0x1a2026, tc = team ? 0xb3301f : 0x2c5d8f;
+  hullParts(K, g, warshipSecs(62, 9.2, 4.2, 2.6, 1.0, 2.8, 30, .7, .6), C, wood);
+  const turret = (z, y, back) => { const d = back ? -1 : 1; K.box(3.8, 1.5, 4.2, gr3, 0, y + .75, z); K.fin([[z + d * 2.1, 0], [z + d * 2.9, 0], [z + d * 2.6, 1.0], [z + d * 2.1, 1.5]].map(p => back ? [p[0], p[1]] : p), 3.8, gr3, 0, y, 0); K.cyl(1.9, 2.1, .6, gr2, 0, y - .1, z, 0, 0, 0, 16); for (const x of [-.85, 0, .85]) K.tube(.14, .19, 8.2, dk, x, y + .85, z + d * 6.2, 10); };
+  turret(16, 3.85, false); turret(9.6, 5.05, false); K.cyl(1.9, 1.9, 1.3, gr2, 0, 4.45, 9.6, 0, 0, 0, 16); turret(-17.5, 3.85, true);
+  K.cyl(1.8, 2.0, 4.4, gr, 0, 5.0, 4.6, 0, 0, 0, 14); K.box(4.8, 1.0, 2.6, gr3, 0, 7.6, 4.6); K.box(4.4, .5, .1, gl, 0, 7.75, 5.95);
+  K.box(6.4, 2.6, 10, gr, 0, 3.9, -.5); K.box(4.6, 2.0, 6.4, gr3, 0, 6.2, 1.8); K.box(3.6, 1.8, 4, gr, 0, 8.1, 2.2); K.box(3.0, .5, .1, gl, 0, 8.6, 4.25);
+  K.cyl(.3, .3, 9, dk, 0, 12, 3); for (const s of [-1, 1]) K.cyl(.22, .22, 8.6, dk, s * 1.2, 10.8, 3.6, -.12, 0, s * .12, 6); K.box(4.4, .16, .16, dk, 0, 14.5, 3); K.box(1.8, .9, .4, 0x3a3f44, 0, 15.6, 3); K.box(2.0, 1.3, .05, tc, 1, 17.2, 2.9);
+  for (const [z, h] of [[-2.4, 5.4], [-7.4, 5.0]]) { K.tube(1.2, 1.2, 2.6, gr2, 0, 2.6 + h / 2, z, 12, 1, 1).rotation.x = 0; K.cyl(1.25, 1.35, h, gr2, 0, 2.6 + h / 2, z, -.1, 0, 0, 12); K.cyl(1.3, 1.3, .4, dk, 0, 2.6 + h + .1, z - .4, -.1, 0, 0, 12); }
+  K.box(4.8, 2.0, 5, gr, 0, 3.6, -10.5); K.cyl(.25, .25, 6.5, dk, 0, 7.6, -10.6);
+  for (const s of [-1, 1]) for (const z of [3, -1.5, -6, -10.5]) { K.box(1.4, .8, 1.6, gr3, s * 3.9, 3.2, z); K.tube(.06, .07, 2.2, dk, s * 3.75, 3.35, z + 1.6, 6); K.tube(.06, .07, 2.2, dk, s * 4.05, 3.35, z + 1.6, 6); }
+  for (const s of [-1, 1]) { rail(K, 10, s * 4.3, 2.6, 22); rail(K, 9, s * 4.4, 2.6, -24); K.tube(.4, .4, 2.4, 0xe8e6dc, s * 3.3, 3.2, -3.6, 8); }
+});
+const _makeBattleshipM = makeBattleship;
+makeBattleship = function (team, x, z, yaw) {
+  const s = _makeBattleshipM(team, x, z, yaw), geo = GEO_CACHE['ship_battleship' + team];
+  if (geo) s.model.traverse(o => { if (o.isMesh && o.geometry === GEO_CACHE['ship_destroyer' + team]) o.geometry = geo; });
+  return s;
+};
+
 </script>
