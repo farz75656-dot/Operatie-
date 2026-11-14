@@ -656,7 +656,19 @@ function getH(x, z) {
   if (fx + fz <= 1) return a + (b - a) * fx + (c - a) * fz;
   return d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
 }
+// the south side of the island: a flat town, a ramp down to the quay and a deep harbour basin
 function isleH(x, z) {
+  const dx = x - ISLE.x, dz = z - ISLE.z;
+  if (dx > -40 && dx < 180 && dz < -120 && dz > -ISLE.r * 1.65) {
+    const w = smooth(-40, -10, dx) * (1 - smooth(150, 180, dx)) * smooth(-120, -140, dz);
+    if (w > 0) {
+      const prof = dz > -215 ? WATER + 7 : dz > -262 ? lerp(WATER + 7, WATER + 2.6, smooth(-215, -262, dz)) : dz > -292 ? WATER + 2.6 : dz > -302 ? lerp(WATER + 2.6, WATER - 16, (-292 - dz) / 10) : lerp(WATER - 16, WATER - 48, smooth(-302, -520, dz));
+      return lerp(isleH0(x, z), prof, w);
+    }
+  }
+  return isleH0(x, z);
+}
+function isleH0(x, z) {
   const dx = x - ISLE.x, dz = z - ISLE.z, d = Math.hypot(dx, dz), floor = WATER - 48;
   if (d > ISLE.r * 1.65) return floor;
   const a = Math.atan2(dz, dx), rr = ISLE.r * (.86 + .28 * fbm(Math.cos(a) * 1.6 + 11, Math.sin(a) * 1.6 + 4, 3)), e = d - rr;
@@ -10247,8 +10259,10 @@ zThink = function (z) {
   }
 };
 // the melting: every few minutes a crowd of zombies walks into a nest and a giant climbs out
-const FUSE = { t: 230, cur: null, n: 0 };
+const FUSE = { t: 120, cur: null, n: 0 };
+const bossCap = () => QUALITY.low ? 5 : 8, bossCount = () => ZM.list.reduce((a, z) => a + (z.alive && z.D.boss ? 1 : 0), 0);
 function fuseStart() {
+  if (bossCount() >= bossCap()) return false;
   let at = null;
   const live = NEST.list.filter(N => N.alive); let bc = 0;
   for (const N of live) { let c = 0; for (const z of ZM.list) if (z.alive && !z.isleRun && !z.D.boss && (z.pos.x - N.pos.x) ** 2 + (z.pos.z - N.pos.z) ** 2 < 220 * 220) c++; if (c > bc) { bc = c; at = { x: N.pos.x, z: N.pos.z, N, where: N.where }; } }
@@ -10266,7 +10280,7 @@ function fuseStart() {
 function updateFuse(dt) {
   if (!ZM.on || ECO.over || ZM.cured || ZM.outT > 0) return;
   const F = FUSE.cur;
-  if (!F) { FUSE.t -= dt; if (FUSE.t <= 0) { FUSE.t = rnd(200, 260) / Math.sqrt(ZM.diff / 1.4); if (!fuseStart()) FUSE.t = 40; } return; }
+  if (!F) { FUSE.t -= dt; if (FUSE.t <= 0) { FUSE.t = rnd(100, 140) / Math.sqrt(ZM.diff / 1.4); if (!fuseStart()) FUSE.t = 40; } return; }
   F.t += dt;
   for (const z of F.list) {
     if (!z.alive || z.removed || z.fuse !== F) continue;
@@ -10282,7 +10296,7 @@ function updateFuse(dt) {
 const _zIsleB = zIsleAssault;
 zIsleAssault = function () {
   _zIsleB();
-  if (ZM.t < 720 || Math.random() > .35) return;
+  if (ZM.t < 600 || Math.random() > .45) return;
   const g = ZM.list.find(z => z.alive && z.D.boss && !z.isleRun && !z.misBoss && z.pos.x < WORLD); if (!g) return;
   const R = zSwimTarget(g.pos.z); g.isleRun = R; g.goal = { x: R.gx, z: R.gz }; g.prey = null; g.heard = true;
   addFeed(null, null, `👹 Er zwemt ook een ${g.variant === 'titan' ? 'KOLOS' : 'REUS'} naar je eiland!`);
@@ -10585,6 +10599,7 @@ player.died = function (...a) { if (_pDiedM) _pDiedM.apply(this, a); const M = M
 #misBox .hd{display:flex;justify-content:space-between;font-weight:700;color:#ffd34a;letter-spacing:.05em;cursor:pointer}
 #misBox .m{display:flex;align-items:center;gap:6px;margin-top:5px} #misBox .m div{flex:1;min-width:0} #misBox .m small{display:block;opacity:.75;font-size:10.5px}
 #misBox button{appearance:none;background:rgba(255,211,74,.16);border:1px solid rgba(255,211,74,.55);color:#fff;font:700 11px var(--display);padding:5px 7px;cursor:pointer;white-space:nowrap}
+#misBox .pk{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px} #misBox .pk small{flex:1 0 100%;opacity:.8;font-size:10.5px} #misBox .pk button{flex:1 0 45%}
 #misBox button.x{background:rgba(226,84,60,.15);border-color:rgba(226,84,60,.5)}
 #misBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(128px + env(safe-area-inset-top,0px));z-index:21;pointer-events:none;background:rgba(14,16,12,.72);border:1px solid rgba(255,211,74,.55);padding:5px 12px;font:700 13px var(--display);color:#fff4cc;letter-spacing:.04em;text-align:center;max-width:70vw}
 #misBar .p{height:4px;background:rgba(255,255,255,.15);margin-top:4px} #misBar .p i{display:block;height:100%;background:#ffd34a}
@@ -10604,6 +10619,8 @@ player.died = function (...a) { if (_pDiedM) _pDiedM.apply(this, a); const M = M
     if (b.dataset.go) { const M = MIS.list.find(m => m.id === +b.dataset.go); if (M) misStart(M); }
     else if (b.dataset.play) { const M = MIS.active; if (M) { if (M.state === 'fly') { if (CTL.on) ctlExit(false); ctlEnter('watch', M.drop); } else { const u = M.squad.find(s => s.alive); if (u) { if (CTL.on) ctlExit(false); PZ.fp = true; possess(u); } } } }
     else if (b.dataset.abort) { const M = MIS.active; if (M) misFail(M, 'afgebroken'); }
+    else if (b.dataset.pick) { MIS.pick = b.dataset.pick === '1'; MIS.sig = ''; MIS.uiT = 0; }
+    else if (b.dataset.mt) { const l = (ZM.on ? MTYPES.zombie : MTYPES.battle).find(t => t[0] === b.dataset.mt); KINDS.mission = { label: '⭐ ' + l[1], sub: 'tik op de plek' }; setTool({ kind: 'mission', team: CMD.team, mt: b.dataset.mt }); MIS.pick = false; MIS.sig = ''; flashTip(b.dataset.mt === 'c4' ? 'Tik bij het doel dat je wil opblazen' : b.dataset.mt === 'sample' ? 'Tik bij een ziekenhuis' : b.dataset.mt === 'rescue' ? 'Tik op een stad' : b.dataset.mt === 'intel' ? 'Tik bij een vijandelijk punt' : 'Tik op de kaart waar de missie moet zijn'); }
     b.blur();
   });
   const bar = document.createElement('div'); bar.id = 'misBar'; bar.hidden = true; document.body.appendChild(bar);
@@ -10627,9 +10644,10 @@ function misUI(dt) {
     MIS.uiT = .5; const cp = new V3(cam.x, 0, cam.z);
     const rows = MIS.list.map(m => `<div class="m"><div><b>${m.icon} ${m.title}</b><small>${m.where} · ${Math.round(Math.hypot(m.obj.x - cp.x, m.obj.z - cp.z))} m</small></div><button data-go="${m.id}">🚁 Start</button></div>`).join('');
     const act = M ? `<div class="m"><div><b>▶ ${M.icon} ${M.title}</b><small>${misStepText(M)}</small></div><button data-play="1">🎮 Speel</button><button class="x" data-abort="1">✕</button></div>` : '';
-    const html = `<div class="hd"><span>⭐ MISSIES${MIS.list.length ? ' · ' + MIS.list.length : ''}</span><span>${MIS.min ? '▸' : '▾'}</span></div>${MIS.min ? '' : act + (rows || (M ? '' : '<div class="m"><small>Er komen zo nieuwe missies binnen</small></div>'))}`;
+    const types = (ZM.on ? MTYPES.zombie : MTYPES.battle), pick = M ? '' : MIS.pick ? `<div class="pk"><small>Kies een missie en tik dan op de kaart waar hij moet zijn:</small>${types.map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}<button class="x" data-pick="0">✕</button></div>` : '<div class="m"><button data-pick="1" style="flex:1">＋ Kies zelf een missie</button></div>';
+    const html = `<div class="hd"><span>⭐ MISSIES${MIS.list.length ? ' · ' + MIS.list.length : ''}</span><span>${MIS.min ? '▸' : '▾'}</span></div>${MIS.min ? '' : act + pick + rows}`;
     if (html !== MIS.sig) { MIS.sig = html; box.innerHTML = html; }
-    box.hidden = !(MIS.list.length || M) || state === 'menu';
+    box.hidden = state === 'menu';
   }
   const bar = document.getElementById('misBar'), mk = document.getElementById('misMark'), air = document.getElementById('misAir'), actB = document.getElementById('misAct');
   const inMis = M && play && M.state !== 'fly' && misLeader(M);
@@ -10680,10 +10698,258 @@ Soldier.prototype.label = function () { return this.misName ? (this.misName[0].t
 const _setupBattleM = setupBattle;
 setupBattle = function (battle) {
   if (MIS.active) { MIS.active = null; } MIS.list.length = 0; MIS.nextT = 40; MIS.arty.length = 0; for (const k in MIS.cd) MIS.cd[k] = 0; MIS.sig = '';
-  for (const R of ROCKS) scene.remove(R.m); ROCKS.length = 0; FUSE.cur = null; FUSE.t = 230; FUSE.n = 0;
+  for (const R of ROCKS) scene.remove(R.m); ROCKS.length = 0; FUSE.cur = null; FUSE.t = 120; FUSE.n = 0; ZM.g0 = false;
   _setupBattleM(battle);
 };
 const _updateWavesM = updateWaves;
 updateWaves = function (dt) { _updateWavesM(dt); updateFuse(dt); updateMission(dt); misUI(dt); updateBossBar(); };
+
+// ================= CHOOSE YOUR OWN MISSION, MANY GIANTS, TRUCKS ON THE ISLAND, RADIO SUPPORT, ISLAND ARTILLERY, TOWN AND HARBOUR =================
+const MTYPES = {
+  zombie: [['c4', '💣 Broeinest opblazen'], ['rescue', '🆘 Overlevenden redden'], ['sample', '🧪 Virusstaal halen'], ['radio', '📡 Noodzender verdedigen'], ['boss', '👹 Reus doden']],
+  battle: [['c4', '💣 Gebouw opblazen'], ['pilot', '🪂 Piloot redden'], ['intel', '📁 Plannen stelen'], ['radio', '📡 Zendmast verdedigen']]
+};
+KINDS.mission = { label: '⭐ Missie', sub: 'tik op de plek' };
+// ---------- a mission at the spot you tap ----------
+function misCreateAt(type, p) {
+  const T = CMD.team, foe = 1 - T, dd = o => { const q = o.pos || o; return Math.hypot(q.x - p.x, q.z - p.z); }, near = arr => arr.slice().sort((a, b) => dd(a) - dd(b))[0];
+  let M = null;
+  if (type === 'c4') {
+    if (ZM.on) { const N = near(NEST.list.filter(n => n.alive)); if (!N) { flashTip('Er is geen broeinest om op te blazen'); return null; } M = { title: 'Blaas het broeinest op', where: N.where, target: N, obj: N.pos.clone(), tname: 'het broeinest' }; }
+    else { const s = near(units.filter(u => u.alive && u.team === foe && u.type === 'struct' && !u.noTarget && u.pos.x < WORLD)); if (!s) { flashTip('Er is geen vijandelijk gebouw'); return null; } const n = s.label().replace(/^Rood |^Blauw /, '').toLowerCase(); M = { title: `Blaas de vijandelijke ${n} op`, where: placeName(s.pos.x, s.pos.z), target: s, obj: s.pos.clone(), tname: 'de ' + n }; }
+  } else if (type === 'rescue') {
+    const C = near(CITIES.filter(C => C.X && C.X.length).map(C => Object.assign(C, { x: (C.x0 + C.x1) / 2, z: (C.z0 + C.z1) / 2 }))); if (!C) { flashTip('Geen stad gevonden'); return null; }
+    const nx = C.X.slice().sort((a, b) => Math.abs(a - p.x) - Math.abs(b - p.x))[0], nz = C.Z.slice().sort((a, b) => Math.abs(a - p.z) - Math.abs(b - p.z))[0];
+    M = { title: 'Red de overlevenden', where: cityName(C), obj: new V3(nx, 0, nz), nSurv: 4 };
+  } else if (type === 'sample') {
+    const H = near(HOSP); if (!H) { flashTip('Er is geen ziekenhuis'); return null; } M = { title: 'Haal het virusstaal uit het ziekenhuis', where: H.name, obj: H.nodes.D.clone(), H, item: 'staal' };
+  } else if (type === 'intel') {
+    const P = near(POINTS.filter(q => q.owner === foe)); if (!P) { flashTip('De vijand heeft geen punten meer'); return null; } M = { title: 'Steel de geheime plannen', where: `${P.L} ${P.name}`, obj: lzSpot(P.x, P.z, 5, 30), item: 'plannen' };
+  } else {
+    let q = new V3(p.x, 0, p.z); if (q.x > WORLD - 20) { flashTip('Kies een plek op het vasteland'); return null; }
+    if (getH(q.x, q.z) < WATER + 1 || inBox(new V3(q.x, getH(q.x, q.z) + 1, q.z))) q = lzSpot(q.x, q.z, 0, 80);
+    if (type === 'radio') M = { title: ZM.on ? 'Verdedig de noodzender' : 'Verdedig de zendmast', where: placeName(q.x, q.z), obj: q };
+    else if (type === 'boss') M = { title: ZM.t > 900 ? 'Dood de kolos' : 'Dood de reus', where: placeName(q.x, q.z), obj: q, kind: ZM.t > 900 ? 'titan' : 'giant' };
+    else if (type === 'pilot') M = { title: 'Red de neergeschoten piloot', where: placeName(q.x, q.z), obj: q, nSurv: 1 };
+  }
+  if (!M) return null;
+  M.type = type; M.id = ++MIS.seq; M.state = 'avail'; M.t = 0; M.icon = { c4: '💣', rescue: '🆘', pilot: '🪂', sample: '🧪', intel: '📁', radio: '📡', boss: '👹' }[type];
+  return M;
+}
+// ---------- trucks (ICBM, rocket launchers, missile defence) can be put on the island ----------
+const ISLE_TRUCKS = { tel: 1, mlrs: 1, shahed: 1, abmtruck: 1 };
+function isleSpot(x, z) {
+  for (let i = 0; i < 80; i++) { const a = rnd(0, TAU), r = i ? rnd(4, 20 + i) : 0, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; if (px < WORLD + 100) continue; const h = getH(px, pz); if (h < WATER + 1.5 || inBox(new V3(px, h + 1.5, pz))) continue; return { x: px, z: pz }; }
+  return { x: ISL.campP.x + 40, z: ISL.campP.z };
+}
+const _deliverI = deliver;
+deliver = function (kind, team, p) {
+  if (ISLE_TRUCKS[kind] && p && p.x > WORLD + 100) {
+    const q = isleSpot(p.x, p.z), yaw = Math.atan2(BASES[1 - team].x - q.x, BASES[1 - team].z - q.z);
+    const tr = kind === 'abmtruck' ? new ABMTruck(team, q.x, q.z, yaw) : new Truck(team, q.x, q.z, yaw, kind); tr.offset = 0; tr.order = null;
+    addFeed(null, null, `🏝 ${KINDS[kind].label} staat klaar op het eiland${kind === 'tel' ? ' · selecteer hem om de ICBM af te vuren' : ''}`);
+    return tr;
+  }
+  return _deliverI(kind, team, p);
+};
+if (KINDS.tel) KINDS.tel.sub = 'tik op land of eiland';
+// ships: tap the island harbour and they are built right there
+const HARB = { x: ISLE.x + 66, z: ISLE.z - 340 };
+const inHarbour = (x, z) => x > ISLE.x - 20 && x < ISLE.x + 160 && z < ISLE.z - 290 && z > ISLE.z - 420;
+const _seaSpotH = seaSpot;
+seaSpot = function (x, z) {
+  if (inHarbour(x, z)) { for (let i = 0; i < 40; i++) { const px = clamp(x + (i ? rnd(-40, 40) : 0), ISLE.x + 5, ISLE.x + 135), pz = clamp(z + (i ? rnd(-40, 40) : 0), ISLE.z - 410, ISLE.z - 315); if (isDeep(px, pz, 10)) return new V3(px, 0, pz); } return new V3(HARB.x, 0, HARB.z); }
+  return _seaSpotH(x, z);
+};
+const _deliverH = deliver;
+deliver = function (kind, team, p) {
+  if (SHIP[kind] || kind === 'battleship') {
+    const n0 = units.length, r = _deliverH(kind, team, p);
+    if (p && inHarbour(p.x, p.z)) for (const s of units.slice(n0)) if (s.type === 'ship') { const q = seaSpot(p.x, p.z); s.pos.set(q.x, s.pos.y, q.z); s.yaw = Math.PI; s.goal = null; addFeed(null, null, `⚓ ${s.label()} ligt klaar in de haven van het eiland`); }
+    return r;
+  }
+  return _deliverH(kind, team, p);
+};
+// ---------- many giants ----------
+const _zmSecondG = zmSecond;
+zmSecond = function () {
+  // townspeople who are bitten do not rise again (otherwise one zombie on the island turns the whole town)
+  for (const c of CIV.list) if (c.isleTown && !c.alive && c.bit) c.bit = 0;
+  _zmSecondG();
+  if (!ZM.on || ECO.over || ZM.cured) return;
+  const live = NEST.list.filter(N => N.alive);
+  // right after the outbreak two giants climb out of the nests
+  if (!ZM.g0 && ZM.t > 45 && live.length) { ZM.g0 = true; live.slice().sort(() => Math.random() - .5).slice(0, 2).forEach(N => spawnGiant(N.pos.x + 9, N.pos.z, 'giant', N.where)); }
+  // every nest gives birth to a giant now and then
+  for (const N of live) {
+    if (N.gT === undefined) N.gT = rnd(140, 220);
+    N.gT -= Math.sqrt(ZM.diff / 1.4);
+    if (N.gT <= 0) { N.gT = rnd(150, 230); if (bossCount() < bossCap()) spawnGiant(N.pos.x + rnd(-8, 8), N.pos.z + 9, ZM.t > 900 && Math.random() < .3 ? 'titan' : 'giant', N.where); }
+  }
+};
+// ---------- the radio: air strikes, A-10s, artillery and the Apache are called in over the radio ----------
+const RADIO = { open: false, cd: { air: 0, a10: 0, arty: 0, apache: 0 }, cs: 'Staal-1' };
+const RCD = { air: 90, a10: 70, arty: 35, apache: 120 };
+const RNAME = { air: ['💣', 'Luchtaanval', 'bommenwerpers'], a10: ['✈', 'A-10', 'A-10\'s'], arty: ['💥', 'Artillerie', 'artillerie'], apache: ['🚁', 'Apache', 'een Apache'] };
+function radioLine(t) { addFeed(null, null, t); }
+function radioCall(kind) {
+  const u = PZ.unit;
+  if (state !== 'possess' || !u || u.type !== 'soldier' || !u.alive) { flashTip('De radio werkt als je zelf een soldaat speelt'); return; }
+  if (RADIO.cd[kind] > 0) { flashTip(`📻 HQ: ${RNAME[kind][1]} is nog niet klaar · ${Math.ceil(RADIO.cd[kind])} s`); return; }
+  const p = PZ.aim.clone(); p.y = Math.max(getH(p.x, p.z), WATER); const d = Math.hypot(p.x - u.pos.x, p.z - u.pos.z);
+  if (d > 1600) { flashTip('📻 HQ: te ver weg, kijk naar een plek dichterbij'); return; }
+  if (kind === 'arty' && !BATTERIES[u.team].length) { flashTip('📻 HQ: er zijn geen kanonnen beschikbaar'); return; }
+  RADIO.cd[kind] = RCD[kind]; RADIO.open = false;
+  for (let i = 0; i < 10; i++) spawnP(p.clone().add(new V3(rnd(-1, 1), .5, rnd(-1, 1))), { tex: smokeTex, color: 0xd9482a, op: .7, size: 2, grow: 3, life: 7, vel: new V3(rnd(-.4, .4), rnd(1.5, 3), rnd(-.4, .4)), drag: .6 });
+  markers.push({ p: p.clone(), t: 0, col: '#ff6a50' });
+  if (Snd.ctx) Snd.burst(camera.position, { f: 2600, q: 1.2, dur: .3, vol: .18, rng: 40 });
+  const grid = `${String.fromCharCode(65 + clamp(Math.floor((p.x + WORLD) / (2 * WORLD) * 10), 0, 9))}${1 + clamp(Math.floor((p.z + WORLD) / (2 * WORLD) * 10), 0, 9)}`;
+  radioLine(`📻 ${RADIO.cs}: HQ, verzoek ${RNAME[kind][2]} op mijn rode rook, vak ${grid}, over.`);
+  if (d < 35) flashTip('⚠ GEVAARLIJK DICHTBIJ · zoek dekking!');
+  if (kind === 'a10') { a10Run(u.team, p); radioLine(`📻 HQ: Begrepen ${RADIO.cs}, drie A-10's onderweg, inslag over ±15 seconden. Uit.`); }
+  else if (kind === 'arty') { fireBattery(u.team, p, BATTERIES[u.team].length > 3 ? 12 : 9); radioLine(`📻 HQ: Begrepen ${RADIO.cs}, ${BATTERIES[u.team].some(g => g.isle) ? 'de kanonnen van het eiland en de basis vuren' : 'de batterij vuurt'}, granaten onderweg. Uit.`); }
+  else if (kind === 'apache') { const h = new AttackHeli(u.team, new V3(p.x, 0, p.z)); h.misAir = true; radioLine(`📻 HQ: Begrepen ${RADIO.cs}, Apache vertrekt naar je rook. Uit.`); }
+  else if (kind === 'air') { airstrike(u.team, p); radioLine(`📻 HQ: Begrepen ${RADIO.cs}, bommenwerpers op weg, blijf uit de buurt van de rook. Uit.`); }
+  if (MIS.active && MIS.active.squad && MIS.active.squad.includes(u)) MIS.active.radio = (MIS.active.radio || 0) + 1;
+}
+misAir = function (k) { radioCall(k); };
+{
+  const st = document.createElement('style');
+  st.textContent = `#misAir{display:none!important}
+#radioBtn{position:fixed;left:calc(10px + env(safe-area-inset-left,0px));top:40%;z-index:22;appearance:none;background:rgba(14,16,12,.75);border:1px solid rgba(255,211,74,.7);color:#ffd34a;font:700 13px var(--display);padding:9px 12px;letter-spacing:.06em;cursor:pointer;touch-action:none}
+#radioBtn.on{background:rgba(255,211,74,.25);color:#fff}
+#radioMenu{position:fixed;left:calc(10px + env(safe-area-inset-left,0px));top:calc(40% + 46px);z-index:22;display:flex;flex-direction:column;gap:5px;background:rgba(14,16,12,.82);border:1px solid rgba(255,211,74,.5);padding:6px}
+#radioMenu .t{font:600 10px var(--display);letter-spacing:.12em;color:#ffd34a;opacity:.85}
+#radioMenu button{appearance:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff;font:700 12px var(--display);padding:7px 10px;min-width:150px;text-align:left;position:relative;overflow:hidden;cursor:pointer;touch-action:none}
+#radioMenu button small{opacity:.7;font-weight:500} #radioMenu button i{position:absolute;left:0;bottom:0;height:3px;background:#ffd34a} #radioMenu button.cd{opacity:.5}`;
+  document.head.appendChild(st);
+  const b = document.createElement('button'); b.id = 'radioBtn'; b.hidden = true; b.innerHTML = '📻 RADIO'; document.body.appendChild(b);
+  const m = document.createElement('div'); m.id = 'radioMenu'; m.hidden = true;
+  m.innerHTML = '<div class="t">KIES EN KIJK NAAR HET DOEL</div>' + [['air', 4], ['a10', 1], ['arty', 2], ['apache', 3]].map(([k, n]) => `<button data-r="${k}">${RNAME[k][0]} ${RNAME[k][1]} <small>${IS_TOUCH ? '' : '[' + n + ']'}</small><i></i></button>`).join('');
+  document.body.appendChild(m);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); RADIO.open = !RADIO.open; if (RADIO.open && Snd.ctx) Snd.burst(camera.position, { f: 2600, q: 1.2, dur: .2, vol: .12, rng: 40 }); });
+  m.addEventListener('pointerdown', e => { const x = e.target.closest('button'); if (!x) return; e.preventDefault(); e.stopPropagation(); radioCall(x.dataset.r); });
+  addEventListener('keydown', e => { if (state !== 'possess' || e.repeat) return; if (e.code === 'KeyT') RADIO.open = !RADIO.open; else if (e.code === 'Digit4') radioCall('air'); });
+}
+function radioUI() {
+  const b = document.getElementById('radioBtn'), m = document.getElementById('radioMenu'); if (!b) return;
+  const u = PZ.unit, on = state === 'possess' && u && u.type === 'soldier' && u.alive;
+  b.hidden = !on; if (!on) RADIO.open = false; m.hidden = !RADIO.open; b.classList.toggle('on', RADIO.open);
+  if (RADIO.open) for (const x of m.querySelectorAll('button')) { const k = x.dataset.r, c = RADIO.cd[k]; x.classList.toggle('cd', c > 0); x.lastChild.style.width = (c > 0 ? (1 - c / RCD[k]) * 100 : 100) + '%'; }
+}
+// ---------- the island: artillery battery, a small town and a harbour ----------
+const ISLB = { guns: [] };
+(function buildIslandExtras() {
+  const X = ISLE.x, Z = ISLE.z, g = new THREE.Group(); scene.add(g);
+  const s0 = STATIC.children.length;
+  const conc = mat(0x9a9a92), dk = mat(0x2a2b28), steel = mat(0x6c7378), white = mat(0xf2f1ec), asph = mat(0x3b3d3e), stone = mat(0xb5ab95), red = mat(0xb3301f);
+  const at = (x, z) => getH(X + x, Z + z);
+  const bx = (w, h, d, mt, x, y, z, ry) => { const o = mesh(new THREE.BoxGeometry(w, h, d), mt, X + x, y, Z + z, g); if (ry) o.rotation.y = ry; return o; };
+  const cyl = (r0, r1, h, mt, x, y, z, seg = 10) => mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mt, X + x, y, Z + z, g);
+  // roads follow the ground in short pieces
+  const road = (x0, z0, x1, z1, w, mt = asph) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(L / 6)), ry = Math.atan2(x1 - x0, z1 - z0);
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 1) / n, xa = x0 + (x1 - x0) * a, za = z0 + (z1 - z0) * a, xb = x0 + (x1 - x0) * b, zb = z0 + (z1 - z0) * b, ya = at(xa, za), yb = at(xb, zb);
+      const o = bx(w, .14, L / n + .4, mt, (xa + xb) / 2, (ya + yb) / 2 + .1, (za + zb) / 2, ry); o.rotation.x = -Math.atan2(yb - ya, L / n); o.rotation.order = 'YXZ'; o.castShadow = false;
+    }
+  };
+  // ---- the artillery battery north of the fort ----
+  const AG = { carriage: new THREE.BoxGeometry(1.5, .55, 2.4), wheel: new THREE.CylinderGeometry(.72, .72, .3, 14).rotateZ(Math.PI / 2), trail: new THREE.BoxGeometry(.22, .22, 3.8), shield: new THREE.BoxGeometry(2.6, 1.3, .08), cradle: new THREE.BoxGeometry(.5, .5, 2.2), barrel: new THREE.CylinderGeometry(.12, .16, 5.2, 10).rotateX(Math.PI / 2), brake: new THREE.CylinderGeometry(.22, .22, .5, 10).rotateX(Math.PI / 2), bag: new THREE.BoxGeometry(1.6, .5, .7) };
+  for (let i = 0; i < 3; i++) {
+    const x = X + 64 + i * 18, z = Z + 162, y = getH(x, z), yaw = -Math.PI / 2;
+    const gg = new THREE.Group(); gg.position.set(x, y, z); gg.rotation.y = yaw; scene.add(gg);
+    const base = new THREE.Group(); gg.add(base); const hm = mat(0x4d5737), sb = mat(0x8f8466);
+    mesh(AG.carriage, hm, 0, .95, 0, base); for (const s of [-1, 1]) { mesh(AG.wheel, dk, s * 1.05, .72, .2, base); const t = mesh(AG.trail, hm, s * .55, .45, -2.2, base); t.rotation.y = s * .22; t.rotation.x = .12; }
+    mesh(AG.shield, hm, 0, 1.75, .9, base);
+    for (let k = 0; k < 11; k++) { const a = k / 11 * TAU; const bag = mesh(AG.bag, sb, Math.cos(a) * 4.4, .25, Math.sin(a) * 4.4, base); bag.rotation.y = -a + Math.PI / 2; mesh(AG.bag, sb, Math.cos(a) * 4.4, .75, Math.sin(a) * 4.4, base).rotation.y = -a + Math.PI / 2; }
+    collapse(base, null, 'islArtyB');
+    const pivot = new THREE.Group(); pivot.position.set(0, 1.45, .4); gg.add(pivot); const slide = new THREE.Group(); pivot.add(slide);
+    mesh(AG.cradle, hm, 0, 0, .3, slide); mesh(AG.barrel, dk, 0, .05, 2.6, slide); mesh(AG.brake, dk, 0, .05, 5.25, slide); collapse(slide, null, 'islArtyS');
+    pivot.rotation.x = -.35;
+    ISLB.guns.push({ g: gg, pivot, slide, team: 0, yaw, recoil: 0, aimYaw: 0, aimPitch: .35, queue: [], isle: true });
+  }
+  bx(70, .1, 22, mat(0x8a8578), 82, at(82, 162) + .05, 162).castShadow = false;
+  for (const [x, z] of [[58, 150], [106, 150], [58, 174]]) { bx(3, 2.2, 3, mat(0x5d6247), x, at(x, z) + 1.1, z); }   // ammo bunkers
+  // ---- the town of Staalhaven ----
+  road(4, -176, 108, -176, 9); road(28, -134, 28, -216, 7); road(88, -134, 88, -216, 7); road(58, -176, 58, -284, 8);
+  bx(26, .16, 26, stone, 58, at(58, -176) + .12, -176).castShadow = false;
+  // fountain on the square
+  const fy = at(58, -176); cyl(3.2, 3.4, .9, stone, 58, fy + .45, -176, 18); cyl(2.8, 2.8, .1, new THREE.MeshLambertMaterial({ color: 0x4a8fb8 }), 58, fy + .82, -176, 18); cyl(.35, .45, 2.4, stone, 58, fy + 1.2, -176, 8); mesh(new THREE.SphereGeometry(.6, 10, 8), stone, X + 58, fy + 2.6, Z - 176, g);
+  // church with a tower and a spire
+  house(X + 58, Z - 150, 14, 20, 9, 0xd8d0c0, 0x5c3d30, false);
+  const ty = at(58, -163); bx(5.4, 24, 5.4, mat(0xcfc6b2), 58, ty + 12, -163); const sp = mesh(new THREE.ConeGeometry(3.6, 9, 4).rotateY(Math.PI / 4), mat(0x3f4a52), X + 58, ty + 28.5, Z - 163, g); sp.castShadow = false;
+  bx(1.6, 1.6, .2, mat(0xf2f1ec), 58, ty + 19, -160.2); bx(.18, 3, .18, mat(0xe9c531), 58, ty + 34.3, -163);
+  // houses, shops and the town hall
+  const lots = [[12, -163], [40, -163], [76, -163], [100, -163], [12, -190], [40, -190], [76, -190], [100, -190], [17, -146], [39, -146], [99, -146], [17, -206], [39, -206], [77, -206], [99, -206]];
+  lots.forEach(([x, z], i) => {
+    const shop = z === -190, w = shop ? 10 : rnd(8, 10.5), d = rnd(8, 9.5), h = shop ? 5.6 : [6.4, 6.4, 9.6][i % 3], wall = WALLS[(i * 3) % WALLS.length], roof = ROOFS[i % ROOFS.length];
+    house(X + x, Z + z, w, d, h, shop ? [0xe0d6c2, 0xc9b79a, 0xd9c7a7, 0xbfb4a2][i % 4] : wall, roof, shop);
+    if (shop) { const y = at(x, z); bx(w * .9, .15, 1.8, mat([0xb3301f, 0x2c5d8f, 0x3d7a46, 0xc9a227][i % 4]), x, y + 3.2, z + d / 2 + .9).rotation.x = .25; }
+  });
+  house(X + 77, Z - 146, 13, 11, 9.6, 0xd2c6ae, 0, true); { const y = at(77, -146); bx(.14, 7, .14, steel, 77, y + 13.2, -146); bx(.06, 1.4, 2.2, mat(SET.side ? 0xb3301f : 0x2c5d8f), 77, y + 16, -144.9); }
+  // streetlights, trees and parked cars
+  const lampM = new THREE.MeshBasicMaterial({ color: 0xffe9a8 });
+  for (let x = 10; x <= 104; x += 16) for (const s of [-1, 1]) { const z = -176 + s * 5.4, y = at(x, z); cyl(.08, .1, 5.6, dk, x, y + 2.8, z, 6); bx(.9, .12, .2, dk, x, y + 5.6, z - s * .35); mesh(new THREE.SphereGeometry(.22, 8, 6), lampM, X + x, y + 5.45, Z + z - s * .7, g).castShadow = false; }
+  for (const [x, z] of [[22, -168], [34, -184], [70, -168], [94, -184], [82, -200], [34, -140], [64, -200], [50, -200], [104, -168], [8, -184]]) { const y = at(x, z); cyl(.2, .26, 1.6, mat(0x5a4330), x, y + .8, z, 6); mesh(new THREE.ConeGeometry(1.8, 4.2, 7), mat(0x3f6a2c), X + x, y + 3.6, Z + z, g); }
+  const carC = [0xb3301f, 0x2c5d8f, 0xe8e6dc, 0x3d7a46, 0x2b2b2b, 0xc9a227];
+  [[20, -172.3, 0], [46, -179.7, 0], [96, -172.3, 0], [30.8, -200, 1], [85.2, -150, 1], [64, -270, 0]].forEach(([x, z, r], i) => { const y = at(x, z), c = new THREE.Group(); c.position.set(X + x, y, Z + z); c.rotation.y = r ? 0 : Math.PI / 2; g.add(c); mesh(new THREE.BoxGeometry(1.8, .8, 4.2), mat(carC[i % 6]), 0, .65, 0, c); mesh(new THREE.BoxGeometry(1.6, .65, 2.2), mat(0x22303a), 0, 1.35, -.2, c); });
+  // ---- the harbour: quay, piers, crane, warehouses, containers, lighthouse ----
+  const qy = WATER + 2.6;
+  bx(170, .5, 30, conc, 66, qy + .02, -277).castShadow = false;
+  for (let x = -14; x <= 146; x += 10) cyl(.35, .4, .9, dk, x, qy + .6, -290.5, 8);
+  for (const px of [22, 66, 110]) { bx(9, .8, 64, conc, px, qy + .3, -324).castShadow = false; for (let z = -298; z >= -354; z -= 8) for (const s of [-1, 1]) cyl(.45, .45, 22, dk, px + s * 3.8, qy - 11, z, 6); }
+  { const c = new THREE.Group(); c.position.set(X + 66, qy, Z - 282); g.add(c); const cm = mat(0xd98a1f); for (const [x, z] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) mesh(new THREE.BoxGeometry(.9, 24, .9), cm, x, 12, z, c); mesh(new THREE.BoxGeometry(2, 1.6, 46), cm, 0, 24, -10, c); mesh(new THREE.BoxGeometry(4, 3, 4), cm, 0, 26, 6, c); mesh(new THREE.BoxGeometry(.1, 14, .1), dk, 0, 16, -28, c); }
+  house(X + 18, Z - 242, 24, 14, 8, 0x8c949c, 0, true); house(X + 114, Z - 242, 24, 14, 8, 0x9a8f7a, 0, true);
+  const cc = [0xb3301f, 0x2c5d8f, 0x3d7a46, 0xc9a227, 0x7a7d80, 0xd35400];
+  for (let i = 0; i < 18; i++) { const cx = 88 + (i % 3) * 7, cz = -266 - Math.floor(i / 3) * 3.4, lv = (i * 7) % 3; for (let l = 0; l <= lv; l++) bx(6, 2.5, 2.4, mat(cc[(i + l * 2) % 6]), cx, qy + 1.5 + l * 2.5, cz); }
+  for (let i = 0; i < 6; i++) bx(1.2, 1.2, 1.2, mat(0x7a5a3a), 34 + (i % 3) * 1.4, qy + .85 + Math.floor(i / 3) * 1.2, -272);
+  // lighthouse at the corner of the quay
+  { const ly = qy; for (let k = 0; k < 6; k++) cyl(1.9 - k * .12, 2 - k * .12, 3, k % 2 ? red : white, 142, ly + 1.5 + k * 3, -286, 14); cyl(1.4, 1.4, 1.6, mat(0x22303a), 142, ly + 19, -286, 10); ISLB.lamp = mesh(new THREE.SphereGeometry(.9, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff1b0 }), X + 142, ly + 19, Z - 286, g); ISLB.lamp.castShadow = false; cyl(0, 1.6, 1.4, red, 142, ly + 20.5, -286, 10); }
+  // boats moored at the piers (they bob on the water)
+  ISLB.boats = [];
+  const boat = (x, z, len, beam, hull, top, ry = 0) => {
+    const b = new THREE.Group(); b.position.set(X + x, WATER, Z + z); b.rotation.y = ry; scene.add(b);
+    mesh(new THREE.BoxGeometry(beam, 2.4, len), mat(hull), 0, .4, 0, b); mesh(new THREE.ConeGeometry(beam * .5, len * .18, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4), mat(hull), 0, .4, len * .58, b).scale.set(1, .7, 1);
+    mesh(new THREE.BoxGeometry(beam * .7, len * .07, len * .35), mat(top), 0, 1.6 + len * .035, -len * .1, b);
+    ISLB.boats.push({ b, ph: rnd(0, 6) }); return b;
+  };
+  { const f = boat(34, -330, 56, 9, 0x6c7378, 0x8a9096); mesh(new THREE.BoxGeometry(.4, 10, .4), mat(0x3a3d40), 0, 8, -4, f); mesh(new THREE.CylinderGeometry(.3, .3, 6, 6).rotateX(Math.PI / 2), dk, 0, 2.6, 20, f); mesh(new THREE.BoxGeometry(2.2, 1.2, 3), mat(0x6c7378), 0, 2.2, 17, f); }
+  { const fe = boat(79, -334, 48, 12, 0xf2f1ec, 0xe8e6dc); mesh(new THREE.BoxGeometry(12.2, .8, 48.2), mat(0x2c5d8f), 0, .2, 0, fe); mesh(new THREE.CylinderGeometry(1, 1, 3.4, 10), red, 0, 6.6, -8, fe); }
+  for (let i = 0; i < 3; i++) boat(118 + (i % 2) * 6, -306 - i * 16, 12, 4, [0x2c5d8f, 0xb3301f, 0x3d7a46][i], 0xe8e6dc);
+  STATIC.children.slice(s0).forEach(c => g.add(c));
+  collapse(g, null, 'isleTown');
+})();
+function updateIsleExtras(dt) {
+  if (ISLB.boats) for (const B of ISLB.boats) { B.ph += dt; B.b.position.y = WATER - .2 + Math.sin(B.ph * .9) * .18; B.b.rotation.z = Math.sin(B.ph * .7) * .02; }
+  if (ISLB.lamp) ISLB.lamp.visible = (SIMT % 4) < 2.6;
+}
+// the island guns join your batteries; residents walk the streets of Staalhaven
+const _setupBattleI = setupBattle;
+setupBattle = function (battle) {
+  _setupBattleI(battle);
+  for (const arr of BATTERIES) for (let i = arr.length - 1; i >= 0; i--) if (arr[i].isle) arr.splice(i, 1);
+  const T = SET.side; for (const gn of ISLB.guns) { gn.team = T; gn.queue.length = 0; BATTERIES[T].push(gn); }
+  for (let i = 0; i < 22; i++) { const c = spawnCiv('village', ISLE.x + 58, ISLE.z - 176); c.x = ISLE.x + rnd(10, 105); c.z = ISLE.z + rnd(-210, -140); c.isleTown = true; CIV.list.push(c); }
+  RADIO.open = false; for (const k in RADIO.cd) RADIO.cd[k] = 0; ZM.g0 = false;
+};
+// labels for the town, the harbour and the guns
+const _drawOverlayI = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayI(dt);
+  if (state !== 'play' || (typeof CTL !== 'undefined' && CTL.on)) return;
+  const cp = camera.position, txt = (x, y, z, s, col, maxD) => { const P = new V3(x, y, z); if (P.distanceTo(cp) > maxD) return; const q = project(P); if (!q) return; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(s, q[0], q[1]); oc.fillStyle = col; oc.fillText(s, q[0], q[1]); };
+  txt(ISLE.x + 58, WATER + 46, ISLE.z - 176, '🏘 STAALHAVEN', '#f3ecd2', 1500);
+  txt(ISLE.x + 66, WATER + 30, ISLE.z - 300, '⚓ HAVEN · tik hier met een schip om het hier te bouwen', '#9fd3f0', 1100);
+  txt(ISLE.x + 82, WATER + 20, ISLE.z + 162, '💥 ARTILLERIE (eiland)', '#ffd34a', 1100);
+};
+const _updateWavesI = updateWaves;
+updateWaves = function (dt) { _updateWavesI(dt); for (const k in RADIO.cd) RADIO.cd[k] = Math.max(0, RADIO.cd[k] - dt); radioUI(); updateIsleExtras(dt); };
+// placing a mission at the spot you tap
+const _placeAtMis = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'mission') { const t = tool.mt; setTool(null); if (MIS.active) { flashTip('Er loopt al een missie · maak die eerst af'); return; } const M = misCreateAt(t, p); if (M) misStart(M); return; }
+  _placeAtMis(p);
+};
 
 </script>
