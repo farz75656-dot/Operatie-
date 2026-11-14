@@ -520,11 +520,11 @@ const WORLD = MAP.world || 1000, COAST = MAP.coast || 560, WATER = MAP.water, G 
 // your headquarters island lies out at sea, east of the map
 const ISLE = { x: WORLD + 720, z: 0, r: 380 }, XMAX = ISLE.x + ISLE.r * 1.2 + 120;
 // game settings (also carried through the URL hash when switching maps)
-const SET = { role: 'verdedigen', map: MAPKEY, mode: 'battle', diff: 'normaal', money: 900, tickets: 400, tod: 'day', side: 0, gfx: 'auto', weather: 'helder', aiSkill: 1, aiIncome: 1 };
+const SET = { role: 'verdedigen', map: MAPKEY, mode: 'battle', diff: 'normaal', money: 1e14, tickets: 400, tod: 'day', side: 0, gfx: 'auto', weather: 'helder', aiSkill: 1, aiIncome: 1 };
 const SET_OPTS = {
   mode: [['battle', 'Veldslag'], ['zombie', '🧟 Zombies'], ['sandbox', 'Sandbox']],
   diff: [['makkelijk', 'Makkelijk'], ['normaal', 'Normaal'], ['moeilijk', 'Moeilijk'], ['brutaal', 'Brutaal']],
-  money: [[500, '◆ 500'], [900, '◆ 900'], [1500, '◆ 1500'], [3000, '◆ 3000']],
+  money: [[900, '◆ 900'], [3000, '◆ 3000'], [1e6, '◆ 1 miljoen'], [1e9, '◆ 1 miljard'], [1e14, '◆ 100 biljoen']],
   tickets: [[200, '200'], [400, '400'], [800, '800']],
   tod: [['day', 'Dag'], ['dusk', 'Zonsondergang']],
   weather: [['helder', 'Helder'], ['neerslag', MAPKEY === 'winter' ? 'Sneeuwstorm' : MAPKEY === 'woestijn' ? 'Zandstorm' : 'Regen']],
@@ -9155,5 +9155,32 @@ updateWaves = function (dt) {
   _updateWavesA(dt); if (A10S.length) updateA10s(dt); if (GUNS.length) updateGunships(dt);
   if (TSW.t && SIMT >= TSW.t && !ECO.over) { TSW.t = 0; endGame(true); const e = document.getElementById('endScreen'); e.querySelector('h2').textContent = 'OVERWINNING'; e.querySelector('p').textContent = `De Tsar Bomba heeft de oorlog beslist: niets op het vasteland heeft het overleefd. Blauw maakte ${score[0]} doden, rood ${score[1]}.`; }
 };
+
+// ================= MONEY: huge start budgets, readable amounts and a top-up button =================
+function fmtMoney(v) {
+  v = Math.floor(v);
+  if (v >= 1e12) return (v / 1e12).toLocaleString('nl-BE', { maximumFractionDigits: v >= 1e13 ? 0 : 1 }) + ' biljoen';
+  if (v >= 1e9) return (v / 1e9).toLocaleString('nl-BE', { maximumFractionDigits: 1 }) + ' miljard';
+  if (v >= 1e6) return (v / 1e6).toLocaleString('nl-BE', { maximumFractionDigits: 1 }) + ' miljoen';
+  return v.toLocaleString('nl-BE');
+}
+const _ecoHudM = updateEcoHud;
+updateEcoHud = function () {
+  _ecoHudM(); const el = document.getElementById('money'); if (!el || el.hidden) return;
+  const b = el.querySelector('b'); if (b) b.textContent = '◆ ' + fmtMoney(ECO.money[CMD.team]);
+};
+// the button lives next to the money panel (whose content is rewritten every frame), so a tap always lands
+{
+  const el = document.getElementById('money'), w = document.createElement('div'); w.id = 'moneyWrap';
+  el.parentNode.insertBefore(w, el); w.appendChild(el);
+  const k = document.createElement('button'); k.id = 'cashBtn'; k.textContent = '💰 Vol'; k.title = 'Geld bijvullen tot 100 biljoen'; w.appendChild(k);
+}
+{
+  const st = document.createElement('style');
+  st.textContent = `#moneyWrap{position:relative} #money[hidden]+#cashBtn{display:none} #cashBtn{position:absolute;pointer-events:auto;right:6px;top:6px;appearance:none;cursor:pointer;font:700 11px var(--display);padding:3px 7px;border:1px solid rgba(233,185,73,.6);background:rgba(233,185,73,.15);color:var(--amber)}
+body.touch #cashBtn{top:2px;padding:2px 6px;font-size:10px}`;
+  document.head.appendChild(st);
+  document.addEventListener('click', e => { if (e.target && e.target.id === 'cashBtn') { ECO.money[CMD.team] = 1e14; refreshTools(true); updateEcoHud(); addFeed(null, null, '💰 Je hebt nu ◆ 100 biljoen'); } });
+}
 
 </script>
