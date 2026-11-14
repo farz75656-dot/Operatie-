@@ -8965,6 +8965,18 @@ function zmIntro() {
 @media (max-height:520px){#zmIntro>div{font-size:12px;padding:10px 14px}#zmIntro li{margin:2px 0}}`;
   document.head.appendChild(st);
 }
+// in zombie mode there is no red army at all: the other side of the scoreboard is the zombies, and you cannot switch to them
+const _switchTeamZ = switchTeam;
+switchTeam = function () { if (ZM.on && ZM.t > 0) { flashTip('In de zombie-modus is er geen rood leger · je speelt alleen tegen de zombies'); return; } return _switchTeamZ(); };
+const _setSpawnSideZ = setSpawnSide;
+setSpawnSide = function (s) { if (ZM.on) s = ZM.team; _setSpawnSideZ(s); if (ZM.on) { const b = document.getElementById('sideBtn'); if (b) b.innerHTML = `${ZM.team ? 'ROOD' : 'BLAUW'}<small>jij · geen rood leger</small>`; } };
+function zmScoreLabels() {
+  const zs = document.querySelector(ZM.team ? '#score .b' : '#score .r'); if (!zs) return;
+  for (const n of zs.childNodes) if (n.nodeType === 3 && /ROOD|BLAUW/.test(n.textContent)) n.textContent = n.textContent.replace(/ROOD|BLAUW/, '🧟 ZOMBIES');
+  const tb = document.getElementById('teamName'); if (tb) tb.textContent = ZM.team ? 'ROOD' : 'BLAUW';
+}
+const _beginGameZ2 = beginGame;
+beginGame = function () { _beginGameZ2(); if (ZM.on) { zmScoreLabels(); setSpawnSide(ZM.team); } };
 
 // ================= MORE AIR POWER: attack helicopter, A-10 strafing run, AC-130 gunship, grenade quadcopters · TSAR = VICTORY =================
 Object.assign(COST, { apache: 650, a10: 350, gunship: 900, quad: 140 });
