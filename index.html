@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="nl">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -8604,7 +8605,7 @@ class Zombie extends Unit {
         if (Math.hypot(p.x - ox, p.z - oz) < 4 || od < 7) { tx = ix; tz = iz; } else { tx = ox; tz = oz; }
         if ((this.variant === 'brute' || this.D.boss) && this.blocked) { this.breakT = (this.breakT || 0) + dt; if (this.breakT > (this.D.boss ? 1 : 4)) { this.breakT = 0; fortBreach(p.x, p.z); } }
       }
-      if (this.labAtk && Math.hypot(p.x - ISL.lab.x, p.z - ISL.lab.z) < 21) { ISL.lab.hp -= D.dps * dt * .5; this.ph += dt * 6; this.yaw = Math.atan2(ISL.lab.x - p.x, ISL.lab.z - p.z); if (Math.random() < dt * .4) spawnP(new V3(p.x, p.y + 1.4, p.z), { tex: smokeTex, color: 0xd9d6cc, op: .5, size: 1, grow: 2, life: 1, vel: new V3(0, 1, 0), drag: 1 }); return; }
+      if (this.labAtk && Math.hypot(p.x - ISL.lab.x, p.z - ISL.lab.z) < 21) { ISL.lab.hp -= D.dps * dt * (D.boss ? .12 : .5); this.ph += dt * 6; this.yaw = Math.atan2(ISL.lab.x - p.x, ISL.lab.z - p.z); if (Math.random() < dt * .4) spawnP(new V3(p.x, p.y + 1.4, p.z), { tex: smokeTex, color: 0xd9d6cc, op: .5, size: 1, grow: 2, life: 1, vel: new V3(0, 1, 0), drag: 1 }); return; }
     }
     const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1;
     if (tgt && direct && d < reach) {
@@ -8623,7 +8624,7 @@ class Zombie extends Unit {
       this.blocked = false;
       if (this.isle) { const F = ISL.fort, was = p.x > F.x0 && p.x < F.x1 && p.z > F.z0 && p.z < F.z1, now = nx > F.x0 && nx < F.x1 && nz > F.z0 && nz < F.z1; if (!was && now && !fortOpenings().some(q => Math.hypot(nx - q.x, nz - q.z) < 8)) { const a = nx - F.x0, b = F.x1 - nx, c = nz - F.z0, e = F.z1 - nz, m = Math.min(a, b, c, e); if (m === a) nx = F.x0; else if (m === b) nx = F.x1; else if (m === c) nz = F.z0; else nz = F.z1; this.blocked = true; } }
       p.x = nx; p.z = nz; this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 6); this.ph += dt * sp * 2.2;
-      if (((FRAME.n + this.zid) & 3) === 0) zPush(p, .45);
+      if (!D.boss && ((FRAME.n + this.zid) & 3) === 0) zPush(p, .45);
       if (this.swim && getH(p.x, p.z) > WATER + .3) this.swim = false;
     } else this.goal = null;
     p.y = Math.max(getH(p.x, p.z), WATER - 1.3);
@@ -8661,7 +8662,7 @@ function zThink(z) {
 function drawZombies() {
   let n = 0; const col = ZR.col, cp = camera.position, far = QUALITY.low ? 900 : 1500;
   for (const z of ZM.list) {
-    if (n >= ZR.cap) break; const p = z.pos; if ((p.x - cp.x) ** 2 + (p.z - cp.z) ** 2 > far * far) continue;
+    if (n >= ZR.cap) break; const p = z.pos; if ((p.x - cp.x) ** 2 + (p.z - cp.z) ** 2 > (z.D.boss ? far * 2.5 : far) ** 2) continue;
     const s = z.D.sc;
     if (z.alive) { _e4.set(Math.sin(z.ph) * .05, z.yaw, Math.sin(z.ph * .5) * .09, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + Math.abs(Math.sin(z.ph)) * .05, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
     else { _e4.set(-Math.PI / 2, z.rot || 0, 0, 'YXZ'); _m4.compose(_v4.set(p.x, p.y + .2, p.z), _q4.setFromEuler(_e4), _zs.set(s, s, s)); }
@@ -9824,7 +9825,7 @@ zIsleAssault = function () {
   let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 30) { ZM.isleT = Math.min(ZM.isleT, 30); return; }
   const n = Math.min(36, Math.round((8 + ZM.t / 45) * ZM.diff));
   // the zombies closest to the east coast go first
-  const cand = ZM.list.filter(z => z.alive && !z.isleRun && z.pos.x < WORLD - 5 && z.pos.x > COAST - 480 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
+  const cand = ZM.list.filter(z => z.alive && !z.isleRun && !z.D.boss && z.pos.x < WORLD - 5 && z.pos.x > COAST - 480 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
   if (cand.length < n) {
     // the rest comes out of the nest nearest to the sea
     const live = NEST.list.filter(N => N.alive).sort((a, b) => b.pos.x - a.pos.x);
@@ -9861,7 +9862,7 @@ Zombie.prototype.update = function (dt) {
         // swimming (and wading through the shallows): faster than walking so they make it over, but slow enough to be caught
         const sp = (h < WATER - .7 ? 5.6 + this.D.sp * .5 : 1.5 + this.D.sp) * ZM.spMul;
         p.x += dx / d * sp * dt; p.z += dz / d * sp * dt; this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 4); this.ph += dt * 5;
-        p.y = Math.max(h, WATER - 1.25 + Math.sin(this.ph) * .08);
+        p.y = Math.max(h, WATER - (this.D.boss ? this.D.sc * .9 : 1.25) + Math.sin(this.ph) * .08);
         if (Math.random() < dt * .25) spawnP(new V3(p.x, WATER + .1, p.z), { color: 0xeaf4f6, op: .5, size: 1.1, grow: 2, life: .8, vel: new V3(0, .6, 0), drag: 1 });
         return;
       }
@@ -10151,8 +10152,8 @@ updateWaves = function (dt) { _updateWavesF(dt); if (BURN.size) updateBurn(dt); 
 // ================= GIANTS AND BOSSES, MISSIONS: HELI DROP, FIRST PERSON, OBJECTIVES, AIR SUPPORT =================
 // ---------- giants: zombies melt together into one huge one ----------
 Object.assign(ZDEF, {
-  giant: { hp: 11000, sp: 4.1, dps: 300, sc: 4.4, col: [.4, .44, .33], boss: true },
-  titan: { hp: 26000, sp: 4.4, dps: 520, sc: 6.4, col: [.42, .3, .3], boss: true }
+  giant: { hp: 13000, sp: 7, dps: 420, sc: 16, col: [.4, .44, .33], boss: true },
+  titan: { hp: 30000, sp: 8.5, dps: 760, sc: 26, col: [.42, .3, .3], boss: true }
 });
 Object.assign(UNAME, { giant: ['reus', 'reuzen'], titan: ['kolos', 'kolossen'], surv: ['overlevende', 'overlevenden'] });
 const GG = { eye: new THREE.SphereGeometry(.035, 6, 4), spike: new THREE.ConeGeometry(.05, .26, 5), club: new THREE.CylinderGeometry(.06, .1, 1.5, 6), plate: new THREE.BoxGeometry(.56, .12, .32), rock: new THREE.DodecahedronGeometry(1, 0) };
@@ -10180,7 +10181,7 @@ function spawnGiant(x, z, kind, where, merged) {
 const _zDmgB = Zombie.prototype.damage;
 Zombie.prototype.damage = function (n, src, kind, p) {
   // heavy hits (tank shells, rockets) still bite, small arms barely scratch it
-  if (this.D.boss && kind !== 'c4' && kind !== 'cure') n *= kind === 'fire' ? .7 : kind === 'blast' ? .5 : n >= 150 ? .6 : .25;
+  if (this.D.boss && kind !== 'c4' && kind !== 'cure') n *= kind === 'fire' ? .7 : kind === 'blast' ? .5 : n >= 150 ? .7 : .25;
   if (this.isleRun && src && (src.type === 'ship' || src.type === 'struct') && getH(this.pos.x, this.pos.z) < WATER - .7) n *= .4;
   return _zDmgB.call(this, n, src, kind, p);
 };
@@ -10193,20 +10194,21 @@ Zombie.prototype.killedBy = function (src) {
 const ROCKS = [];
 function bossFoes(z, r) { const out = []; for (const u of units) { if (!u.alive || u.hidden || u.team === z.team || u.type === 'zombie' || u.type === 'nest' || u.type === 'drone' || u.type === 'jet') continue; if (u.type === 'heli' && u.pos.y - z.pos.y > 7 * z.D.sc / 4.4) continue; if (u.pos.x > WORLD + 20 && z.pos.x < WORLD - 200) continue; const d = Math.hypot(u.pos.x - z.pos.x, u.pos.z - z.pos.z); if (d < r) out.push([u, d]); } return out; }
 function bossStomp(z) {
-  const k = z.D.sc / 4.4, f = z.forward(), c = z.pos.clone().addScaledVector(f, 2 * k), R = 10 * k;
+  const k = z.D.sc / 4.4, kd = Math.min(k, 1.8), f = z.forward(), c = z.pos.clone().addScaledVector(f, 1.2 * k), R = 6 + 4 * k;
   for (const u of units) {
     if (!u.alive || u.hidden || u.team === z.team || u.type === 'zombie' || u.type === 'nest') continue; if (u.type === 'heli' && u.pos.y - z.pos.y > 4) continue; if (isAirT(u) && u.type !== 'heli') continue;
     const d = Math.hypot(u.pos.x - c.x, u.pos.z - c.z); if (d > R + (u.radius || 0)) continue;
-    const base = u.type === 'tank' ? 330 : u.type === 'struct' ? 420 : u.type === 'ship' ? 0 : 240; if (base) u.damage(base * k * (1 - Math.min(1, d / R) * .6), z, 'stomp');
+    const base = u.type === 'tank' ? 330 : u.type === 'struct' ? 420 : u.type === 'ship' ? 0 : 240; if (base) u.damage(base * kd * (1 - Math.min(1, d / R) * .6), z, 'stomp');
   }
   for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; spawnP(new V3(c.x + Math.cos(a) * 3 * k, Math.max(getH(c.x, c.z), WATER) + .6, c.z + Math.sin(a) * 3 * k), { tex: smokeTex, color: 0x8a7c62, op: .6, size: 2.5 * k, grow: 3, life: 1.4, vel: new V3(Math.cos(a) * 9 * k, 1.5, Math.sin(a) * 9 * k), drag: 2 }); }
-  Snd.burst(c, { f: 55, type: 'lowpass', dur: .9, vol: 1.3, thump: .9, tf: 35, brown: true, rng: 1100 }); addShake(c, .5 * k); zNoise(c.x, c.z, 260, 3);
+  Snd.burst(c, { f: 55, type: 'lowpass', dur: .9, vol: 1.3, thump: .9, tf: 35, brown: true, rng: 1100 }); addShake(c, .5 * kd); zNoise(c.x, c.z, 260, 3);
+  if (typeof damageBuildings === 'function') damageBuildings(new V3(c.x, getH(c.x, c.z) + 3, c.z), R * .7, 900 * kd);
 }
 function bossThrow(z, t) {
   const k = z.D.sc / 4.4, f = z.forward(), from = z.pos.clone().addScaledVector(f, 1.2 * k); from.y += 7.2 * k;
   const tp = t.center().clone().addScaledVector(t.velocity ? t.velocity() : new V3(), 1.2), dx = tp.x - from.x, dz = tp.z - from.z, d = Math.hypot(dx, dz), T = .7 + d / 55;
   const v = new V3(dx / T, (tp.y - from.y + .5 * G * T * T) / T, dz / T), m = mesh(GG.rock, mat(0x6b6458), from.x, from.y, from.z); m.scale.setScalar(1.1 * k); scene.add(m);
-  ROCKS.push({ m, p: from, v, z, k }); Snd.burst(from, { f: 120, type: 'lowpass', dur: .5, vol: .7, brown: true, rng: 600 });
+  ROCKS.push({ m, p: from, v, z, k, kd: Math.min(k, 1.8) }); Snd.burst(from, { f: 120, type: 'lowpass', dur: .5, vol: .7, brown: true, rng: 600 });
 }
 function updateRocks(dt) {
   for (let i = ROCKS.length - 1; i >= 0; i--) {
@@ -10214,22 +10216,23 @@ function updateRocks(dt) {
     let hit = R.p.y < Math.max(getH(R.p.x, R.p.z), WATER) + .5 || inBox(R.p);
     if (!hit) for (const u of units) { if (!u.alive || u.team === R.z.team || u.type === 'zombie') continue; if (u.center().distanceToSquared(R.p) < (u.radius + 1.6 * R.k) ** 2) { hit = true; break; } }
     if (!hit && R.p.y > -500) continue;
-    explosion(R.p.clone(), 1.1 * R.k, { r: 4 }); const rad = 8 * R.k;
-    for (const u of units) { if (!u.alive || u.hidden || u.team === R.z.team || u.type === 'zombie' || u.type === 'nest') continue; const d = u.center().distanceTo(R.p); if (d < rad + u.radius) u.damage((u.type === 'tank' ? 380 : u.type === 'struct' ? 300 : 260) * R.k * (1 - Math.min(1, d / rad) * .5), R.z.alive ? R.z : null, 'rock'); }
+    explosion(R.p.clone(), .8 + .4 * R.k, { r: 4 }); const rad = 6 + 3 * R.k; if (typeof damageBuildings === 'function') damageBuildings(R.p, rad * .6, 600 * R.kd);
+    for (const u of units) { if (!u.alive || u.hidden || u.team === R.z.team || u.type === 'zombie' || u.type === 'nest') continue; const d = u.center().distanceTo(R.p); if (d < rad + u.radius) u.damage((u.type === 'tank' ? 380 : u.type === 'struct' ? 300 : 260) * R.kd * (1 - Math.min(1, d / rad) * .5), R.z.alive ? R.z : null, 'rock'); }
     scene.remove(R.m); ROCKS.splice(i, 1);
   }
 }
 function bossAct(z, dt) {
   const k = z.D.sc / 4.4;
   z.stompT = (z.stompT === undefined ? 1 : z.stompT) - dt; z.throwT = (z.throwT === undefined ? 3 : z.throwT) - dt;
-  if (z.stompT <= 0) { if (bossFoes(z, 8.5 * k).length) { z.stompT = 2.2; bossStomp(z); } else z.stompT = .35; }
+  if (z.stompT <= 0) { if (bossFoes(z, (6 + 4 * k) * .85).length) { z.stompT = 2.2; bossStomp(z); } else z.stompT = .35; }
   if (z.throwT <= 0) {
     z.throwT = .9; let best = null, bs = 1e9;
-    for (const [u, d] of bossFoes(z, 170 * Math.min(1.3, k))) { if (d < 28 * k) continue; const w = d * (u.type === 'tank' ? .55 : u.type === 'heli' ? .5 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
+    for (const [u, d] of bossFoes(z, 160 + 25 * k)) { if (d < 20 + 8 * k) continue; const w = d * (u.type === 'tank' ? .55 : u.type === 'heli' ? .5 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
     if (best) { z.throwT = rnd(5, 7.5) / Math.sqrt(ZM.diff / 1.4); bossThrow(z, best); }
   }
+  z.bT = (z.bT || 0) - dt; if (z.bT <= 0) { z.bT = .45; if (typeof damageBuildings === 'function') damageBuildings(new V3(z.pos.x, z.pos.y + 3, z.pos.z), 1.6 * k, 380 * k); }
   // the ground shakes when it walks
-  z.stepT = (z.stepT || 0) - dt; if (z.stepT <= 0) { z.stepT = .9; const c = z.pos; if (camera.position.distanceTo(c) < 260) { Snd.burst(c, { f: 45, type: 'lowpass', dur: .35, vol: .6, thump: .5, tf: 30, brown: true, rng: 500 }); addShake(c, .12 * k); } }
+  z.stepT = (z.stepT || 0) - dt; if (z.stepT <= 0) { z.stepT = .9; const c = z.pos; if (camera.position.distanceTo(c) < 200 + 60 * k) { Snd.burst(c, { f: 40, type: 'lowpass', dur: .45, vol: .8, thump: .7, tf: 28, brown: true, rng: 900 }); addShake(c, .12 * Math.min(k, 3)); } }
 }
 const _zUpdB = Zombie.prototype.update;
 Zombie.prototype.update = function (dt) {
@@ -10252,9 +10255,9 @@ zThink = function (z) {
   _zThinkB(z);
   if (z.prey && z.prey.noTarget && z.prey.type === 'soldier') z.prey = null;
   // a giant turns on whatever is shooting at it
-  if (z.D.boss && !z.isleRun && !z.isle) { const a = z.lastHit; if (a && a.alive && !a.hidden && a.team !== z.team && a.pos && !isAirT(a) && a.type !== 'ship' && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 170 && Math.random() < .7) { z.prey = a; z.civ = null; z.heard = true; return; } }
+  if (z.D.boss && !z.isleRun && !z.isle) { const a = z.lastHit; if (a && a.alive && !a.hidden && a.team !== z.team && a.pos && !isAirT(a) && a.type !== 'ship' && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 280 && Math.random() < .7) { z.prey = a; z.civ = null; z.heard = true; return; } }
   if (z.D.boss && !z.isleRun && !z.isle && !z.prey && !z.civ) {
-    let best = null, bs = 1e9; for (const [u, d] of bossFoes(z, 150)) { const w = d * (u.type === 'tank' ? .6 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
+    let best = null, bs = 1e9; for (const [u, d] of bossFoes(z, 230)) { const w = d * (u.type === 'tank' ? .6 : u.type === 'struct' ? .8 : 1); if (w < bs) { bs = w; best = u; } }
     if (best) { z.prey = best; z.heard = true; }
   }
 };
@@ -10301,21 +10304,32 @@ zIsleAssault = function () {
   const R = zSwimTarget(g.pos.z); g.isleRun = R; g.goal = { x: R.gx, z: R.gz }; g.prey = null; g.heard = true;
   addFeed(null, null, `👹 Er zwemt ook een ${g.variant === 'titan' ? 'KOLOS' : 'REUS'} naar je eiland!`);
 };
-// boss health bar
+// boss health bar (with a ✕ to hide it; '👹 toon balk' brings it back)
+const BOSSBAR = { off: false };
 {
   const st = document.createElement('style');
   st.textContent = `#bossBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(166px + env(safe-area-inset-top,0px));width:min(46vw,420px);z-index:21;pointer-events:none;font:700 12px var(--display);color:#ffd6cc;text-align:center;letter-spacing:.08em;text-shadow:0 1px 3px #000}
-#bossBar .b{height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,120,90,.6);margin-top:3px} #bossBar .b i{display:block;height:100%;background:linear-gradient(90deg,#b3301f,#ff6a50)}`;
+#bossBar .b{height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(255,120,90,.6);margin-top:3px} #bossBar .b i{display:block;height:100%;background:linear-gradient(90deg,#b3301f,#ff6a50)}
+#bossBar .x{position:absolute;right:-30px;top:-2px;pointer-events:auto;appearance:none;background:rgba(14,16,12,.75);border:1px solid rgba(255,120,90,.6);color:#ffd6cc;font:700 12px var(--display);width:24px;height:24px;padding:0;cursor:pointer}
+#bossShow{position:fixed;left:50%;transform:translateX(-50%);top:calc(166px + env(safe-area-inset-top,0px));z-index:21;appearance:none;background:rgba(14,16,12,.7);border:1px solid rgba(255,120,90,.5);color:#ffd6cc;font:700 11px var(--display);padding:3px 9px;cursor:pointer}`;
   document.head.appendChild(st);
   const b = document.createElement('div'); b.id = 'bossBar'; b.hidden = true; document.body.appendChild(b);
+  const t = document.createElement('div'); b.appendChild(t); t.className = 't';
+  const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Balk verbergen'; b.appendChild(x);
+  const s = document.createElement('button'); s.id = 'bossShow'; s.hidden = true; s.textContent = '👹 toon balk'; document.body.appendChild(s);
+  try { BOSSBAR.off = localStorage.getItem('os_bossbar') === 'off'; } catch (e) { }
+  const set = off => { BOSSBAR.off = off; try { localStorage.setItem('os_bossbar', off ? 'off' : 'on'); } catch (e) { } updateBossBar(); };
+  x.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); set(true); });
+  s.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); set(false); });
 }
 function updateBossBar() {
-  const el = document.getElementById('bossBar'); if (!el) return;
+  const el = document.getElementById('bossBar'), sh = document.getElementById('bossShow'); if (!el) return;
   let best = null, bd = 1e18; const cp = camera.position;
   if (state === 'play' || state === 'possess') for (const z of ZM.list) { if (!z.alive || !z.D.boss) continue; let d = (z.pos.x - cp.x) ** 2 + (z.pos.z - cp.z) ** 2; if (z.misBoss && MIS.active === z.misBoss) d *= .05; if (d < bd) { bd = d; best = z; } }
-  if (!best || bd > 1100 * 1100) { if (!el.hidden) el.hidden = true; return; }
+  if (!best || bd > 1100 * 1100) { if (!el.hidden) el.hidden = true; if (sh && !sh.hidden) sh.hidden = true; return; }
+  if (BOSSBAR.off) { el.hidden = true; if (sh) sh.hidden = false; return; } if (sh) sh.hidden = true;
   const h = `👹 ${best.variant === 'titan' ? 'KOLOS' : 'REUS'}${best.where ? ' · ' + best.where : ''} · ${Math.ceil(best.hp / best.maxHp * 100)}%<div class="b"><i style="width:${best.hp / best.maxHp * 100}%"></i></div>`;
-  if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false;
+  if (el._h !== h) { el._h = h; el.firstChild.innerHTML = h; } el.hidden = false;
 }
 // ---------- missions ----------
 ROLES.surv = { rng: 0, chase: 0, dmg: 0, mag: 1, burst: [1, 1], cd: 1, pause: [1, 1], spr: 1, snd: 'rifle' };
