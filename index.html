@@ -426,7 +426,7 @@ body.possess.pzD.tvcam #pzMsl{display:none!important}
       <div class="trow trow5"><button class="tb" data-tool="reaper"></button><button class="tb" data-tool="kamikaze"></button><button class="tb" data-tool="gcruise"></button><button class="tb x" data-tool="swarm"></button></div>
       <div class="lbl" style="margin-top:4px">Hoofdkwartier-eiland · buiten bereik van je eigen kernbommen</div>
       <div class="trow trow5"><button class="act" id="btnIsleGo" style="color:#b9e38a;border-color:rgba(156,196,107,.5)">🏝 Leger + burgers naar het eiland</button><button class="act" id="btnIsleBack">⬅ Leger terug naar het vasteland</button><button class="act" id="btnIsleView">👁 Bekijk eiland</button></div>
-      <div class="trow trow5"><button class="tb" data-tool="scav"></button><button class="tb x zmOnly" data-tool="lure"></button></div>
+      <div class="trow trow5"><button class="tb" data-tool="scav"></button><button class="tb x zmOnly" data-tool="lure"></button><button class="tb" data-tool="flame"></button></div>
       <div id="tip">Klik op de kaart of de minikaart · Shift = meerdere · Esc = annuleren</div>
     </div>
     <button class="panel" id="reqBtn"><b>＋</b> Versterking</button>
@@ -1888,7 +1888,7 @@ class Jet extends Unit {
       const c = this.home, a = performance.now() / 12000 + this.team * 3;
       D = new V3(c.x + Math.cos(a) * 600 - this.pos.x, Math.max(getH(c.x, c.z), 0) + 420 - this.pos.y, c.z + Math.sin(a) * 600 - this.pos.z).normalize();
     }
-    if (Math.abs(this.pos.x) > WORLD + 300 || Math.abs(this.pos.z) > WORLD + 300) D = new V3(-this.pos.x, 350 - this.pos.y, -this.pos.z).normalize();
+    if (this.pos.x > XMAX + 300 || this.pos.x < -WORLD - 300 || Math.abs(this.pos.z) > WORLD + 300) D = new V3(-this.pos.x, 350 - this.pos.y, -this.pos.z).normalize();
     const agl = this.agl(), ahead = this.pos.clone().addScaledVector(f, Math.max(150, this.speed * 3.5));
     if (Math.min(agl, ahead.y - Math.max(getH(ahead.x, ahead.z), WATER)) < 140) { D = new V3(f.x, 1.2, f.z).normalize(); I.thr = 1; I.bomb = false; }
     this.steerTo(D, dt);
@@ -1921,7 +1921,7 @@ class Jet extends Unit {
       const a = performance.now() / 9000 + this.team * 3 + this.hp * .01;
       D = new V3(c.x + Math.cos(a) * 420, Math.max(getH(c.x, c.z), 0) + 380, c.z + Math.sin(a) * 420).sub(this.pos).normalize();
     }
-    if (Math.abs(this.pos.x) > WORLD + 300 || Math.abs(this.pos.z) > WORLD + 300) D = new V3(-this.pos.x, 350 - this.pos.y, -this.pos.z).normalize();
+    if (this.pos.x > XMAX + 300 || this.pos.x < -WORLD - 300 || Math.abs(this.pos.z) > WORLD + 300) D = new V3(-this.pos.x, 350 - this.pos.y, -this.pos.z).normalize();
     const ahead = this.pos.clone().addScaledVector(f, Math.max(120, this.speed * 3));
     const clear = Math.min(agl, ahead.y - Math.max(getH(ahead.x, ahead.z), WATER));
     if (clear < 110 || (f.y < -.2 && agl / (-f.y * this.speed) < 4.5)) { D = new V3(f.x, 1.2, f.z).normalize(); wantGun = false; this.attackRun = false; I.thr = 1; }
@@ -4604,7 +4604,7 @@ class Drone extends Unit {
       const seg = segHitUnit(prev, this.pos, { owner: this, team: this.team, type: 'drone' });
       if (seg || this.agl() < 1 || inBox(this.pos) || (I.fire && this.isPlayerUnit()) || this.life <= 0) { this.boom(seg ? seg.u : null); return; }
     }
-    this.pos.x = clamp(this.pos.x, -WORLD - 300, WORLD + 300); this.pos.z = clamp(this.pos.z, -WORLD - 300, WORLD + 300);
+    this.pos.x = clamp(this.pos.x, -WORLD - 300, XMAX + 300); this.pos.z = clamp(this.pos.z, -WORLD - 300, WORLD + 300);
   }
   lockTarget() { const f = this.forward(); let best = null, ba = .35; for (const u of units) { if (!u.alive || u.hidden || u.noTarget || u.team === this.team || isAirT(u) || u.type === 'drone') continue; const d = u.center().clone().sub(this.pos), L = d.length(); if (L > 1400) continue; const a = f.angleTo(d.divideScalar(L)); if (a < ba) { ba = a; best = u; } } return best; }
   fireMissile() {
@@ -8676,9 +8676,9 @@ function zOutbreak() {
     names.push(cityName(o.C)); let k = 0;
     for (const c of CIV.list.slice()) if (c.alive && c.kind === 'city' && c.city === o.C && Math.random() < .95) { CIV.list.splice(CIV.list.indexOf(c), 1); CIV.max--; zSpawn(c.x, c.z, Math.random() < .25 ? 'runner' : 'walker'); k++; }
     const cx = (o.C.x0 + o.C.x1) / 2, cz = (o.C.z0 + o.C.z1) / 2; for (let i = 0; i < 14; i++) zSpawn(o.C.X.length ? o.C.X[(Math.random() * o.C.X.length) | 0] : cx + rnd(-30, 30), o.C.Z.length ? o.C.Z[(Math.random() * o.C.Z.length) | 0] : cz + rnd(-30, 30), 'walker');
-    o.C.evacuated = true;
+    o.C.evacuated = true; if (typeof nestCity === 'function') nestCity(o.C);
   }
-  if (!cs.length) for (let i = 0; i < 14; i++) { const a = rnd(0, TAU); zSpawn(b.x + Math.cos(a) * 600, b.z + Math.sin(a) * 600, 'walker'); }
+  if (!cs.length) { for (let i = 0; i < 14; i++) { const a = rnd(0, TAU); zSpawn(b.x + Math.cos(a) * 600, b.z + Math.sin(a) * 600, 'walker'); } if (typeof nestNear === 'function') nestNear(b.x - 600, b.z); }
   addFeed(null, null, `☣ UITBRAAK in ${names.join(', ') || 'het binnenland'}! De doden staan op en trekken naar je steden`); siren();
 }
 function zHorde() {
@@ -8787,16 +8787,17 @@ Heli.prototype.update = function (dt) {
   if (this.state !== 'unload') return;
   const f = this.forward(), door = new V3(this.pos.x + f.z * 3, 0, this.pos.z - f.x * 3);
   if (S.phase === 'out') {
-    S.phase = 'search'; S.t = 0; const spots = scavSpots(S.C, this.pos);
-    for (let i = 0; i < 4; i++) { const s = new Soldier(this.team, door.x + rnd(-2, 2), door.z + rnd(-2, 2), i === 2 ? 'mg' : 'rifle'); s.sc = { spots: [spots[i % spots.length], spots[(i + 2) % spots.length]], i: 0, wait: 0, back: false, loot: { food: 0, med: 0, oil: 0, coal: 0 } }; S.men.push(s); }
+    S.phase = 'search'; S.t = 0; const spots = S.H ? null : scavSpots(S.C, this.pos);
+    for (let i = 0; i < 4; i++) { const s = new Soldier(this.team, door.x + rnd(-2, 2), door.z + rnd(-2, 2), i === 2 ? 'mg' : 'rifle'); s.sc = { spots: S.H ? hospRoute(S.H, i) : [spots[i % spots.length], spots[(i + 2) % spots.length]], i: 0, wait: 0, back: false, loot: { food: 0, med: 0, oil: 0, coal: 0 } }; S.men.push(s); }
+    if (S.H && ZM.on) hospZombies(S.H);
   } else if (S.phase === 'search') {
     S.t += dt; let out = 0;
     for (const s of S.men) {
       if (!s.alive || s.inHeli) continue; out++; const c = s.sc;
-      if (S.t > 150) c.back = true;
+      if (S.t > (S.H ? 190 : 150)) c.back = true;
       if (!c.back) {
         const q = c.spots[c.i];
-        if (Math.hypot(q.x - s.pos.x, q.z - s.pos.z) < 3) { c.wait += dt; if (c.wait > 7) { c.loot.food += rnd(3, 6); c.loot.med += rnd(2, 3.6); c.loot.oil += rnd(1, 2.2); c.loot.coal += rnd(0, 1.5); c.wait = 0; c.i++; if (c.i >= c.spots.length) c.back = true; } }
+        if (Math.hypot(q.x - s.pos.x, q.z - s.pos.z) < (q.pass ? 2.2 : 3)) { c.wait += q.pass ? 99 : dt; if (c.wait > 7) { if (q.hosp && !q.pass) { c.loot.food += rnd(0, 1.5); c.loot.med += rnd(7, 11); } else if (!q.pass) { c.loot.food += rnd(3, 6); c.loot.med += rnd(2, 3.6); c.loot.oil += rnd(1, 2.2); c.loot.coal += rnd(0, 1.5); } c.wait = 0; c.i++; s.order = null; if (c.i >= c.spots.length) c.back = true; } }
         else if (!s.order) s.order = { type: 'move', p: new V3(q.x, 0, q.z), run: true };
       } else if (Math.hypot(door.x - s.pos.x, door.z - s.pos.z) < 4) { s.inHeli = true; liftHidden(s); for (const k in c.loot) S.loot[k] += c.loot[k]; S.n++; out--; }
       else if (!s.order || Math.hypot(s.order.p.x - door.x, s.order.p.z - door.z) > 3) s.order = { type: 'move', p: door.clone(), run: true };
@@ -8860,7 +8861,7 @@ function zmUpdate(dt) {
   if (ZM.outT > 0) { ZM.outT -= dt; if (ZM.outT <= 0) zOutbreak(); return; }
   ZM.sT -= dt; if (ZM.sT <= 0) { ZM.sT = 1; zmSecond(); }
   ZM.waveT -= dt; if (ZM.waveT <= 0) { ZM.waveT = Math.max(10, 30 - ZM.t / 40) / Math.sqrt(ZM.diff); zHorde(); }
-  ZM.isleT -= dt; if (ZM.isleT <= 0) { ZM.isleT = Math.max(50, 130 - ZM.t / 10) / Math.sqrt(ZM.diff); zIsleAssault(); }
+  ZM.isleT -= dt; if (ZM.isleT <= 0) { ZM.isleT = Math.max(75, 160 - ZM.t / 10) / Math.sqrt(ZM.diff); zIsleAssault(); }
 }
 // ---------- the island's guns ----------
 ISL.gun = { team: 0, type: 'struct', alive: true, hidden: false, removed: false, pos: new V3(ISLE.x, 0, ISLE.z), label: () => 'Eilandverdediging', kind: () => 'tower' };
@@ -8914,7 +8915,7 @@ function updateZmBox(dt) {
   const html = `<div class="hd"><span>🧟 ZOMBIE-UITBRAAK · ${mm}:${ss}</span><span>${ZM.min ? '▸' : '▾'}</span></div>${ZM.min ? '' : `
 <div>🧪 Geneesmiddel <b>${Math.floor(ZM.cure)}%</b><span class="bar"><i style="width:${ZM.cure}%"></i></span>${ZM.cured ? 'wordt verspreid…' : ZM.stat ? `<span class="w">⚠ ${ZM.stat}</span>` : 'onderzoek loopt'}</div>
 <div class="res"><span class="${R.food < 10 ? 'low' : ''}">🍞 ${f(R.food)}</span><span class="${R.oil < 6 ? 'low' : ''}">⛽ ${f(R.oil)}</span><span class="${R.coal < 5 ? 'low' : ''}">⛏ ${f(R.coal)}</span><span class="${R.med < 3 ? 'low' : ''}">💊 ${f(R.med)}</span></div>
-<div>🧟 <b>${zAlive()}</b> zombies · <b>${ZM.kills}</b> gedood${bad ? ` · ☣ ${bad} punten besmet` : ''}</div>
+<div>🧟 <b>${zAlive()}</b> zombies · <b>${ZM.kills}</b> gedood${bad ? ` · ☣ ${bad} punten besmet` : ''}</div>${typeof NEST !== 'undefined' ? `<div>🦠 <b>${NEST.alive}</b> broeinesten${NEST.swim ? ` · <span class="w">🌊 ${NEST.swim} zwemmen naar je eiland</span>` : ''}</div>` : ''}
 <div>🏥 Labo ${Math.max(0, Math.round(L.hp / L.max * 100))}% · eten +${Math.round((typeof HARV !== 'undefined' && HARV.food || 6) * 3)} / −${(ZM.need || 0).toFixed(0)} per min</div>`}`;
   if (html !== ZM.sig) { ZM.sig = html; ZM.box.innerHTML = html; } ZM.box.hidden = false;
 }
@@ -9698,5 +9699,441 @@ possess = function (u) { if (u && (u.type === 'ship' || u.variant === 'apache'))
 const _updSelW = updateSelPanel;
 updateSelPanel = function () { _updSelW(); const b = document.getElementById('aWatch'); if (b) b.disabled = !sel.size; };
 { const st = document.createElement('style'); st.textContent = '#ctlUI button.down{background:rgba(233,185,73,.5)!important} #ctlUI .bl button{padding:4px;font-size:16px;line-height:1.05} #ctlUI .bl small{font-size:9px}'; document.head.appendChild(st); }
+
+// ================= NESTS, SWIMMING ZOMBIES, ISLAND SILOS, FORMATIONS, A-10 FLIGHTS, FLAMETHROWERS, HOSPITAL RUNS =================
+UNAME.nest = ['zombienest', 'zombienesten'];
+// ---------- breeding nests: zombies no longer come out of nowhere, they crawl out of these ----------
+const NEST = { list: [], max: 6, growT: 160, borderT: -1e9, alive: 0, swim: 0, seq: 0 };
+const NESTG = { mound: new THREE.SphereGeometry(5.2, 14, 8, 0, TAU, 0, Math.PI / 2), lump: new THREE.SphereGeometry(2.6, 10, 6, 0, TAU, 0, Math.PI / 2), pus: new THREE.SphereGeometry(.7, 8, 6), hole: new THREE.CircleGeometry(2, 14).rotateX(-Math.PI / 2), bone: new THREE.CylinderGeometry(.14, .2, 3.2, 5) };
+class Nest extends Unit {
+  constructor(x, z, where) {
+    super(ZM.zt, 'nest'); this.variant = 'nest'; this.hp = this.maxHp = 2600 * ZM.hpMul; this.radius = 5; this.blastMul = 1; this.where = where || 'het binnenland';
+    this.nid = NEST.seq++; this.ph = rnd(0, 6); this.queue = 0; this.qT = 0; this.trT = rnd(4, 9);
+    const y = getH(x, z); this.pos.set(x, y, z);
+    const g = this.group, flesh = mat(0x3b3528), dark = mat(0x2a241c), boneM = mat(0xcfc6aa);
+    this.glowM = new THREE.MeshBasicMaterial({ color: 0x8fdc3a });
+    this.body = mesh(NESTG.mound, flesh, 0, -.6, 0, g); this.body.scale.set(1, .5, 1);
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + rnd(-.4, .4), l = mesh(NESTG.lump, i ? flesh : dark, Math.cos(a) * 4.2, -.3, Math.sin(a) * 4.2, g); l.scale.set(1, rnd(.5, .8), 1); }
+    for (let i = 0; i < 7; i++) { const a = rnd(0, TAU), r = rnd(1.5, 4.5), s = rnd(.5, 1.1); const p = mesh(NESTG.pus, this.glowM, Math.cos(a) * r, Math.max(.2, 2.1 * Math.sqrt(Math.max(0, 1 - (r / 5.2) ** 2))) - .3, Math.sin(a) * r, g); p.scale.setScalar(s); p.castShadow = false; }
+    mesh(NESTG.hole, mat(0x0d0b08), 0, 2.05, 0, g).castShadow = false;
+    for (let i = 0; i < 5; i++) { const a = rnd(0, TAU), b = mesh(NESTG.bone, boneM, Math.cos(a) * 5.4, .6, Math.sin(a) * 5.4, g); b.rotation.set(rnd(-.9, .9), 0, rnd(-.9, .9)); }
+    this._hs = [{ c: new V3(x, y + 1.6, z), r: 5.4 }];
+    NEST.list.push(this); markers.push({ p: this.pos.clone(), t: 0, col: '#9be04a' });
+  }
+  label() { return 'Zombienest'; }
+  kind() { return 'nest'; }
+  center() { return this._hs[0].c; }
+  forward() { return new V3(0, 0, 1); }
+  hitSpheres() { return this.alive ? this._hs : ZEMPTY; }
+  damage(n, src, kind, p) {
+    if (!this.alive) return; super.damage(n, src, kind, p); this.hurtT = SIMT;
+    // a nest under fire screams for help
+    if (this.alive && noteOnce('nest' + this.nid, 5)) { zNoise(this.pos.x, this.pos.z, 340, 5); if (this.queue < 6) this.queue += 3; }
+  }
+  killedBy(src) { score[1 - this.team] += 5; ZM.nestKills = (ZM.nestKills || 0) + 1; const left = NEST.list.filter(n => n.alive && n !== this).length; addFeed(null, null, `💥 Zombienest bij ${this.where} vernietigd!${left ? ` Nog ${left} over` : ' Er zijn geen nesten meer · nieuwe zombies komen nu alleen nog van over de grens'}`); }
+  die() { explosion(this.pos.clone().add(new V3(0, 2, 0)), 2.4, { r: 7 }); this.glowM.color.setHex(0x2a2a20); for (let i = 0; i < 14; i++) spawnP(this.pos.clone().add(new V3(rnd(-3, 3), 2, rnd(-3, 3))), { tex: smokeTex, color: 0x4a3f2c, op: .7, size: 2.5, grow: 3, life: 2.5, vel: new V3(rnd(-4, 4), rnd(3, 9), rnd(-4, 4)), drag: 1.2 }); }
+  remove() { super.remove(); const i = NEST.list.indexOf(this); if (i >= 0) NEST.list.splice(i, 1); }
+  update(dt) {
+    if (!this.alive) { this.deadT += dt; this.group.position.y -= dt * .25; if (this.deadT > 14) this.remove(); return; }
+    this.ph += dt * (this.queue > 0 ? 6 : 2); const s = 1 + Math.sin(this.ph) * .035; this.body.scale.set(s, .5 / s, s);
+    const k = .7 + Math.sin(this.ph * 1.3) * .3; this.glowM.color.setRGB(.56 * k, .86 * k, .23 * k);
+    if (Math.random() < dt * .8) spawnP(this.pos.clone().add(new V3(rnd(-2, 2), 2.4, rnd(-2, 2))), { tex: smokeTex, color: 0x7f9a4a, op: .25, size: 2.2, grow: 2.5, life: 3, vel: new V3(rnd(-.4, .4), 1.1, rnd(-.4, .4)), drag: .6 });
+    // the queue: zombies crawl out one after another
+    if (this.queue > 0) { this.qT -= dt; if (this.qT <= 0) { this.qT = .14; this.queue--; nestEmerge(this, 1); } }
+  }
+}
+function nestEmerge(N, k, run) {
+  const out = [];
+  for (let i = 0; i < k; i++) {
+    if (zAlive() >= ZM.cap + 40) break;
+    const a = rnd(0, TAU), r = rnd(4.5, 8), x = N.pos.x + Math.cos(a) * r, z = N.pos.z + Math.sin(a) * r; if (getH(x, z) < WATER + .3) continue;
+    const zb = zSpawn(x, z, zKind()); if (!zb) break; zb.yaw = a; out.push(zb);
+    if (Math.random() < .5) spawnP(new V3(x, getH(x, z) + .5, z), { tex: smokeTex, color: 0x5d5040, op: .55, size: 1.6, grow: 2.4, life: 1.4, vel: new V3(rnd(-1, 1), 2, rnd(-1, 1)), drag: 1.4 });
+  }
+  return out;
+}
+function nestOk(x, z) {
+  if (Math.abs(x) > WORLD - 60 || Math.abs(z) > WORLD - 60 || x > COAST - 30) return false;
+  const y = getH(x, z); if (y < WATER + 1.5) return false;
+  for (const [a, b] of [[0, 0], [5, 0], [-5, 0], [0, 5], [0, -5]]) if (inBox(new V3(x + a, getH(x + a, z + b) + 1.5, z + b))) return false;
+  if (Math.abs(getH(x + 5, z) - getH(x - 5, z)) > 3.5 || Math.abs(getH(x, z + 5) - getH(x, z - 5)) > 3.5) return false;
+  return !NEST.list.some(n => n.alive && Math.hypot(n.pos.x - x, n.pos.z - z) < 140);
+}
+function nestSpot(cx, cz, r0, r1) { for (let i = 0; i < 80; i++) { const a = rnd(0, TAU), r = rnd(r0, r1), x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; if (nestOk(x, z)) return { x, z }; } return null; }
+function placeName(x, z) {
+  let best = null, bd = 1e9; for (const C of CITIES) { const d = Math.hypot((C.x0 + C.x1) / 2 - x, (C.z0 + C.z1) / 2 - z); if (d < bd) { bd = d; best = C; } }
+  if (best && bd < 380) return cityName(best);
+  let P = null; bd = 1e9; for (const p of POINTS) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; P = p; } }
+  return P ? `${P.L} ${P.name}` : 'het binnenland';
+}
+const nestCount = () => NEST.list.filter(n => n.alive).length;
+function nestCity(C) {
+  if (nestCount() >= NEST.max) return null;
+  const cx = (C.x0 + C.x1) / 2, cz = (C.z0 + C.z1) / 2, half = Math.hypot(C.x1 - C.x0, C.z1 - C.z0) / 2;
+  const s = nestSpot(cx, cz, half * .4, half + 40) || nestSpot(cx, cz, 0, half + 110); if (!s) return null;
+  return new Nest(s.x, s.z, cityName(C));
+}
+function nestNear(x, z) { if (nestCount() >= NEST.max) return null; const s = nestSpot(x, z, 0, 160); return s ? new Nest(s.x, s.z, placeName(s.x, s.z)) : null; }
+// zombie crowds dig a new nest where nobody stops them
+function nestGrow() {
+  if (nestCount() >= NEST.max) return;
+  const ml = ZM.list.filter(z => z.alive && z.pos.x < COAST && !z.isleRun); if (ml.length < 14) return;
+  let best = null, bc = 0;
+  for (let k = 0; k < 24; k++) { const z = ml[(Math.random() * ml.length) | 0]; let c = 0; for (const o of ml) if ((o.pos.x - z.pos.x) ** 2 + (o.pos.z - z.pos.z) ** 2 < 3600) c++; if (c > bc) { bc = c; best = z; } }
+  if (!best || bc < 14) return;
+  const bx = best.pos.x, bz = best.pos.z;
+  if (units.some(u => u.alive && u.team === ZM.team && u.type !== 'struct' && u.type !== 'jet' && (u.pos.x - bx) ** 2 + (u.pos.z - bz) ** 2 < 220 * 220)) return;
+  const s = nestSpot(bx, bz, 0, 60); if (!s) return;
+  const N = new Nest(s.x, s.z, placeName(s.x, s.z)); addFeed(null, null, `🦠 Een horde van ${bc} zombies graaft een nieuw broeinest bij ${N.where} · vernietig het voordat er meer uit kruipen`);
+}
+// hordes now crawl out of the nests
+const _zHordeN = zHorde;
+zHorde = function () {
+  let sw = 0; for (const z of ZM.list) if (z.alive && z.isleRun) sw++;
+  const alive = zAlive() - sw, room = ZM.cap - alive; if (room < 4) return;
+  const live = NEST.list.filter(n => n.alive);
+  if (!live.length) {
+    // no nests left: now and then a group of stragglers drifts in across the border
+    if (SIMT - NEST.borderT < 110) return; NEST.borderT = SIMT; return _zHordeN();
+  }
+  const n = Math.min(room, Math.round((8 + ZM.t / 25) * ZM.diff), 50), N = live[(Math.random() * live.length) | 0];
+  N.queue += n; ZM.wave++;
+  if (ZM.wave % 3 === 1 || n >= 30) addFeed(null, null, `🧟 Een horde van ${n} zombies kruipt uit het broeinest bij ${N.where}`);
+  markers.push({ p: N.pos.clone(), t: 0, col: '#9be04a' });
+};
+// ---------- island attacks: the dead walk into the sea and swim over (no more zombies popping up on the island) ----------
+function zSwimTarget(z0) {
+  const gz = clamp(ISLE.z + (z0 - ISLE.z) * .25 + rnd(-110, 110), ISLE.z - 210, ISLE.z + 210); let x = ISLE.x - ISLE.r * 1.2;
+  while (x < ISLE.x - 60 && isleH(x, gz) < WATER + 1.2) x += 4;
+  return { gx: x + 8, gz };
+}
+zIsleAssault = function () {
+  // wait while a big group is still on its way over
+  let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 30) { ZM.isleT = Math.min(ZM.isleT, 30); return; }
+  const n = Math.min(28, Math.round((7 + ZM.t / 50) * ZM.diff));
+  // the zombies closest to the east coast go first
+  const cand = ZM.list.filter(z => z.alive && !z.isleRun && z.pos.x < WORLD - 5 && z.pos.x > COAST - 480 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
+  if (cand.length < n) {
+    // the rest comes out of the nest nearest to the sea
+    const live = NEST.list.filter(N => N.alive).sort((a, b) => b.pos.x - a.pos.x);
+    if (live[0]) cand.push(...nestEmerge(live[0], n - cand.length));
+  }
+  if (cand.length < 3) return;
+  let zc = 0; for (const z of cand) zc += z.pos.z; zc /= cand.length;
+  const R = zSwimTarget(zc);
+  for (const z of cand) { z.isleRun = { gx: R.gx + rnd(-12, 12), gz: R.gz + rnd(-25, 25) }; z.goal = { x: z.isleRun.gx, z: z.isleRun.gz }; z.prey = null; z.civ = null; z.heard = true; z.thinkT = rnd(0, .4); }
+  NEST.swimN = (NEST.swimN || 0) + 1;
+  addFeed(null, null, `🌊 ALARM · ${cand.length} zombies lopen de zee in en zwemmen naar je eiland! Onderschep ze met schepen, helikopters of vliegtuigen voor ze aan land komen`); siren();
+  markers.push({ p: new V3(COAST + 40, WATER, zc), t: 0, col: '#9be04a' }); markers.push({ p: new V3(R.gx, WATER, R.gz), t: 0, col: '#9be04a' });
+};
+const _zThinkN = zThink;
+zThink = function (z) {
+  if (!z.isleRun) return _zThinkN(z);
+  _zThinkN(z);
+  // on the way to the sea they only bite what is right in front of them
+  const p = z.pos;
+  if (z.prey && Math.hypot(z.prey.pos.x - p.x, z.prey.pos.z - p.z) > 8) z.prey = null;
+  if (z.civ && Math.hypot(z.civ.x - p.x, z.civ.z - p.z) > 6) z.civ = null;
+  if (!z.prey && !z.civ) { z.goal = { x: z.isleRun.gx, z: z.isleRun.gz }; z.heard = true; z.labAtk = false; }
+};
+const _zUpdN = Zombie.prototype.update;
+Zombie.prototype.update = function (dt) {
+  const R = this.isleRun;
+  if (R && this.alive) {
+    const p = this.pos, h = getH(p.x, p.z);
+    if (p.x > WORLD && (h > WATER + .4 || Math.hypot(R.gx - p.x, R.gz - p.z) < 7)) { this.isleRun = null; this.swim = h < WATER + .3; this.isle = true; this.thinkT = 0; this.goal = null; }   // ashore on the island
+    else {
+      const dx = R.gx - p.x, dz = R.gz - p.z, d = Math.hypot(dx, dz) || 1;
+      this.swim = h < WATER - .3 || getH(p.x + dx / d * 2.5, p.z + dz / d * 2.5) < WATER - .3;
+      if (h < WATER + .4) {
+        // swimming (and wading through the shallows): faster than walking so they make it over, but slow enough to be caught
+        const sp = (h < WATER - .7 ? 5.6 + this.D.sp * .5 : 1.5 + this.D.sp) * ZM.spMul;
+        p.x += dx / d * sp * dt; p.z += dz / d * sp * dt; this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 4); this.ph += dt * 5;
+        p.y = Math.max(h, WATER - 1.25 + Math.sin(this.ph) * .08);
+        if (Math.random() < dt * .25) spawnP(new V3(p.x, WATER + .1, p.z), { color: 0xeaf4f6, op: .5, size: 1.1, grow: 2, life: .8, vel: new V3(0, .6, 0), drag: 1 });
+        return;
+      }
+    }
+  }
+  return _zUpdN.call(this, dt);
+};
+// once a second: nests trickle, grow, and every overrun point sprouts one
+const _zmSecondN = zmSecond;
+zmSecond = function () {
+  _zmSecondN();
+  if (!ZM.on || ECO.over) return;
+  let alive = 0, swim = 0; for (const N of NEST.list) if (N.alive) alive++; for (const z of ZM.list) if (z.alive && z.isleRun) swim++;
+  NEST.alive = alive; NEST.swim = swim;
+  if (swim && noteOnce('swim', 40)) { const lead = ZM.list.filter(z => z.alive && z.isleRun).sort((a, b) => b.pos.x - a.pos.x)[0]; if (lead && lead.pos.x > COAST + 50) addFeed(null, null, `🌊 ${swim} zombies zwemmen naar je eiland · de voorste is nog ${Math.max(0, Math.round(ISLE.x - ISLE.r * .86 - lead.pos.x))} m van de kust`); }
+  for (const N of NEST.list) { if (!N.alive) continue; N.trT -= 1; if (N.trT <= 0) { N.trT = rnd(10, 16) / ZM.diff; if (zAlive() < ZM.cap) N.queue += 1; } }
+  NEST.growT -= 1; if (NEST.growT <= 0) { NEST.growT = rnd(130, 180) / Math.sqrt(ZM.diff); nestGrow(); }
+  for (const p of POINTS) {
+    if (!p.zom) { p.nested = false; continue; }
+    if (p.nested || alive >= NEST.max) continue; p.nested = true;
+    const s = nestSpot(p.x, p.z, 25, 90); if (s) { const N = new Nest(s.x, s.z, `${p.L} ${p.name}`); alive++; addFeed(null, null, `🦠 Bij ${N.where} groeit nu een broeinest · heroveren en vernietigen!`); }
+  }
+};
+// labels, health bars and minimap marks for nests
+const _drawOverlayN = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayN(dt);
+  if (state !== 'play' || (typeof BCW !== 'undefined' && BCW.unit) || (typeof CTL !== 'undefined' && CTL.on)) return;
+  const cp = camera.position;
+  for (const N of NEST.list) {
+    if (!N.alive) continue; const P = N.pos.clone(); P.y += 9; if (P.distanceTo(cp) > 1600) continue; const q = project(P); if (!q) continue;
+    oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText('🦠 BROEINEST', q[0], q[1]); oc.fillStyle = '#b6f06a'; oc.fillText('🦠 BROEINEST', q[0], q[1]);
+    const f = N.hp / N.maxHp; oc.fillStyle = 'rgba(0,0,0,.55)'; oc.fillRect(q[0] - 26, q[1] + 5, 52, 5); oc.fillStyle = f > .5 ? '#9be04a' : f > .25 ? '#e2c044' : '#e2543c'; oc.fillRect(q[0] - 26, q[1] + 5, 52 * f, 5);
+  }
+  if (ZM.on || (tool && tool.kind === 'scav')) for (const H of HOSP) {
+    const P = new V3(H.x, H.y + 11, H.z); if (P.distanceTo(cp) > 1500) continue; const q = project(P); if (!q) continue;
+    const t = tool && tool.kind === 'scav' ? '🏥 ZIEKENHUIS · tik voor medicijnen' : '🏥 ZIEKENHUIS'; oc.font = '700 12px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(t, q[0], q[1]); oc.fillStyle = '#ff9a9a'; oc.fillText(t, q[0], q[1]);
+  }
+};
+const _drawMinimapN = drawMinimap;
+drawMinimap = function () {
+  _drawMinimapN(); const k = 392 / (2 * WORLD);
+  for (const N of NEST.list) { if (!N.alive) continue; const x = (N.pos.x + WORLD) * k, y = (N.pos.z + WORLD) * k; mmc.fillStyle = '#2a3a14'; mmc.strokeStyle = '#b6f06a'; mmc.lineWidth = 2; mmc.beginPath(); mmc.arc(x, y, 6, 0, TAU); mmc.fill(); mmc.stroke(); mmc.fillStyle = '#b6f06a'; mmc.beginPath(); mmc.arc(x, y, 2, 0, TAU); mmc.fill(); }
+  if (ZM.on) for (const H of HOSP) { const x = (H.x + WORLD) * k, y = (H.z + WORLD) * k; mmc.fillStyle = '#fff'; mmc.fillRect(x - 5, y - 5, 10, 10); mmc.fillStyle = '#d32f2f'; mmc.fillRect(x - 1.5, y - 4, 3, 8); mmc.fillRect(x - 4, y - 1.5, 8, 3); }
+};
+const _setupBattleN = setupBattle;
+setupBattle = function (battle) {
+  for (const N of NEST.list.slice()) N.remove(); NEST.list.length = 0; NEST.growT = 160; NEST.borderT = -1e9; NEST.alive = NEST.swim = 0;
+  _setupBattleN(battle);
+  NEST.max = QUALITY.low ? 4 : 6;
+  // two missile silos on the headquarters island, ready to fire
+  for (const dz of [-1, 1]) { const s = new Struct(SET.side, 'silo', ISLE.x + 42, ISLE.z + dz * 104, 0); s.buildT = .999; s.isleSilo = true; }
+};
+// ---------- hospitals: supply teams fetch medicine there (and meet the dead inside) ----------
+KINDS.scav.sub = 'stad = eten · 🏥 = medicijnen';
+function hospRoute(H, i) {
+  const N = H.nodes, R = [
+    ['out', 'lobby', 'c0', 'cL', 'A*', 'cL', 'C*', 'cL', 'c0', 'lobby', 'out'],
+    ['out', 'lobby', 'c0', 'cR', 'B*', 'cR', 'E*', 'cR', 'c0', 'lobby', 'out'],
+    ['out', 'lobby', 'c0', 'D*', 'c0', 'lobby', 'out'],
+    ['out', 'lobby*', 'out']
+  ][i % 4];
+  return R.map(k => { const loot = k.endsWith('*'), n = N[k.replace('*', '')]; return { x: n.x, z: n.z, pass: !loot, hosp: true }; });
+}
+function hospZombies(H) {
+  const n = Math.round(3 + 2.5 * ZM.diff), rooms = ['A', 'B', 'C', 'D', 'E', 'cL', 'cR'];
+  for (let i = 0; i < n; i++) { const q = H.nodes[rooms[i % rooms.length]]; const z = zSpawn(q.x + rnd(-2, 2), q.z + rnd(-2, 2), Math.random() < .35 ? 'runner' : 'walker'); if (z) z.goal = null; }
+  addFeed(null, null, `🏥 Er zitten zombies in ${H.name}! Het team vecht zich door de kamers naar de medicijnen`);
+}
+function startScavHosp(H, team) {
+  const pad = ISL.pads[3 + (ZM.scavN++ % 3)], L = { x: H.x + rnd(-5, 5), z: H.z + 40 };
+  const h = new Heli(team, new V3(L.x, 0, L.z), []); h.hp = h.maxHp = 800; h.noTarget = false;
+  h.SC = { C: null, H, phase: 'out', men: [], t: 0, pad, loot: { food: 0, med: 0, oil: 0, coal: 0 }, n: 0 };
+  h.pos.set(pad.x, getH(pad.x, pad.z) + 18, pad.z); h.start = new V3(pad.x, 0, pad.z); h.yaw = Math.atan2(L.x - pad.x, L.z - pad.z);
+  addFeed(null, null, `🔍 Bevoorradingsteam vliegt naar ${H.name} om medicijnen te halen`);
+  return h;
+}
+const _placeAtH = placeAt;
+placeAt = function (p) {
+  if (tool && tool.kind === 'scav') {
+    let H = null, bd = 60; for (const o of HOSP) { const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; H = o; } }
+    if (H) { const team = tool.team; if (!pay('scav', team)) return; startScavHosp(H, team); setTool(null); return; }
+  }
+  _placeAtH(p);
+};
+// ---------- flamethrower squad: the special unit against zombies and nests ----------
+ROLES.flame = { rng: 28, chase: 22, dmg: 0, mag: 60, burst: [10, 20], cd: .08, pause: [.3, .6], spr: 1, snd: 'mg' };
+SQUADS.flame = ['flame', 'flame', 'flame', 'flame', 'rifle'];
+UNAME.flame = ['vlammenwerper', 'vlammenwerpers'];
+KINDS.flame = { label: '🔥 Vlammenwerpers', sub: 'tegen zombies en nesten' };
+COST.flame = 340; if (typeof OILC !== 'undefined') OILC.flame = 2;
+const FLG = { tank: new THREE.CylinderGeometry(.12, .12, .55, 8), hose: new THREE.CylinderGeometry(.03, .03, .5, 5), noz: new THREE.CylinderGeometry(.045, .06, .5, 6).rotateX(Math.PI / 2) };
+const BURN = new Set();
+const _sUpdF = Soldier.prototype.update;
+Soldier.prototype.update = function (dt) {
+  if (this.role === 'flame' && !this._fl) {
+    this._fl = true; this.hp = this.maxHp = 170; const g = new THREE.Group(), tm = mat(0x9a3a22);
+    for (const s of [-1, 1]) mesh(FLG.tank, tm, s * .12, 1.27, -.27, g); mesh(FLG.hose, mat(0x222222), .2, 1.1, -.1, g).rotation.z = .7;
+    collapse(g, null, 'flameTanks'); this.body.add(g);
+    if (this.gun) mesh(FLG.noz, mat(0x3a3a3a), 0, -.02, .55, this.gun);
+  }
+  return _sUpdF.call(this, dt);
+};
+// flamethrowers on their way to a nest still burn the zombies that get close
+const _thinkF = Soldier.prototype.think;
+Soldier.prototype.think = function (dt) {
+  if (this.role === 'flame' && this.order && this.order.type === 'attack' && this.order.u.type === 'nest') {
+    let z = null, bd = 15 * 15; for (const q of ZM.list) { if (!q.alive) continue; const d = (q.pos.x - this.pos.x) ** 2 + (q.pos.z - this.pos.z) ** 2; if (d < bd) { bd = d; z = q; } }
+    if (z) { const o = this.order, tt = this.thinkT; this.order = null; this.target = z; this.canSee = true; this.thinkT = 1; _thinkF.call(this, dt); this.order = o; this.thinkT = Math.min(tt, .3); return; }
+  }
+  return _thinkF.call(this, dt);
+};
+const _shootF = Soldier.prototype.shoot;
+Soldier.prototype.shoot = function (dir, spread) {
+  if (this.role !== 'flame') return _shootF.call(this, dir, spread);
+  this.mag--; const from = this.gun ? this.gun.localToWorld(new V3(0, .02, .8)) : this.eye();
+  if (ZM.on && (!this._nz || SIMT - this._nz > 1.5)) { this._nz = SIMT; zNoise(this.pos.x, this.pos.z, 90, 2); }
+  for (let i = 0; i < 2; i++) { const v = dir.clone().multiplyScalar(rnd(20, 28)); v.x += rnd(-1.8, 1.8); v.y += rnd(-.3, 1.4); v.z += rnd(-1.8, 1.8); spawnP(from.clone(), { add: true, color: Math.random() < .5 ? 0xff7a1a : 0xffc640, size: rnd(.7, 1.2), grow: 3.4, life: rnd(.6, .85), op: .9, vel: v, drag: 1.5 }); }
+  if (Math.random() < .25) spawnP(from.clone().addScaledVector(dir, 10), { tex: smokeTex, color: 0x34302c, op: .35, size: 2, grow: 3, life: 1.6, vel: new V3(0, 2.2, 0), drag: 1 });
+  if ((this.mag & 3) === 0) Snd.burst(from, { f: 380, type: 'lowpass', dur: .4, vol: .5, brown: true, rng: 320 });
+  const hx = dir.x, hz = dir.z, hl = Math.hypot(hx, hz) || 1;
+  for (const u of units) {
+    if (!u.alive || u.hidden || u.team === this.team) continue; const t = u.type; if (t !== 'zombie' && t !== 'soldier' && t !== 'nest') continue;
+    const dx = u.pos.x - from.x, dz = u.pos.z - from.z; if (Math.abs(dx) > 34 || Math.abs(dz) > 34) continue;
+    const d = Math.hypot(dx, dz), reach = 26 + (t === 'nest' ? 5 : 0); if (d > reach) continue;
+    if (d > 2.5 && (dx * hx + dz * hz) / (d * hl) < .9) continue;
+    u.damage(t === 'nest' ? 30 : 9, this, 'fire'); if (u.alive && t !== 'nest') { u.burnT = 3.5; u.burnBy = this; BURN.add(u); }
+  }
+};
+function updateBurn(dt) {
+  for (const u of BURN) {
+    if (!u.alive || u.removed || (u.burnT -= dt) <= 0) { BURN.delete(u); continue; }
+    u.damage(24 * dt, u.burnBy, 'fire');
+    if (Math.random() < dt * 7) spawnP(u.pos.clone().add(new V3(rnd(-.3, .3), rnd(.6, 1.6), rnd(-.3, .3))), { add: true, color: Math.random() < .5 ? 0xff7a1a : 0xffb030, size: rnd(.5, .9), grow: 1.6, life: .5, op: .85, vel: new V3(0, 2.5, 0), drag: 1 });
+  }
+}
+// ---------- formations: block (6 per row), line, wedge, column or free ----------
+const FORM = { mode: 'vrij' }; try { FORM.mode = localStorage.getItem('os_form') || 'vrij'; } catch (e) { }
+const FORMS = [['blok', '▦ Blok'], ['linie', '━ Linie'], ['wig', '◣ Wig'], ['kolom', '⋮ Kolom'], ['vrij', '✣ Vrij']];
+function formSlots(n, shape) {
+  const out = [];
+  if (shape === 'wig') { out.push([0, 0]); for (let i = 1; i < n; i++) { const r = Math.ceil(i / 2), s = i % 2 ? -1 : 1; out.push([s * r, r * .9]); } return out; }
+  const cols = shape === 'linie' ? Math.min(n, 24) : shape === 'kolom' ? Math.min(2, n) : Math.min(6, n);
+  for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), inRow = Math.min(cols, n - r * cols); out.push([(i % cols - (inRow - 1) / 2), r]); }
+  return out;
+}
+const formable = u => u && u.alive && !u.hidden && (u.type === 'soldier' || u.type === 'tank' || u.type === 'ship' || u.type === 'jet' || (u.type === 'heli' && u.state === 'in')) && !(typeof isLauncher === 'function' && isLauncher(u) && TRUCKMODE === 'fire');
+function formUp(list, p, run) {
+  const shape = FORM.mode; if (shape === 'vrij') return;
+  const camF = new V3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+  const groups = { tank: [], soldier: [], ship: [], heli: [], jet: [] }; for (const u of list) if (formable(u)) groups[u.type].push(u);
+  const ground = [...groups.tank, ...groups.soldier];
+  const centre = arr => { const c = new V3(); for (const u of arr) c.add(u.pos); return c.multiplyScalar(1 / arr.length); };
+  const facing = (arr, at) => { if (!at) return camF.clone(); const c = centre(arr), f = new V3(at.x - c.x, 0, at.z - c.z); return f.lengthSq() > 64 ? f.normalize() : camF.clone(); };
+  const fill = (arr, at, f, gap, back, set) => {
+    if (!arr.length) return 0; const R = new V3(-f.z, 0, f.x), slots = formSlots(arr.length, shape), free = arr.slice(); let rows = 0;
+    for (const [x, y] of slots) {
+      const q = at.clone().addScaledVector(R, x * gap).addScaledVector(f, -(y * gap + back)); q.y = 0; rows = Math.max(rows, y);
+      let bi = 0, bd = 1e18; for (let i = 0; i < free.length; i++) { const d = (free[i].pos.x - q.x) ** 2 + (free[i].pos.z - q.z) ** 2; if (d < bd) { bd = d; bi = i; } }
+      set(free.splice(bi, 1)[0], q, f);
+    }
+    return (rows + 1) * gap;
+  };
+  const move = (u, q) => { u.order = { type: 'move', p: q, run }; u.target = null; };
+  if (ground.length) {
+    const at = p ? p.clone() : centre(ground), f = facing(ground, p);
+    const back = fill(groups.tank, at, f, 13, 0, move);
+    fill(groups.soldier, at, f, 3.6, groups.tank.length ? back + 4 : 0, move);
+  }
+  if (groups.heli.length > 1) { const at = p ? p.clone() : centre(groups.heli), f = facing(groups.heli, p); fill(groups.heli, at, f, 30, 0, (u, q) => { u.dest = q; }); }
+  if (groups.ship.length > 1) { const at = p ? p.clone() : centre(groups.ship), f = facing(groups.ship, p); fill(groups.ship, at, f, 80, 0, (u, q) => { u.goal = seaSpot(q.x, q.z); u.order = null; }); }
+  if (groups.jet.length > 1) formJets(groups.jet, shape);
+}
+function formJets(jets, shape) {
+  const L = jets.find(j => j.isPlayerUnit()) || jets[0], rest = jets.filter(j => j !== L), slots = formSlots(jets.length, shape === 'blok' ? 'wig' : shape), gap = 48;
+  L.wing = null;
+  rest.forEach((j, i) => { const s = slots[i + 1], s0 = slots[0]; j.wing = { L, ox: (s[0] - s0[0]) * gap, oz: (s[1] - s0[1]) * gap + (shape === 'linie' ? 0 : 0), oy: -(s[1] - s0[1]) * 4 }; j.target = null; });
+}
+const _issueMoveF = issueMove;
+issueMove = function (p, run) {
+  _issueMoveF(p, run);
+  const list = [...sel].filter(u => u.alive);
+  if (FORM.mode === 'vrij') { for (const u of list) if (u.type === 'jet') u.wing = null; return; }
+  formUp(list, p, run);
+};
+// jets hold their slot on the leader until he goes into a fight
+const _jetThinkF = Jet.prototype.think;
+Jet.prototype.think = function (dt) {
+  const W = this.wing;
+  if (W && !this.onGround) {
+    const L = W.L;
+    if (!L.alive || L.removed || L.falling) this.wing = null;
+    else if (L.isPlayerUnit() || !(L.target && L.target.alive)) return jetHold(this, L, dt);
+  }
+  const r = _jetThinkF.call(this, dt);
+  // a leader with wingmen flies a little slower so they can keep up
+  if (this._wingT && SIMT - this._wingT < 1 && !(this.target && this.target.alive)) this.in.thr = Math.min(this.in.thr, .68);
+  return r;
+};
+function jetHold(J, L, dt) {
+  const I = J.in, lf = L.forward(), hf = new V3(lf.x, 0, lf.z); if (hf.lengthSq() < 1e-4) hf.set(0, 0, 1); hf.normalize();
+  const R = new V3(-hf.z, 0, hf.x), W = J.wing, slot = L.pos.clone().addScaledVector(R, W.ox).addScaledVector(hf, -W.oz); slot.y += W.oy;
+  let D = slot.clone().addScaledVector(lf, 170).sub(J.pos).normalize();
+  const along = slot.clone().sub(J.pos).dot(lf);
+  I.thr = clamp((L.in.thr || .85) + along * .008, .3, 1);
+  const f = J.forward(), agl = J.agl(), ahead = J.pos.clone().addScaledVector(f, Math.max(120, J.speed * 3)), clear = Math.min(agl, ahead.y - Math.max(getH(ahead.x, ahead.z), WATER));
+  if (clear < 80) { D = new V3(f.x, 1.2, f.z).normalize(); I.thr = 1; }
+  J.steerTo(D, dt); I.gun = I.msl = I.bomb = false; L._wingT = SIMT;
+  // a gentle pull into the slot keeps the formation tight in the turns
+  const err = J.pos.distanceTo(slot); if (err < 700 && clear >= 80) J.pos.lerp(slot, Math.min(1, dt * (err > 150 ? .25 : .45)));
+}
+// the formation buttons in the selection panel (key G cycles)
+{
+  const st = document.createElement('style');
+  st.textContent = `#formRow{flex-wrap:wrap;margin:5px 0 4px;gap:3px} #formRow .lbl2{flex:1 0 100%;font:600 10px var(--display);letter-spacing:.12em;opacity:.7;text-transform:uppercase}
+#formRow .fm{flex:1 0 17%;padding:5px 1px;font-size:10.5px;letter-spacing:0;min-height:28px;white-space:nowrap;overflow:hidden} #formRow .fm.on{background:rgba(155,224,74,.22);border-color:#9be04a;color:#fff}`;
+  document.head.appendChild(st);
+  const fr = document.createElement('div'); fr.className = 'acts'; fr.id = 'formRow'; fr.hidden = true;
+  fr.innerHTML = '<span class="lbl2">Formatie</span>' + FORMS.map(([k, l]) => `<button class="act fm" data-form="${k}">${l}</button>`).join('');
+  const sl = document.getElementById('selList'); if (sl) sl.insertAdjacentElement('afterend', fr);
+  fr.addEventListener('click', e => { const b = e.target.closest('[data-form]'); if (b) { setForm(b.dataset.form, true); b.blur(); } });
+}
+function paintForm() { document.querySelectorAll('#formRow .fm').forEach(b => b.classList.toggle('on', b.dataset.form === FORM.mode)); }
+function setForm(mode, apply) {
+  FORM.mode = mode; try { localStorage.setItem('os_form', mode); } catch (e) { } paintForm();
+  const list = [...sel].filter(formable), name = FORMS.find(f => f[0] === mode)[1];
+  if (mode === 'vrij') { for (const u of list) if (u.type === 'jet') u.wing = null; flashTip('Formatie uit · eenheden lopen weer vrij'); return; }
+  if (apply && list.length > 1) { formUp(list, null, false); markers.push({ p: list[0].pos.clone(), t: 0, col: '#9cc46b' }); }
+  flashTip(`Formatie: ${name} · tik op de kaart en je eenheden gaan in deze vorm`);
+}
+paintForm();
+const _updSelF = updateSelPanel;
+updateSelPanel = function () { _updSelF(); const fr = document.getElementById('formRow'); if (fr) { let n = 0; for (const u of sel) if (formable(u)) n++; fr.hidden = n < 2; } };
+addEventListener('keydown', e => {
+  if (e.repeat || e.code !== 'KeyG' || state !== 'play' || (typeof CTL !== 'undefined' && CTL.on) || /INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || '')) return;
+  const i = FORMS.findIndex(f => f[0] === FORM.mode); setForm(FORMS[(i + 1) % FORMS.length][0], true);
+});
+// ---------- A-10s come as a flight of three in a V ----------
+const _a10RunF = a10Run;
+a10Run = function (team, p) {
+  _a10RunF(team, p); const L = A10S[A10S.length - 1]; if (!L) return;
+  const hd = new V3(L.dir.x, 0, L.dir.z).normalize(), R = new V3(-hd.z, 0, hd.x);
+  const wing = [-1, 1].map(s => {
+    const ox = s * 46, oz = 42, W = { g: buildA10(team), pos: L.pos.clone().addScaledVector(R, ox).addScaledVector(hd, -oz), c: L.c.clone().addScaledVector(R, s * 24), team, t: 0, st: 'in', ammo: 1150, rkMax: 8, dir: L.dir.clone(), cd: 0, n: 0, rk: 4, owner: flyer(team, 'A-10'), wing: { L, ox, oz, cx: s * 24 }, player: true, lrk: L.rk };
+    W.pos.y += 4; W.g.position.copy(W.pos); return W;
+  });
+  A10S.splice(A10S.length - 1, 0, ...wing);   // the leader stays last, so taking control picks him
+  if (team === CMD.team) addFeed(null, null, '✈ Drie A-10\'s vliegen in V-formatie naar het doel');
+};
+const _ctlCandF = ctlCandidate;
+ctlCandidate = function () { const c = _ctlCandF(); if (c && c.kind === 'a10' && c.obj.wing && A10S.includes(c.obj.wing.L) && !c.obj.wing.L.leaving) c.obj = c.obj.wing.L; return c; };
+const _a10PlayerF = updateA10Player;
+updateA10Player = function (A, dt) {
+  if (A.wing && !(typeof CTL !== 'undefined' && CTL.on && CTL.obj === A)) return a10Wing(A, dt);
+  if (A.wing) A.wing = null;
+  return _a10PlayerF(A, dt);
+};
+function a10Wing(W, dt) {
+  const L = W.wing.L, p = W.pos; W.t += dt; W.owner.pos.copy(p);
+  if (!A10S.includes(L) || L.leaving || (!L.player && L.st === 'out' && L.t > 40)) { W.wing = null; W.player = false; W.st = 'out'; W.c.copy(p); W.t = Math.max(W.t, 45); return false; }
+  const hd = new V3(L.dir.x, 0, L.dir.z); if (hd.lengthSq() < 1e-4) hd.set(0, 0, 1); hd.normalize(); const R = new V3(-hd.z, 0, hd.x);
+  const slot = L.pos.clone().addScaledVector(R, W.wing.ox).addScaledVector(hd, -W.wing.oz); slot.y += 4;
+  W.dir.copy(L.dir); p.addScaledVector(W.dir, 125 * dt); p.lerp(slot, Math.min(1, dt * 2.2));
+  const floor = Math.max(getH(p.x, p.z), WATER) + 30; if (p.y < floor) p.y = floor;
+  W.g.position.copy(p); W.g.rotation.copy(L.g.rotation);
+  W.st = L.st; W.c.copy(L.c).addScaledVector(R, W.wing.cx);
+  const hdC = Math.hypot(W.c.x - p.x, W.c.z - p.z), firing = L.player ? (CTL.fire && L.inRange) : (L.st === 'in' && hdC < 640 && hdC > 170);
+  if (firing && W.ammo > 0) {
+    if (!W.foes || SIMT - W.foesT > 1.5) { W.foesT = SIMT; W.foes = units.filter(u => u.alive && u.team !== W.team && !u.hidden && !isAirT(u) && u.type !== 'drone' && Math.hypot(u.pos.x - W.c.x, u.pos.z - W.c.z) < 60); }
+    W.cd -= dt;
+    while (W.cd <= 0 && W.ammo > 0) {
+      W.cd += .03; W.n++; W.ammo--; const gun = p.clone().addScaledVector(W.dir, 9), f = W.foes.filter(u => u.alive);
+      const aimP = f.length && Math.random() < .65 ? f[(Math.random() * f.length) | 0].center().clone().add(new V3(rnd(-2.5, 2.5), 0, rnd(-2.5, 2.5))) : W.c.clone().add(new V3(rnd(-20, 20), 1, rnd(-20, 20)));
+      const r = fireBullet(W.owner, gun, aimP.sub(gun).normalize(), { dmg: 130, range: 1100, spread: .006, ap: .55, tracer: W.n % 3 === 0, from: gun, tcol: 0xffd27a });
+      if (W.n % 3 === 0 && r.kind !== 'none') { if (W.n % 9 === 0) explosion(r.point.clone(), .55, { r: 2 }); applyBlast(r.point, 6, 85, W.owner); }
+    }
+  } else W.cd = 0;
+  // when the leader fires rockets, so do the wingmen
+  if (L.rk < W.lrk && W.rk > 0) { W.rk--; const pod = p.clone().add(new V3(rnd(-3, 3), -1, 0)); launch('rocket', pod, W.c.clone().add(new V3(rnd(-10, 10), 0, rnd(-10, 10))).sub(pod).normalize().multiplyScalar(190), W.owner); }
+  W.lrk = L.rk;
+  return false;
+}
+// ---------- per frame ----------
+const _updateWavesF = updateWaves;
+updateWaves = function (dt) { _updateWavesF(dt); if (BURN.size) updateBurn(dt); };
 
 </script>
