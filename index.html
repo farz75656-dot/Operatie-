@@ -519,7 +519,7 @@ const HASHP = location.hash.replace('#', '').split('-');
 const MAPKEY = MAPS[HASHP[0]] ? HASHP[0] : 'megastad', MAP = MAPS[MAPKEY];
 const WORLD = MAP.world || 1000, COAST = MAP.coast || 560, WATER = MAP.water, G = 9.81;
 // your headquarters island lies out at sea, east of the map
-const ISLE = { x: WORLD + 720, z: 0, r: 380 }, XMAX = ISLE.x + ISLE.r * 1.2 + 120;
+const ISLE = { x: WORLD + 900, z: 0, r: 560 }, XMAX = ISLE.x + ISLE.r * 1.2 + 120;
 // game settings (also carried through the URL hash when switching maps)
 const SET = { role: 'verdedigen', map: MAPKEY, mode: 'battle', diff: 'normaal', money: 1e14, tickets: 400, tod: 'day', side: 0, gfx: 'auto', weather: 'helder', aiSkill: 1, aiIncome: 1 };
 const SET_OPTS = {
@@ -673,7 +673,7 @@ function isleH0(x, z) {
   const dx = x - ISLE.x, dz = z - ISLE.z, d = Math.hypot(dx, dz), floor = WATER - 48;
   if (d > ISLE.r * 1.65) return floor;
   const a = Math.atan2(dz, dx), rr = ISLE.r * (.86 + .28 * fbm(Math.cos(a) * 1.6 + 11, Math.sin(a) * 1.6 + 4, 3)), e = d - rr;
-  const top = WATER + 7 + 18 * fbm(x / 110 + 3, z / 110 + 9, 3) * smooth(232, 290, d) * smooth(rr - 30, rr - 90, d);
+  const top = WATER + 7 + 18 * fbm(x / 110 + 3, z / 110 + 9, 3) * smooth(ISLE.r * .61, ISLE.r * .76, d) * smooth(rr - 30, rr - 90, d);
   return e < -60 ? top : e < 0 ? lerp(top, WATER - .6, (e + 60) / 60) : lerp(WATER - .6, floor, smooth(0, 110, e));
 }
 function groundNormal(x, z) { const e = 2; return new V3(getH(x - e, z) - getH(x + e, z), 2 * e, getH(x, z - e) - getH(x, z + e)).normalize(); }
@@ -8099,7 +8099,7 @@ const ISL = { built: false, pads: [], team: 0, tur: [], pumps: [], hqP: { x: ISL
   lab: { x: ISLE.x - 50, z: ISLE.z - 44, hp: 3000, max: 3000 }, depot: { x: ISLE.x - 50, z: ISLE.z + 44 }, gate: { x: ISLE.x - 95, z: ISLE.z },
   fort: { x0: ISLE.x - 95, x1: ISLE.x + 70, z0: ISLE.z - 75, z1: ISLE.z + 75 } };
 (function buildIsland() {
-  const S = ISLE.r * 3.6, n = 128, geo = new THREE.PlaneGeometry(S, S, n, n); geo.rotateX(-Math.PI / 2);
+  const S = ISLE.r * 3.6, n = 184, geo = new THREE.PlaneGeometry(S, S, n, n); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) pos.setY(i, isleH(ISLE.x + pos.getX(i), ISLE.z + pos.getZ(i)));
   geo.computeVertexNormals();
   const P = MAP.pal, grass = new THREE.Color(P.grass), dry = new THREE.Color(P.dry), rock = new THREE.Color(P.rock), sand = new THREE.Color(P.sand), gravel = new THREE.Color(0x8a8578), c = new THREE.Color(), nor = geo.attributes.normal, cols = new Float32Array(pos.count * 3);
@@ -8208,7 +8208,7 @@ const ISL = { built: false, pads: [], team: 0, tur: [], pumps: [], hqP: { x: ISL
   STATIC.children.slice(s0).forEach(c => g.add(c)); // houses built after the map's scenery was merged
   collapse(g, null, 'isleFort');
   // ---- trees on the outer ring ----
-  const pts = []; for (let i = 0; i < 1400 && pts.length < 130; i++) { const a = rnd(0, TAU), r = rnd(235, ISLE.r * 1.1), x = X + Math.cos(a) * r, z = Z + Math.sin(a) * r, h = isleH(x, z); if (h < WATER + 3.5) continue; pts.push([x, h, z]); }
+  const pts = []; for (let i = 0; i < 3000 && pts.length < 300; i++) { const a = rnd(0, TAU), r = rnd(ISLE.r * .62, ISLE.r * 1.1), x = X + Math.cos(a) * r, z = Z + Math.sin(a) * r, h = isleH(x, z); if (h < WATER + 3.5) continue; pts.push([x, h, z]); }
   const tg = new THREE.ConeGeometry(2.6, 7, 6).translate(0, 4.5, 0), ti = new THREE.InstancedMesh(tg, new THREE.MeshLambertMaterial({ color: MAP.tree ? MAP.tree[0] : 0x3c5a2a }), pts.length), m4 = new THREE.Matrix4();
   pts.forEach((p, i) => { const s = rnd(.8, 1.4); m4.makeScale(s, s, s).setPosition(p[0], p[1], p[2]); ti.setMatrixAt(i, m4); }); scene.add(ti);
   ISL.built = true;
@@ -8768,7 +8768,7 @@ function zmEconomySecond() {
   ZM.need = (sold * .2 + civ * .08);
   if (ZM.cured) return;
   const L = ISL.lab; ZM.stat = L.hp <= 0 ? 'labo vernietigd' : R.med <= 0 ? 'geen medische voorraad · stuur een 🔍 bevoorradingsteam' : R.coal <= 0 ? 'geen kolen voor de stroom' : R.food <= 0 ? 'geen eten · de onderzoekers kunnen niet werken' : ZM.list.some(z => z.alive && z.isle) ? 'zombies op het eiland · onderzoek ligt stil' : '';
-  if (!ZM.stat) { ZM.cure = Math.min(100, ZM.cure + 100 / 420); R.med = Math.max(0, R.med - 60 / 420); R.coal = Math.max(0, R.coal - 3 / 60); }
+  if (!ZM.stat) { ZM.cure = Math.min(100, ZM.cure + 100 / 2400); R.med = Math.max(0, R.med - 60 / 2400); R.coal = Math.max(0, R.coal - 3 / 60); }
   if (R.food <= 0 && noteOnce('food', 60)) addFeed(null, null, '🍞 Het eten is op! Je inkomen halveert en het onderzoek ligt stil · stuur een 🔍 bevoorradingsteam');
   if (ZM.cure >= 100) {
     ZM.cured = SIMT; addFeed(null, null, '🧪 HET GENEESMIDDEL IS KLAAR! Vliegtuigen sproeien het over het hele land'); siren();
@@ -8836,7 +8836,7 @@ startEvac = function (C, how, to, team, list) {
 };
 // ---------- turning zombie mode on ----------
 function zmSetup() {
-  ZM.on = true; ZM.team = SET.side; ZM.zt = 1 - SET.side; ZM.cap = QUALITY.low ? 190 : 330; ZM.diff = { makkelijk: 1.1, normaal: 1.75, moeilijk: 2.3, brutaal: 3 }[SET.diff] || 1.75; ZM.hpMul = { makkelijk: 1.2, normaal: 1.8, moeilijk: 2.2, brutaal: 2.7 }[SET.diff] || 1.8; ZM.spMul = { makkelijk: 1.05, normaal: 1.18, moeilijk: 1.24, brutaal: 1.32 }[SET.diff] || 1.18; ZM.isleT = 150;
+  ZM.on = true; ZM.team = SET.side; ZM.zt = 1 - SET.side; ZM.cap = QUALITY.low ? 340 : 620; ZM.diff = { makkelijk: 1.1, normaal: 1.75, moeilijk: 2.3, brutaal: 3 }[SET.diff] || 1.75; ZM.hpMul = { makkelijk: 1.2, normaal: 1.8, moeilijk: 2.2, brutaal: 2.7 }[SET.diff] || 1.8; ZM.spMul = { makkelijk: 1.05, normaal: 1.18, moeilijk: 1.24, brutaal: 1.32 }[SET.diff] || 1.18; ZM.isleT = 150;
   for (const u of units.slice()) if (u.team === ZM.zt) u.remove();
   POINTS.forEach(p => { p.owner = ZM.team; p.prog = ZM.team ? 1 : -1; p.lastOwner = p.owner; paintPoint(p); });
   ECO.money[ZM.zt] = 0; if (typeof HSTG !== 'undefined') HSTG.nextT = 1e12;
@@ -8874,7 +8874,7 @@ function zmUpdate(dt) {
   if (ZM.outT > 0) { ZM.outT -= dt; if (ZM.outT <= 0) zOutbreak(); return; }
   ZM.sT -= dt; if (ZM.sT <= 0) { ZM.sT = 1; zmSecond(); }
   ZM.waveT -= dt; if (ZM.waveT <= 0) { ZM.waveT = Math.max(10, 30 - ZM.t / 40) / Math.sqrt(ZM.diff); zHorde(); }
-  ZM.isleT -= dt; if (ZM.isleT <= 0) { ZM.isleT = Math.max(75, 160 - ZM.t / 10) / Math.sqrt(ZM.diff); zIsleAssault(); }
+  ZM.isleT -= dt; if (ZM.isleT <= 0) { ZM.isleT = Math.max(55, 140 - ZM.t / 14) / Math.sqrt(ZM.diff); zIsleAssault(); }
 }
 // ---------- the island's guns ----------
 ISL.gun = { team: 0, type: 'struct', alive: true, hidden: false, removed: false, pos: new V3(ISLE.x, 0, ISLE.z), label: () => 'Eilandverdediging', kind: () => 'tower' };
@@ -9822,10 +9822,10 @@ function zSwimTarget(z0) {
 }
 zIsleAssault = function () {
   // wait while a big group is still on its way over
-  let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 30) { ZM.isleT = Math.min(ZM.isleT, 30); return; }
-  const n = Math.min(36, Math.round((8 + ZM.t / 45) * ZM.diff));
+  let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 90) { ZM.isleT = Math.min(ZM.isleT, 30); return; }
+  const n = Math.min(120, Math.round((16 + ZM.t / 22) * ZM.diff));
   // the zombies closest to the east coast go first
-  const cand = ZM.list.filter(z => z.alive && !z.isleRun && !z.D.boss && z.pos.x < WORLD - 5 && z.pos.x > COAST - 480 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
+  const cand = ZM.list.filter(z => z.alive && !z.isleRun && !z.D.boss && z.pos.x < WORLD - 5 && z.pos.x > COAST - 240 && !z.prey && !z.civ).sort((a, b) => b.pos.x - a.pos.x).slice(0, n);
   if (cand.length < n) {
     // the rest comes out of the nest nearest to the sea
     const live = NEST.list.filter(N => N.alive).sort((a, b) => b.pos.x - a.pos.x);
@@ -9860,7 +9860,7 @@ Zombie.prototype.update = function (dt) {
       this.swim = h < WATER - .3 || getH(p.x + dx / d * 2.5, p.z + dz / d * 2.5) < WATER - .3;
       if (h < WATER + .4) {
         // swimming (and wading through the shallows): faster than walking so they make it over, but slow enough to be caught
-        const sp = (h < WATER - .7 ? 5.6 + this.D.sp * .5 : 1.5 + this.D.sp) * ZM.spMul;
+        const sp = (h < WATER - .7 ? 9 + this.D.sp * .5 : 2.5 + this.D.sp) * ZM.spMul;
         p.x += dx / d * sp * dt; p.z += dz / d * sp * dt; this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 4); this.ph += dt * 5;
         p.y = Math.max(h, WATER - (this.D.boss ? this.D.sc * .9 : 1.25) + Math.sin(this.ph) * .08);
         if (Math.random() < dt * .25) spawnP(new V3(p.x, WATER + .1, p.z), { color: 0xeaf4f6, op: .5, size: 1.1, grow: 2, life: .8, vel: new V3(0, .6, 0), drag: 1 });
@@ -9878,7 +9878,7 @@ zmSecond = function () {
   let alive = 0, swim = 0; for (const N of NEST.list) if (N.alive) alive++; for (const z of ZM.list) if (z.alive && z.isleRun) swim++;
   NEST.alive = alive; NEST.swim = swim;
   if (swim && noteOnce('swim', 40)) { const lead = ZM.list.filter(z => z.alive && z.isleRun).sort((a, b) => b.pos.x - a.pos.x)[0]; if (lead && lead.pos.x > COAST + 50) addFeed(null, null, `🌊 ${swim} zombies zwemmen naar je eiland · de voorste is nog ${Math.max(0, Math.round(ISLE.x - ISLE.r * .86 - lead.pos.x))} m van de kust`); }
-  for (const N of NEST.list) { if (!N.alive) continue; N.trT -= 1; if (N.trT <= 0) { N.trT = rnd(10, 16) / ZM.diff; if (zAlive() < ZM.cap) N.queue += 1; } }
+  for (const N of NEST.list) { if (!N.alive) continue; N.trT -= 1; if (N.trT <= 0) { N.trT = rnd(6, 10) / ZM.diff; if (zAlive() < ZM.cap) N.queue += 1; } }
   NEST.growT -= 1; if (NEST.growT <= 0) { NEST.growT = rnd(130, 180) / Math.sqrt(ZM.diff); nestGrow(); }
   for (const p of POINTS) {
     if (!p.zom) { p.nested = false; continue; }
@@ -10488,7 +10488,7 @@ function misSucceed(M) {
   const T = M.team, R = []; let money = 2500;
   if (ZM.on) {
     const res = ZM.res;
-    if (M.type === 'sample') { ZM.cure = Math.min(99, ZM.cure + 12); res.med += 25; R.push('+12% geneesmiddel', '+25 💊'); }
+    if (M.type === 'sample') { ZM.cure = Math.min(99, ZM.cure + 5); res.med += 25; R.push('+5% geneesmiddel', '+25 💊'); }
     else if (M.type === 'rescue') { res.food += 10; const st = EVM.st['isle' + T]; if (st) st.saved = (st.saved || 0) + saved; R.push(`${saved} ${saved === 1 ? 'overlevende' : 'overlevenden'} naar het eiland`); money += saved * 400; }
     else if (M.type === 'radio') { ZM.isleT += 150; R.push('de volgende eilandaanval komt later'); }
     else if (M.type === 'boss') { for (const k in res) res[k] += 20; money = 5000; R.push('+20 van alle voorraden'); }
@@ -12217,5 +12217,370 @@ Drone.prototype.update = function (dt) {
   }
   return _droneUpdM.call(this, dt);
 };
+
+// ================= THE ISLAND FORTRESS: ring wall, gun towers, searchlights, patrols, hospital, screening, MG posts, city fences =================
+// ---------- shared helpers ----------
+function catGeo(list) {
+  let n = 0; for (const g of list) n += g.attributes.position.count;
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), C = new Float32Array(n * 3); let o = 0;
+  for (const g of list) { P.set(g.attributes.position.array, o); N.set(g.attributes.normal.array, o); C.set(g.attributes.color.array, o); o += g.attributes.position.count * 3; }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(P, 3)); out.setAttribute('normal', new THREE.BufferAttribute(N, 3)); out.setAttribute('color', new THREE.BufferAttribute(C, 3)); out.computeBoundingSphere(); return out;
+}
+// build parts in world space and bake them into one geometry
+function worldGeo(build) { const root = new THREE.Group(); scene.add(root); build(mdlKit(root), root); const ms = []; root.traverse(o => { if (o.isMesh) ms.push(o); }); const geo = mergeRel(root, ms); scene.remove(root); ms.forEach(m => m.geometry.dispose()); return geo; }
+const nightAmt = () => SET.tod === 'dusk' ? .65 : SET.tod === 'night' ? 1 : 0;
+// ---------- the ring wall ----------
+const FORT = { N: 104, segs: [], towers: [], built: false, tab: new Float32Array(720), mesh: null, rubble: [], dmgT: 0 };
+const rrAt = a => ISLE.r * (.86 + .28 * fbm(Math.cos(a) * 1.6 + 11, Math.sin(a) * 1.6 + 4, 3));
+for (let i = 0; i < 720; i++) FORT.tab[i] = rrAt(i / 720 * TAU) - 80;
+function fortR(a) { const t = (((a % TAU) + TAU) % TAU) / TAU * 720, i = Math.floor(t), f = t - i; return FORT.tab[i % 720] * (1 - f) + FORT.tab[(i + 1) % 720] * f; }
+function fortSeg(a) { return FORT.segs[Math.floor((((a % TAU) + TAU) % TAU) / TAU * FORT.N) % FORT.N]; }
+const fortPt = a => { const r = fortR(a); return { x: ISLE.x + Math.cos(a) * r, z: ISLE.z + Math.sin(a) * r }; };
+const isleGH = (x, z) => isleH(x, z);
+function insideFort(x, z) { const dx = x - ISLE.x, dz = z - ISLE.z; return Math.hypot(dx, dz) < fortR(Math.atan2(dz, dx)) - 1; }
+(function buildFort() {
+  const CON = 0x8f8b80, CON2 = 0x7a766c, CON3 = 0x9d998e, DK = 0x2c2d2b, STEEL = 0x43484d, HAZ = 0xd8b23a;
+  for (let i = 0; i < FORT.N; i++) {
+    const a0 = i / FORT.N * TAU, a1 = (i + 1) / FORT.N * TAU, am = (a0 + a1) / 2, p0 = fortPt(a0), p1 = fortPt(a1), pm = fortPt(am);
+    const h0 = isleGH(p0.x, p0.z), h1 = isleGH(p1.x, p1.z), hm = isleGH(pm.x, pm.z), water = Math.min(h0, h1, hm) < WATER + .8;
+    const base = water ? WATER - 4 : Math.min(h0, h1, hm) - 2.5, top = water ? WATER + 3.2 : Math.max(h0, h1, hm) + 8;
+    const L = Math.hypot(p1.x - p0.x, p1.z - p0.z) + .7, yaw = Math.atan2(p1.x - p0.x, p1.z - p0.z), out = Math.sign(Math.cos(yaw) * Math.cos(am) - Math.sin(yaw) * Math.sin(am)) || 1;
+    const S = { i, a0, a1, am, p0, p1, pm, water, base, top, yaw, out, L, hp: water ? 12000 : 9000, max: water ? 12000 : 9000, dmg: 0, broken: false, calm: 0 };
+    S.geo = worldGeo((K, root) => {
+      const g = new THREE.Group(); g.position.set(pm.x, 0, pm.z); g.rotation.y = yaw; root.add(g); const k = mdlKit(g);
+      if (water) {
+        // harbour boom: steel floats with a net, ships can pass
+        k.box(1.6, 3.4, L, STEEL, 0, WATER + .2, 0); k.box(1.8, .3, L, HAZ, 0, WATER + 1.95, 0);
+        for (let t = -L / 2 + 1.5; t < L / 2; t += 3) k.box(.15, 2.4, .15, DK, 0, WATER + 3.2, t);
+        return;
+      }
+      const H = top - base;
+      k.box(4.4, 2.6, L, CON2, 0, base + 1.3, 0); k.box(2.9, H, L, CON, 0, base + H / 2, 0);
+      k.box(2.95, .28, L, CON2, 0, base + H * .38, 0); k.box(2.95, .28, L, CON2, 0, base + H * .72, 0);
+      k.box(3.8, .45, L, CON3, 0, top + .22, 0);
+      for (let t = -L / 2 + 1.1; t < L / 2 - .5; t += 2.5) k.box(.75, 1.7, 1.25, CON3, out * 1.55, top + 1.1, t);
+      k.box(.6, .9, L, CON, out * 1.55, top + .7, 0); k.box(.12, 1.0, L, DK, -out * 1.75, top + .95, 0);
+      for (let t = -L / 2 + 4; t < L / 2 - 2; t += 8) k.box(.12, .7, .8, DK, out * 1.47, base + H * .55, t);
+      for (let t = -L / 2 + 2; t < L / 2; t += 3) k.box(.1, 1.2, .1, 0x6b6e70, out * 1.95, top + 2.4, t);
+      k.box(.05, .05, L, 0x6b6e70, out * 1.95, top + 3.0, 0);
+    });
+    FORT.segs.push(S);
+  }
+  // towers on every fourth joint and at both ends of the harbour boom
+  const tw = new Set(); FORT.segs.forEach((S, i) => { const prev = FORT.segs[(i + FORT.N - 1) % FORT.N]; if (i % 4 === 0 || S.water !== prev.water) tw.add(i); });
+  const TG = [];
+  for (const i of tw) {
+    const S = FORT.segs[i], prev = FORT.segs[(i + FORT.N - 1) % FORT.N], p = S.p0, top = Math.max(S.water ? WATER + 8 : S.top, prev.water ? WATER + 8 : prev.top), base = Math.min(S.base, prev.base) - .5;
+    TG.push(worldGeo(K => {
+      const H = top + 4 - base;
+      K.cyl(4.4, 5.0, H, 0x8a8679, p.x, base + H / 2, p.z, 0, 0, 0, 16); K.cyl(5.2, 5.2, 1.0, 0x9d998e, p.x, top + 4.5, p.z, 0, 0, 0, 16);
+      for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; K.box(1.3, 1.5, .8, 0x9d998e, p.x + Math.cos(a) * 4.8, top + 5.7, p.z + Math.sin(a) * 4.8, 0, -a, 0); }
+      K.box(9.6, .3, 9.6, 0x6e6a62, p.x, top + 5.05, p.z); for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + .4; K.box(.2, 1.2, 1.4, 0x22303a, p.x + Math.cos(a) * 4.96, top + 1.5, p.z + Math.sin(a) * 4.96, 0, -a, 0); }
+      K.cyl(.12, .12, 6, 0x6b6e70, p.x - 3, top + 8, p.z - 3, 0, 0, 0, 5); K.box(.05, 1.2, 1.8, SET.side ? 0xb3301f : 0x2c5d8f, p.x - 3, top + 10.2, p.z - 2.1);
+    }));
+    const out = Math.atan2(Math.sin(S.a0), Math.cos(S.a0));
+    FORT.towers.push({ x: p.x, y: top + 5.4, z: p.z, out, yaw: Math.atan2(Math.cos(out), Math.sin(out)), cd: rnd(0, 1), burst: 0, tgt: null, thinkT: rnd(0, .4), ph: rnd(0, 6), sweep: 0 });
+  }
+  scene.add(new THREE.Mesh(catGeo(TG), VCMAT)); TG.forEach(g => g.dispose());
+  // gun heads and searchlight beams are instanced: one draw call each
+  const headGeo = bakeGeo(K => {
+    K.cyl(1.1, 1.3, .6, 0x3b3f36, 0, .3, 0, 0, 0, 0, 12); K.box(1.9, 1.1, 1.8, 0x4a4f44, 0, 1.15, -.1); K.box(2.2, .14, 2.0, 0x3b3f36, 0, 1.75, -.1);
+    for (const s of [-1, 1]) { K.tube(.07, .07, 2.4, 0x1c1d1b, s * .45, 1.15, 1.9, 8); K.tube(.11, .11, .3, 0x1c1d1b, s * .45, 1.15, 3.05, 8); K.box(.32, .4, .6, 0x2a2c28, s * .45, 1.15, .9); }
+    K.box(.9, .5, .7, 0x2e3032, -1.35, 1.55, -.5); K.cyl(.34, .34, .3, 0xfff2c8, -1.35, 1.55, -.12, Math.PI / 2, 0, 0, 12);
+  });
+  FORT.heads = new THREE.InstancedMesh(headGeo, VCMAT, FORT.towers.length); FORT.heads.castShadow = false; scene.add(FORT.heads);
+  const beam = new THREE.ConeGeometry(16, 150, 18, 1, true).translate(0, -75, 0).rotateX(-Math.PI / 2);
+  FORT.beamMat = new THREE.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: .05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  FORT.beams = new THREE.InstancedMesh(beam, FORT.beamMat, FORT.towers.length); FORT.beams.frustumCulled = false; scene.add(FORT.beams);
+  rebuildWall(); FORT.built = true;
+})();
+function rebuildWall() {
+  if (FORT.mesh) { scene.remove(FORT.mesh); FORT.mesh.geometry.dispose(); }
+  FORT.mesh = new THREE.Mesh(catGeo(FORT.segs.filter(S => !S.broken).map(S => S.geo)), VCMAT); FORT.mesh.receiveShadow = true; scene.add(FORT.mesh);
+}
+function breachWall(S) {
+  S.broken = true; S.hp = 0; rebuildWall();
+  const geo = worldGeo(K => { for (let k = 0; k < 14; k++) { const t = rnd(-.5, .5), x = S.p0.x + (S.p1.x - S.p0.x) * (t + .5), z = S.p0.z + (S.p1.z - S.p0.z) * (t + .5); K.box(rnd(1.5, 3.5), rnd(1, 2.4), rnd(1.5, 3.5), k % 3 ? 0x8f8b80 : 0x6e6a62, x + rnd(-2, 2), isleGH(x, z) + .6, z + rnd(-2, 2), rnd(-.5, .5), rnd(0, 3), rnd(-.5, .5)); } });
+  S.rub = new THREE.Mesh(geo, VCMAT); scene.add(S.rub);
+  for (let k = 0; k < 18; k++) spawnP(new V3(S.pm.x + rnd(-6, 6), isleGH(S.pm.x, S.pm.z) + rnd(1, 7), S.pm.z + rnd(-6, 6)), { tex: smokeTex, color: 0x9a948a, op: .7, size: rnd(4, 7), grow: 2, life: 4, vel: new V3(rnd(-2, 2), rnd(1, 4), rnd(-2, 2)), drag: 1 });
+  addShake(new V3(S.pm.x, 0, S.pm.z), .6);
+  const side = S.am > -Math.PI * .75 && S.am < -Math.PI * .25 ? 'zuid' : S.am > Math.PI * .25 && S.am < Math.PI * .75 ? 'noord' : Math.cos(S.am) < 0 ? 'west' : 'oost';
+  if (ISL.team === CMD.team) { addFeed(null, null, `🧱 DE FORTMUUR IS DOORBROKEN aan de ${side}kant! Zombies stromen het fort binnen · stuur soldaten naar het gat`); siren(); markers.push({ p: new V3(S.pm.x, WATER, S.pm.z), t: 0, col: '#ff6a50' }); }
+}
+function repairWall(S) {
+  S.broken = false; S.hp = S.max; S.calm = 0; if (S.rub) { scene.remove(S.rub); S.rub.geometry.dispose(); S.rub = null; } rebuildWall();
+  if (ISL.team === CMD.team) addFeed(null, null, '🧱 Ingenieurs hebben het gat in de fortmuur gedicht');
+}
+// zombies coming from outside stop at the wall and claw at it; through a breach they walk straight in
+const _zUpdF = Zombie.prototype.update;
+Zombie.prototype.update = function (dt) {
+  if (!FORT.built || this.pos.x < WORLD + 150 || !this.alive) return _zUpdF.call(this, dt);
+  const d0 = Math.hypot(this.pos.x - ISLE.x, this.pos.z - ISLE.z), a0 = Math.atan2(this.pos.z - ISLE.z, this.pos.x - ISLE.x), outside = d0 >= fortR(a0) - .4;
+  _zUpdF.call(this, dt);
+  if (!outside || !this.alive || this.removed) return;
+  const dx = this.pos.x - ISLE.x, dz = this.pos.z - ISLE.z, d1 = Math.hypot(dx, dz), a = Math.atan2(dz, dx), R = fortR(a), pad = Math.min(14, .6 * (this.D.sc || 1)) + 1.6;
+  if (d1 < R + pad) {
+    const S = fortSeg(a); if (S.broken) return;
+    const k = (R + pad) / Math.max(1, d1); this.pos.x = ISLE.x + dx * k; this.pos.z = ISLE.z + dz * k;
+    S.dmg += this.D.dps * dt * (this.D.mega ? 40 : this.D.boss ? 2.5 : this.variant === 'brute' ? .4 : .1); this.atWall = SIMT;
+  }
+};
+// ---------- gun towers and searchlights ----------
+const _m4F = new THREE.Matrix4(), _qF = new THREE.Quaternion(), _eF = new THREE.Euler(), _vF = new V3(), _sF = new V3(1, 1, 1);
+function updateFort(dt) {
+  if (!FORT.built) return;
+  const F = ISL.foes || [], night = nightAmt();
+  FORT.beamMat.opacity = .035 + night * .17;
+  for (let i = 0; i < FORT.towers.length; i++) {
+    const T = FORT.towers[i];
+    T.thinkT -= dt; if (T.thinkT <= 0) { T.thinkT = .3; let b = null, bd = 240 * 240; for (const u of F) { if (!u.alive) continue; const d = (u.pos.x - T.x) ** 2 + (u.pos.z - T.z) ** 2 * 1; if (d < bd) { bd = d; b = u; } } T.tgt = b; }
+    const t = T.tgt && T.tgt.alive ? T.tgt : null;
+    if (t) {
+      const c = t.center(), want = Math.atan2(c.x - T.x, c.z - T.z); T.yaw += clamp(angDiff(T.yaw, want), -3 * dt, 3 * dt);
+      T.cd -= dt;
+      if (T.cd <= 0 && Math.abs(angDiff(T.yaw, want)) < .12) {
+        T.burst++; T.cd = T.burst % 12 === 0 ? 1.7 : .1;
+        const from = new V3(T.x + Math.sin(T.yaw) * 3, T.y + 1.15, T.z + Math.cos(T.yaw) * 3), dir = c.clone().add(new V3(0, .4, 0)).sub(from).normalize();
+        fireBullet(ISL.gun, from, dir, { dmg: 19, range: 280, spread: .018, ap: .12, tracer: T.burst % 3 === 0, from, tcol: 0xffd27a }); if (T.burst % 4 === 0) { muzzle(from, .8); Snd.shot(from, 'mg'); }
+      }
+      T.sweep = lerp(T.sweep, Math.atan2(c.x - T.x, c.z - T.z), Math.min(1, dt * 4)); T.sp = lerp(T.sp ?? -.25, Math.atan2(c.y - T.y - 4, Math.hypot(c.x - T.x, c.z - T.z)), Math.min(1, dt * 4));
+    } else {
+      // turn back to face outwards; the light sweeps slowly over the beach
+      const o = Math.atan2(Math.cos(T.out), Math.sin(T.out)); T.yaw += clamp(angDiff(T.yaw, o), -dt, dt);
+      T.sweep = o + Math.sin(SIMT * .35 + T.ph) * 1.0; T.sp = lerp(T.sp ?? -.25, -.22 + Math.sin(SIMT * .21 + T.ph) * .06, Math.min(1, dt * 2));
+    }
+    _eF.set(0, T.yaw, 0, 'YXZ'); _m4F.compose(_vF.set(T.x, T.y, T.z), _qF.setFromEuler(_eF), _sF.set(1, 1, 1)); FORT.heads.setMatrixAt(i, _m4F);
+    _eF.set(-T.sp, T.sweep, 0, 'YXZ'); _m4F.compose(_vF.set(T.x + Math.sin(T.sweep) * 1.4, T.y + 1.6, T.z + Math.cos(T.sweep) * 1.4), _qF.setFromEuler(_eF), _sF.set(1, 1, 1)); FORT.beams.setMatrixAt(i, _m4F);
+  }
+  FORT.heads.instanceMatrix.needsUpdate = true; FORT.beams.instanceMatrix.needsUpdate = true;
+  // wall damage and repairs, once a second
+  FORT.dmgT -= dt; if (FORT.dmgT > 0) return; FORT.dmgT = 1;
+  const nearZ = S => { for (const z of ZM.list) if (z.alive && (z.pos.x - S.pm.x) ** 2 + (z.pos.z - S.pm.z) ** 2 < 3600) return true; return false; };
+  for (const S of FORT.segs) {
+    if (S.broken) { if (!nearZ(S)) { S.calm += 1; if (S.calm > 45) repairWall(S); } else S.calm = 0; continue; }
+    if (S.dmg > 0) { S.hp -= S.dmg; S.dmg = 0; S.calm = 0; if (S.hp <= 0) { breachWall(S); continue; } if (S.hp < S.max * .5 && ISL.team === CMD.team && noteOnce('wall' + S.i, 40)) addFeed(null, null, `🧱 Zombies beuken op de fortmuur · nog ${Math.round(S.hp / S.max * 100)}%`); }
+    else if (S.hp < S.max) { S.calm += 1; if (S.calm > 10) S.hp = Math.min(S.max, S.hp + 40); }
+  }
+}
+// ---------- patrols: three squads walk the inside of the wall ----------
+const PATROL = { groups: [], t: 0 };
+function makePatrol(k) {
+  const team = ISL.team, a = k / 3 * TAU + .4, r = fortR(a) - 34, x = ISLE.x + Math.cos(a) * r, z = ISLE.z + Math.sin(a) * r;
+  const men = ['rifle', 'rifle', 'mg', 'rifle'].map((role, i) => { const s = new Soldier(team, x + (i % 2) * 2, z + (i >> 1) * 2, role); s.patrol = true; return s; });
+  return { k, men, a, dir: k % 2 ? 1 : -1, wait: 0, deadT: 0 };
+}
+function updatePatrols(dt) {
+  PATROL.t -= dt; if (PATROL.t > 0) return; PATROL.t = 1;
+  for (let i = 0; i < PATROL.groups.length; i++) {
+    const G = PATROL.groups[i], alive = G.men.filter(s => s.alive && !s.removed);
+    if (!alive.length) { G.deadT += 1; if (G.deadT > 90) { PATROL.groups[i] = makePatrol(G.k); if (ISL.team === CMD.team) addFeed(null, null, '🪖 Een nieuwe patrouille vertrekt vanuit de kazerne van het fort'); } continue; }
+    if (alive.some(s => s.target && s.target.alive)) continue;   // fighting: they hold
+    const L = alive[0], wp = { x: ISLE.x + Math.cos(G.a) * (fortR(G.a) - 34), z: ISLE.z + Math.sin(G.a) * (fortR(G.a) - 34) };
+    if (Math.hypot(L.pos.x - wp.x, L.pos.z - wp.z) < 14 || !L.order) {
+      G.a += G.dir * .32; const n = { x: ISLE.x + Math.cos(G.a) * (fortR(G.a) - 34), z: ISLE.z + Math.sin(G.a) * (fortR(G.a) - 34) };
+      alive.forEach((s, j) => { s.order = { type: 'move', p: new V3(n.x + (j % 2) * 2.4 - 1.2, 0, n.z + (j >> 1) * 2.4 - 1.2) }; });
+    }
+  }
+}
+// ---------- hospital, quarantine and the screening checkpoint ----------
+const IHOSP = { x: ISLE.x + 34, z: ISLE.z + 214, quar: [], healT: 0, treated: 0, lost: 0 };
+const SCR = { x: ISLE.x - 78, z: ISLE.z - 98, queue: 0, tested: 0, found: 0, missed: 0, hidden: [], batch: { n: 0, k: 0 }, sayT: 0 };
+(function buildHospital() {
+  const H = IHOSP, y = isleGH(H.x, H.z) - .2, WH = 0xeeeeea, RED = 0xc62828, GLS = 0x3a5a78, DK = 0x2c2d2b;
+  const geo = worldGeo(K => {
+    K.box(40, 13, 22, WH, H.x, y + 6.5, H.z); K.box(40.4, .6, 22.4, 0xb9bcbf, H.x, y + 13.2, H.z);
+    for (let f = 0; f < 3; f++) { K.box(40.1, 1.3, .1, GLS, H.x, y + 2.6 + f * 4, H.z - 11.05); K.box(40.1, 1.3, .1, GLS, H.x, y + 2.6 + f * 4, H.z + 11.05); K.box(.1, 1.3, 22.1, GLS, H.x - 20.05, y + 2.6 + f * 4, H.z); K.box(.1, 1.3, 22.1, GLS, H.x + 20.05, y + 2.6 + f * 4, H.z); }
+    K.box(14, 9, 14, WH, H.x - 13, y + 17.5, H.z); for (const [dx, dz] of [[0, -11.3], [-20.3, 0]]) { K.box(dx ? .2 : 6, dx ? 6 : 1.6, dx ? 1.6 : .2, RED, H.x + dx, y + 9.5, H.z + dz); K.box(dx ? .2 : 1.6, dx ? 1.6 : 6, dx ? 6 : .2, RED, H.x + dx, y + 9.5, H.z + dz); }
+    K.box(12, .2, 12, 0x3a3d40, H.x + 10, y + 13.6, H.z); K.cyl(4.6, 4.6, .05, 0xffffff, H.x + 10, y + 13.72, H.z, 0, 0, 0, 24); K.cyl(4.2, 4.2, .06, 0x3a3d40, H.x + 10, y + 13.74, H.z, 0, 0, 0, 24);
+    K.box(.6, .07, 4.4, 0xffffff, H.x + 8.6, y + 13.8, H.z); K.box(.6, .07, 4.4, 0xffffff, H.x + 11.4, y + 13.8, H.z); K.box(2.8, .07, .6, 0xffffff, H.x + 10, y + 13.8, H.z);
+    K.box(10, .4, 6, 0xb9bcbf, H.x, y + 4.2, H.z - 14); for (const s of [-1, 1]) K.box(.3, 4, .3, DK, H.x + s * 4.6, y + 2, H.z - 16.6); K.box(6, 3.4, .2, 0x7fa9c4, H.x, y + 1.7, H.z - 11.2);
+    // ambulances
+    for (const [ax, az] of [[-6, -20], [7, -21]]) { K.box(2.4, 2.6, 5.6, WH, H.x + ax, y + 1.6, H.z + az); K.box(2.42, .4, 5.62, RED, H.x + ax, y + 1.4, H.z + az); K.box(2.3, 1.2, 1.6, 0x3a5a78, H.x + ax, y + 2.2, H.z + az - 2.3); K.box(.8, .25, .3, 0x2f6fd8, H.x + ax, y + 3.0, H.z + az - 1.8); for (const s of [-1, 1]) for (const zz of [-1.8, 1.8]) K.cyl(.45, .45, .3, DK, H.x + ax + s * 1.15, y + .45, H.z + az + zz, 0, 0, Math.PI / 2, 10); }
+    // quarantine: fenced tents with hazard tape
+    const qx = H.x + 46, qz = H.z;
+    for (let k = 0; k < 4; k++) { const tx = qx - 9 + (k % 2) * 18, tz = qz - 7 + (k >> 1) * 14; K.put(new THREE.CylinderGeometry(4, 4, 10, 3).rotateX(-Math.PI / 2), 0xe8e6dc, tx, y + 1.9, tz); K.box(.1, 2, 1.4, 0xd8b23a, tx, y + 1, tz - 5.05); }
+    for (let k = 0; k <= 12; k++) { const t = k / 12; for (const [x0, z0, x1, z1] of [[qx - 18, qz - 15, qx + 18, qz - 15], [qx - 18, qz + 15, qx + 18, qz + 15], [qx - 18, qz - 15, qx - 18, qz + 15], [qx + 18, qz - 15, qx + 18, qz + 15]]) K.box(.15, 2.2, .15, DK, x0 + (x1 - x0) * t, y + 1.1, z0 + (z1 - z0) * t); }
+    for (const [x, z, w, d] of [[qx, qz - 15, 36, .06], [qx, qz + 15, 36, .06], [qx - 18, qz, .06, 30], [qx + 18, qz, .06, 30]]) { K.box(w, .18, d, 0xf2c230, x, y + 1.9, z); K.box(w, .18, d, 0x1c1c1c, x, y + 1.5, z); }
+    K.box(3.2, 2, .12, 0xf2c230, qx, y + 3.4, qz - 15.2); K.box(3.2, .5, .13, 0x1c1c1c, qx, y + 3.4, qz - 15.2);
+    // screening checkpoint at the camp: tent, barriers, a container lab and a table with a scanner
+    const s = SCR, sy = isleGH(s.x, s.z) - .1;
+    K.put(new THREE.CylinderGeometry(4.2, 4.2, 12, 3).rotateX(-Math.PI / 2), 0xdedbd0, s.x, sy + 2, s.z); K.box(.1, 1.6, 2.6, RED, s.x + 6.1, sy + 2.6, s.z);
+    K.box(6, 2.6, 2.4, 0x2f6f8f, s.x - 1, sy + 1.3, s.z + 9); K.box(6.05, .3, 2.45, 0xffffff, s.x - 1, sy + 2.2, s.z + 9);
+    for (const k of [-1, 1]) { K.box(.3, 1.1, 5, 0xc62828, s.x + 9, sy + .55, s.z + k * 4.5); K.box(.32, .2, 5, 0xffffff, s.x + 9, sy + 1.0, s.z + k * 4.5); }
+    K.box(1.8, .9, .8, 0x55524c, s.x + 5, sy + .45, s.z - 1.5); K.box(1.0, 1.9, .6, 0x9aa0a4, s.x + 6.2, sy + .95, s.z + 1.6); K.box(.8, .05, .5, 0x4caf50, s.x + 6.2, sy + 1.92, s.z + 1.6);
+  });
+  scene.add(new THREE.Mesh(geo, VCMAT));
+  BOXES.push({ minX: IHOSP.x - 20, maxX: IHOSP.x + 20, minZ: IHOSP.z - 11, maxZ: IHOSP.z + 11, minY: y - 2, top: y + 13 });
+})();
+// arrivals on the island go through screening first
+const _deliverOneS = deliverOne;
+deliverOne = function (M, S, p) { if (S && S.isle && ZM.on) SCR.queue++; return _deliverOneS(M, S, p); };
+function updateScreening(dt) {
+  SCR.t = (SCR.t || 0) - dt; if (SCR.t > 0) return; SCR.t = 1;
+  let k = Math.min(4, SCR.queue);
+  for (; k > 0; k--) {
+    SCR.queue--; SCR.tested++; SCR.batch.n++;
+    if (Math.random() < .07 + Math.min(.08, ZM.t / 8000)) { if (Math.random() < .86) { SCR.found++; SCR.batch.k++; IHOSP.quar.push({ t: rnd(70, 110) }); } else { SCR.missed++; SCR.hidden.push({ t: rnd(50, 140) }); } }
+  }
+  if (!SCR.queue && SCR.batch.n) { if (ISL.team === CMD.team) addFeed(null, null, `🩺 Screening: ${SCR.batch.n} burgers getest${SCR.batch.k ? ` · ${SCR.batch.k} besmet → quarantaine bij het ziekenhuis` : ' · niemand besmet'}`); SCR.batch.n = SCR.batch.k = 0; }
+  for (let i = SCR.hidden.length - 1; i >= 0; i--) {
+    const h = SCR.hidden[i]; h.t -= 1; if (h.t > 0) continue; SCR.hidden.splice(i, 1);
+    const z = zSpawn(ISL.campP.x + rnd(-25, 25), ISL.campP.z + rnd(-12, 12), Math.random() < .3 ? 'runner' : 'walker'); if (z) { z.isle = true; z.goal = { x: ISL.campP.x, z: ISL.campP.z }; }
+    if (ISL.team === CMD.team) { addFeed(null, null, '☣ Een besmette burger die door de screening glipte is BINNEN het fort veranderd! Bewakers naar het kamp'); markers.push({ p: new V3(ISL.campP.x, WATER, ISL.campP.z), t: 0, col: '#9be04a' }); }
+  }
+  for (let i = IHOSP.quar.length - 1; i >= 0; i--) {
+    const q = IHOSP.quar[i]; q.t -= 1; if (q.t > 0) continue; IHOSP.quar.splice(i, 1);
+    if (Math.random() < .72) { IHOSP.treated++; ZM.res.med = Math.max(0, ZM.res.med - 1.5); if (ISL.team === CMD.team && noteOnce('quarOk', 30)) addFeed(null, null, '🏥 Een besmette burger is in quarantaine behandeld en mag naar het kamp'); }
+    else { IHOSP.lost++; if (ISL.team === CMD.team && noteOnce('quarLost', 30)) addFeed(null, null, '🏥 In de quarantaine is iemand veranderd · de bewakers hielden het binnen het hek'); }
+  }
+  // the hospital patches up your soldiers
+  for (const u of units) { if (!u.alive || u.team !== ISL.team || u.type !== 'soldier' || u.hp >= u.maxHp) continue; if ((u.pos.x - IHOSP.x) ** 2 + (u.pos.z - IHOSP.z) ** 2 < 90 * 90) u.hp = Math.min(u.maxHp, u.hp + 8); }
+}
+// labels for the new places
+const _drawOverlayF = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayF(dt);
+  if (state !== 'play' || (typeof BCW !== 'undefined' && BCW.unit)) return;
+  const cp = camera.position, lab = (x, y, z, s, col, maxD) => { const P = new V3(x, y, z); if (P.distanceTo(cp) > maxD) return; const q = project(P); if (!q) return; oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(s, q[0], q[1]); oc.fillStyle = col; oc.fillText(s, q[0], q[1]); };
+  lab(IHOSP.x, isleGH(IHOSP.x, IHOSP.z) + 24, IHOSP.z, `🏥 ZIEKENHUIS${ZM.on ? ` · quarantaine ${IHOSP.quar.length}` : ''}`, '#ffd0d0', 1600);
+  if (ZM.on) lab(SCR.x, isleGH(SCR.x, SCR.z) + 10, SCR.z, `🩺 SCREENING · ${SCR.tested} getest · ${SCR.found} besmet${SCR.queue ? ` · ${SCR.queue} wachten` : ''}`, '#d0f0ff', 1200);
+  for (const S of FORT.segs) if (S.broken || (S.hp < S.max * .6)) lab(S.pm.x, Math.max(S.top, WATER + 4) + 6, S.pm.z, S.broken ? `🧱 GAT IN DE MUUR · herstel ${Math.min(100, Math.round(S.calm / 45 * 100))}%` : `🧱 muur ${Math.round(S.hp / S.max * 100)}%`, S.broken ? '#ff8a70' : '#ffd27a', 2600);
+  for (const F of CFENCE) lab(F.cx, F.y + 18, F.cz, `🚧 ${F.name} · omheind${F.segs.some(s => s.broken) ? ' · GAT!' : ''}`, F.segs.some(s => s.broken) ? '#ff8a70' : '#c8e6a0', 1500);
+};
+// ---------- machine-gun post: a ring of sandbags with a manned MG ----------
+SDEF.mgnest = { hp: 1600, w: 6.4, d: 6.4, h: .9, box: 'all', label: 'Mitrailleurpost', sub: 'zandzakken · MG' };
+COST.mgnest = 140; KINDS.mgnest = { label: '🪖 Mitrailleurpost', sub: 'zandzakken · MG' }; UNAME.mgnest = ['mitrailleurpost', 'mitrailleurposten']; if (typeof OILC !== 'undefined') OILC.mgnest = 0;
+const _buildModelF = buildModel;
+buildModel = function (kind, team, g) {
+  if (kind !== 'mgnest') return _buildModelF(kind, team, g);
+  const s1 = mat(0x9c8c68), s2 = mat(0x8a7b5a), s3 = mat(0xa8996f);
+  // horseshoe of sandbags, open at the back
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 13; i++) {
+    const a = -Math.PI * .85 + i / 12 * Math.PI * 1.7 + (r % 2) * .07, R = 2.7 - r * .05; const b = mesh(new THREE.BoxGeometry(1.05, .34, .6), (i + r) % 3 ? s1 : (i + r) % 3 === 1 ? s2 : s3, Math.sin(a) * R, .17 + r * .33, Math.cos(a) * R, g); b.rotation.y = a + Math.PI / 2;
+  }
+  mesh(new THREE.BoxGeometry(5.2, .06, 5.2), mat(0x6f6450), 0, .03, 0, g);
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(.5, .32, .32), mat(0x4b5232), -1.6 + i * .55, .16, -1.6, g);
+};
+const _buildStructF = buildStruct;
+buildStruct = function (kind, team, p, yaw) {
+  const s = _buildStructF(kind, team, p, yaw); if (kind !== 'mgnest') return s;
+  const gun = new THREE.Group(); gun.position.set(0, 1.45, .2); s.group.add(gun); s.gun = gun; s.thinkT = 0; s.gunCd = 0; s.burst = 0;
+  const dk = mat(0x1d1e1c), ol = mat(team ? 0x8a7d5a : 0x55603f), sk = mat(0xc9a27e);
+  mesh(new THREE.CylinderGeometry(.04, .04, 1.4, 6), dk, 0, -.7, 0, gun); mesh(new THREE.BoxGeometry(.24, .26, .9), dk, 0, .05, .1, gun); mesh(new THREE.CylinderGeometry(.045, .045, 1.1, 8).rotateX(Math.PI / 2), dk, 0, .08, 1.05, gun);
+  mesh(new THREE.BoxGeometry(.9, .7, .06), mat(0x4a4f44), 0, .25, .45, gun); mesh(new THREE.BoxGeometry(.3, .22, .26), mat(0x4b5232), -.26, -.05, .05, gun);
+  // the gunner behind it
+  mesh(new THREE.BoxGeometry(.5, .62, .32), ol, 0, -.05, -.65, gun); mesh(new THREE.SphereGeometry(.15, 10, 8), sk, 0, .42, -.6, gun); mesh(new THREE.SphereGeometry(.19, 10, 8, 0, TAU, 0, Math.PI / 2), ol, 0, .47, -.6, gun);
+  for (const k of [-1, 1]) { const a = mesh(new THREE.BoxGeometry(.12, .12, .55), ol, k * .2, .05, -.3, gun); a.rotation.x = .2; }
+  collapse(gun, null, 'mgGun' + team, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  return s;
+};
+const _structUpdF = Struct.prototype.update;
+Struct.prototype.update = function (dt) { _structUpdF.call(this, dt); if (this.variant === 'mgnest' && this.alive && this.buildT >= 1 && this.gun) this.updateBunker(dt); };
+// ---------- city fences: wall off a city you hold; zombies have to break through ----------
+const CFENCE = [];
+KINDS.cityfence = { label: '🚧 Stad omheinen', sub: 'tik op je eigen stad' }; COST.cityfence = 700; if (typeof OILC !== 'undefined') OILC.cityfence = 3; UNAME.cityfence = ['stadsomheining', 'stadsomheiningen'];
+function cityPointOwned(C, team) { const cx = (C.x0 + C.x1) / 2, cz = (C.z0 + C.z1) / 2; const p = POINTS.slice().sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz))[0]; return !p || Math.hypot(p.x - cx, p.z - cz) > 400 || p.owner === team; }
+function buildCityFence(C, team) {
+  const m = 22, x0 = C.x0 - m, x1 = C.x1 + m, z0 = C.z0 - m, z1 = C.z1 + m, segs = [], seg = 12, gates = [];
+  const sides = [[x0, z0, x1, z0], [x1, z0, x1, z1], [x1, z1, x0, z1], [x0, z1, x0, z0]];
+  sides.forEach(([ax, az, bx, bz], si) => {
+    const L = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(L / seg)), gate = Math.floor(n / 2);
+    for (let k = 0; k < n; k++) {
+      const t0 = k / n, t1 = (k + 1) / n, sx0 = ax + (bx - ax) * t0, sz0 = az + (bz - az) * t0, sx1 = ax + (bx - ax) * t1, sz1 = az + (bz - az) * t1, mx = (sx0 + sx1) / 2, mz = (sz0 + sz1) / 2;
+      if (getH(mx, mz) < WATER + .5) continue;
+      if ((si === 0 || si === 2) && k === gate) { gates.push({ x: mx, z: mz, out: si === 0 ? -1 : 1 }); continue; }
+      const horiz = Math.abs(bz - az) < 1, y = getH(mx, mz);
+      const S = { mx, mz, y, horiz, x0: Math.min(sx0, sx1) - (horiz ? 0 : .9), x1: Math.max(sx0, sx1) + (horiz ? 0 : .9), z0: Math.min(sz0, sz1) - (horiz ? .9 : 0), z1: Math.max(sz0, sz1) + (horiz ? .9 : 0), hp: 2600, max: 2600, broken: false, calm: 0 };
+      S.geo = worldGeo(K => { const len = horiz ? S.x1 - S.x0 : S.z1 - S.z0, nb = Math.max(2, Math.round(len / 1.5)); for (let b = 0; b < nb; b++) { const t = (b + .5) / nb, bx2 = horiz ? S.x0 + len * t : mx, bz2 = horiz ? mz : S.z0 + len * t, gy = getH(bx2, bz2); K.box(1.45, 2.2, 1.45, b % 2 ? 0xa3936c : 0x9a8a62, bx2, gy + 1.0, bz2); K.box(1.5, .06, 1.5, 0x6c6a62, bx2, gy + 2.13, bz2); for (const s of [-.72, .72]) K.box(horiz ? .05 : 1.5, 2.2, horiz ? 1.5 : .05, 0x7c7a72, bx2 + (horiz ? s : 0), gy + 1.0, bz2 + (horiz ? 0 : s)); } });
+      S.box = { minX: S.x0, maxX: S.x1, minZ: S.z0, maxZ: S.z1, minY: y - 3, top: y + 2.3 }; BOXES.push(S.box); segs.push(S);
+    }
+  });
+  const F = { C, team, segs, b: { x0, x1, z0, z1 }, name: cityName(C), cx: (C.x0 + C.x1) / 2, cz: (C.z0 + C.z1) / 2, y: getH((C.x0 + C.x1) / 2, (C.z0 + C.z1) / 2), mesh: null, t: 0 };
+  F.rebuild = () => { if (F.mesh) { scene.remove(F.mesh); F.mesh.geometry.dispose(); } const l = F.segs.filter(s => !s.broken).map(s => s.geo); F.mesh = l.length ? new THREE.Mesh(catGeo(l), VCMAT) : null; if (F.mesh) scene.add(F.mesh); };
+  F.rebuild(); CFENCE.push(F);
+  for (const g of gates) { const pz = g.z + g.out * 6; for (const s of [-1, 1]) buildStruct('mgnest', team, new V3(g.x + s * 9, 0, pz), g.out < 0 ? Math.PI : 0); }
+  addFeed(null, null, `🚧 ${F.name} wordt omheind · twee poorten met mitrailleurposten · zombies moeten er nu doorheen breken`);
+  return F;
+}
+function updateCityFences(dt) {
+  for (const F of CFENCE) {
+    F.t -= dt; if (F.t > 0) continue; F.t = 1;
+    if (!F.segs.length) continue; const B = F.b, near = ZM.list.filter(z => z.alive && z.pos.x > B.x0 - 8 && z.pos.x < B.x1 + 8 && z.pos.z > B.z0 - 8 && z.pos.z < B.z1 + 8);
+    let changed = false;
+    for (const S of F.segs) {
+      let n = 0, dps = 0; for (const z of near) { if (z.pos.x > S.x0 - 2.2 && z.pos.x < S.x1 + 2.2 && z.pos.z > S.z0 - 2.2 && z.pos.z < S.z1 + 2.2) { n++; dps += z.D.dps * (z.D.boss ? 3 : z.variant === 'brute' ? .6 : .2); } }
+      if (S.broken) { if (!n) { S.calm++; if (S.calm > 40) { S.broken = false; S.hp = S.max; S.box = { minX: S.x0, maxX: S.x1, minZ: S.z0, maxZ: S.z1, minY: S.y - 3, top: S.y + 2.3 }; BOXES.push(S.box); changed = true; } } else S.calm = 0; continue; }
+      if (n) { S.hp -= dps; S.calm = 0; if (S.hp <= 0) { S.broken = true; const i = BOXES.indexOf(S.box); if (i >= 0) BOXES.splice(i, 1); changed = true; if (F.team === CMD.team && noteOnce('fence' + F.name, 30)) addFeed(null, null, `🚧 Zombies breken door de omheining van ${F.name}!`); } }
+      else if (S.hp < S.max) S.hp = Math.min(S.max, S.hp + 20);
+    }
+    if (changed) F.rebuild();
+  }
+}
+{
+  const ref = document.querySelector('[data-tool="bunker"]');
+  for (const kind of ['cityfence', 'mgnest']) { if (!ref) break; const b = document.createElement('button'); b.className = 'tb b5'; b.dataset.tool = kind; b.innerHTML = `${KINDS[kind].label}<small>${KINDS[kind].sub}</small>`; ref.after(b); b.onclick = () => { setTool(tool && tool.kind === kind ? null : { kind, team: spawnSide }); b.blur(); if (tool) toggleTools(false); }; }
+}
+const _placeAtF = placeAt;
+placeAt = function (p) {
+  if (!tool || tool.kind !== 'cityfence') return _placeAtF(p);
+  const C = cityOf(p, 30), team = tool.team;
+  if (!C) { flashTip('Tik op een stad om ze te omheinen'); return; }
+  if (CFENCE.some(F => F.C === C)) { flashTip('Die stad is al omheind'); return; }
+  if (!cityPointOwned(C, team)) { flashTip('Verover de stad eerst terug, dan kan je ze omheinen'); return; }
+  if (ZM.on && ZM.list.filter(z => z.alive && z.pos.x > C.x0 && z.pos.x < C.x1 && z.pos.z > C.z0 && z.pos.z < C.z1).length > 15) { flashTip('Er lopen nog te veel zombies in de stad · maak ze eerst schoon'); return; }
+  if (!pay('cityfence', team)) return;
+  buildCityFence(C, team); if (!(keys.ShiftLeft || keys.ShiftRight)) setTool(null);
+};
+// ---------- start of a game: patrols out; tick everything ----------
+const _setupBattleF = setupBattle;
+setupBattle = function (battle) {
+  _setupBattleF(battle);
+  for (const G of PATROL.groups) G.men.forEach(s => s.alive && s.remove()); PATROL.groups = [0, 1, 2].map(makePatrol);
+  for (const S of FORT.segs) { S.hp = S.max; S.dmg = 0; if (S.broken) repairWall(S); }
+  SCR.queue = SCR.tested = SCR.found = SCR.missed = 0; SCR.hidden = []; IHOSP.quar = [];
+};
+const _updateWavesFort = updateWaves;
+updateWaves = function (dt) { _updateWavesFort(dt); updateFort(dt); updatePatrols(dt); if (ZM.on) { updateScreening(dt); updateCityFences(dt); } };
+// more zombies on screen: a bigger instance buffer
+{
+  const cap = 900; ZR.cap = cap;
+  for (const k of ['body', 'head']) { const old = ZR[k]; scene.remove(old); const m = new THREE.InstancedMesh(old.geometry, old.material, cap); if (k === 'body') for (let i = 0; i < cap; i++) m.setColorAt(i, ZR.col.setRGB(1, 1, 1)); m.count = 0; m.frustumCulled = false; m.castShadow = false; scene.add(m); ZR[k] = m; }
+}
+// the intro explains the fortress
+const _zmIntroF = zmIntro;
+zmIntro = function () {
+  _zmIntroF();
+  const ul = document.querySelector('#zmIntro ul'); if (!ul) return;
+  const li = document.createElement('li'); li.innerHTML = '<b>🏰 Je eiland is een fort:</b> een muur rondom met geschuttorens en zoeklichten, en patrouilles binnen. Zombies moeten de muur kapot beuken (reuzen gaan er zo door). Ingenieurs dichten gaten als het rustig is.';
+  const li2 = document.createElement('li'); li2.innerHTML = '<b>🩺 Screening:</b> nieuwe burgers worden getest. Wie besmet is gaat in quarantaine bij het ziekenhuis, maar soms glipt er iemand door…';
+  const li3 = document.createElement('li'); li3.innerHTML = '<b>Het geneesmiddel duurt lang</b> (±40 minuten als alles loopt). Bouw 🪖 mitrailleurposten en 🚧 omhein steden die je terugwint.';
+  ul.insertBefore(li3, ul.lastElementChild); ul.insertBefore(li2, li3); ul.insertBefore(li, li2);
+};
+// ---------- assault waves: the swimmers gather out at sea, beyond the guns, and then storm the coast together ----------
+const WAVES = [];
+const _zIsleAssaultF = zIsleAssault;
+zIsleAssault = function () {
+  const before = new Set(ZM.list.filter(z => z.isleRun));
+  _zIsleAssaultF();
+  const grp = ZM.list.filter(z => z.alive && z.isleRun && !before.has(z)); if (grp.length < 3) return;
+  let gx = 0, gz = 0; for (const z of grp) { gx += z.isleRun.gx; gz += z.isleRun.gz; } gx /= grp.length; gz /= grp.length;
+  const stage = { x: gx - 330, z: gz };
+  for (const z of grp) { z.isleRun.rgx = z.isleRun.gx; z.isleRun.rgz = z.isleRun.gz + rnd(-70, 70); z.isleRun.gx = stage.x + rnd(-25, 25); z.isleRun.gz = stage.z + rnd(-45, 45); }
+  WAVES.push({ grp, stage, t: 0, storm: false });
+};
+function updateWaves2(dt) {
+  for (let i = WAVES.length - 1; i >= 0; i--) {
+    const W = WAVES[i]; W.t += dt; const alive = W.grp.filter(z => z.alive && z.isleRun);
+    if (!alive.length) { WAVES.splice(i, 1); continue; }
+    if (W.storm) continue;
+    const there = alive.filter(z => Math.hypot(z.pos.x - W.stage.x, z.pos.z - W.stage.z) < 70).length;
+    if (there >= alive.length * .7 || W.t > 70) {
+      W.storm = true; for (const z of alive) { z.isleRun.gx = z.isleRun.rgx; z.isleRun.gz = z.isleRun.rgz; }
+      if (ISL.team === CMD.team) { addFeed(null, null, `🌊 ${alive.length} zombies verzameld op zee… ZE BESTORMEN NU DE KUST VAN JE EILAND!`); siren(); markers.push({ p: new V3(W.stage.x + 330, WATER, W.stage.z), t: 0, col: '#9be04a' }); }
+    }
+  }
+}
+const _updateWavesW = updateWaves;
+updateWaves = function (dt) { _updateWavesW(dt); if (ZM.on && WAVES.length) updateWaves2(dt); };
 
 </script>
