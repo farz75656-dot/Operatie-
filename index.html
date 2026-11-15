@@ -11525,7 +11525,7 @@ function shipCmd(c) {
     CTL.torpCd = s.variant === 'sub' ? 5 : 9; launchTorpedo(s, CTL.aim.clone()); addFeed(null, null, '🎯 Torpedo los! Hij zoekt zelf het dichtstbijzijnde schip bij je richtpunt');
   } else if (c === 'sonar') {
     CTL.sonarT = 12; if (Snd.ctx) { Snd.burst(CTL.obj.pos, { f: 1150, q: 30, dur: 1.4, vol: .5, rng: 9000 }); }
-    const n = units.filter(u => u.alive && u.team !== s.team && u.type === 'ship' && u.pos.distanceTo(s.pos) < 3200).length;
+    const n = units.filter(u => u.alive && u.team !== s.team && u.type === 'ship' && u.pos.distanceTo(s.pos) < 6000).length;
     addFeed(null, null, `📡 Sonar-ping · ${n ? n + ' vijandelijke schepen gevonden' : 'geen vijandelijke schepen in de buurt'}`);
   }
 }
@@ -11575,10 +11575,24 @@ CTL.ext.ship.hud = function (dt, pr, W, H) {
     const seen = [], lab = [];
     for (const u of units) {
       if (u.type !== 'ship' || !u.alive || u === s || (u.variant === 'sub' && u.submerged && u.team !== s.team)) continue;
-      const d = u.pos.distanceTo(s.pos); if (d > 4500) continue; const q = pr(u.pos.clone().add(new V3(0, 4, 0))); if (!q || Math.hypot(q[0] - cx, q[1] - cy) > R * .95) continue;
+      const d = u.pos.distanceTo(s.pos); if (d > 9000) continue; const q = pr(u.pos.clone().add(new V3(0, 4, 0))); if (!q || Math.hypot(q[0] - cx, q[1] - cy) > R * .95) continue;
       seen.push([d, u, q]);
     }
     seen.sort((a, b) => a[0] - b[0]);
+    // compass tape along the top of the view
+    {
+      const ty = cy - R * .86, span = 40, pxd = R * 1.1 / span; oc.save(); oc.beginPath(); oc.rect(cx - R * .55, ty - 18, R * 1.1, 30); oc.clip();
+      oc.strokeStyle = s.variant === 'sub' ? 'rgba(207,232,200,.8)' : 'rgba(255,215,120,.8)'; oc.fillStyle = oc.strokeStyle; oc.lineWidth = 1.2; oc.font = '600 10px IBM Plex Mono, monospace'; oc.textAlign = 'center';
+      for (let b = Math.floor(brg - span / 2); b <= brg + span / 2; b++) { if (b % 5) continue; const x = cx + (b - brg) * pxd; oc.beginPath(); oc.moveTo(x, ty); oc.lineTo(x, ty - (b % 10 ? 4 : 8)); oc.stroke(); if (!(b % 10)) oc.fillText(String(((b % 360) + 360) % 360).padStart(3, '0'), x, ty + 10); }
+      oc.restore(); oc.fillStyle = '#ff6a50'; oc.beginPath(); oc.moveTo(cx, ty + 2); oc.lineTo(cx - 5, ty + 9); oc.lineTo(cx + 5, ty + 9); oc.fill();
+    }
+    // the ship closest to the crosshair: course, speed and how long a torpedo needs
+    let tq = null, tb = R * .35; for (const it of seen) { const dd = Math.hypot(it[2][0] - cx, it[2][1] - cy); if (dd < tb) { tb = dd; tq = it; } }
+    if (tq) {
+      const [d, u] = tq, f = u.forward(), crs = ((Math.atan2(f.x, f.z) * 180 / Math.PI) % 360 + 360) % 360, kn = Math.round(Math.abs(u.speed || 0) * 1.94), foe = u.team !== s.team;
+      const L = [`${foe ? 'VIJAND' : 'EIGEN'} · ${shipName(u).toUpperCase()}`, `${d > 999 ? (d / 1000).toFixed(2) + ' km' : Math.round(d) + ' m'} · koers ${String(Math.round(crs)).padStart(3, '0')}° · ${kn} kn`, foe && (s.variant === 'sub' || s.variant === 'destroyer') ? `torpedo ±${Math.round(d / 34)} s · ${Math.round(u.hp)} HP` : `${Math.round(u.hp)} HP`];
+      const bx = cx + R * .32, by = cy + R * .3; oc.fillStyle = 'rgba(0,0,0,.55)'; oc.fillRect(bx - 6, by - 14, 210, 50); oc.font = '700 11px IBM Plex Mono, monospace'; oc.textAlign = 'left'; oc.fillStyle = foe ? '#ff9a80' : '#9fd4f5'; L.forEach((t, i) => oc.fillText(t, bx, by + i * 15));
+    }
     for (const [d, u, q] of seen) {
       const foe = u.team !== s.team; oc.strokeStyle = foe ? '#ff6a50' : '#7cc4f0'; oc.lineWidth = 2; const b = clamp(1400 / d * 55 / CTL.fov, 8, 30);
       oc.beginPath(); oc.moveTo(q[0] - b, q[1] - b + 6); oc.lineTo(q[0] - b, q[1] - b); oc.lineTo(q[0] - b + 6, q[1] - b); oc.moveTo(q[0] + b - 6, q[1] - b); oc.lineTo(q[0] + b, q[1] - b); oc.lineTo(q[0] + b, q[1] - b + 6); oc.moveTo(q[0] - b, q[1] + b - 6); oc.lineTo(q[0] - b, q[1] + b); oc.lineTo(q[0] - b + 6, q[1] + b); oc.moveTo(q[0] + b - 6, q[1] + b); oc.lineTo(q[0] + b, q[1] + b); oc.lineTo(q[0] + b, q[1] + b - 6); oc.stroke();
@@ -11598,10 +11612,10 @@ CTL.ext.ship.hud = function (dt, pr, W, H) {
     oc.strokeStyle = 'rgba(125,255,160,.35)'; oc.beginPath(); oc.arc(cx, cy, R * .5, 0, TAU); oc.moveTo(cx - R, cy); oc.lineTo(cx + R, cy); oc.moveTo(cx, cy - R); oc.lineTo(cx, cy + R); oc.stroke();
     const sw = SIMT * 2.4; oc.strokeStyle = 'rgba(125,255,160,.7)'; oc.beginPath(); oc.moveTo(cx, cy); oc.lineTo(cx + Math.cos(sw) * R, cy + Math.sin(sw) * R); oc.stroke();
     for (const u of units) {
-      if (!u.alive || u === s || (u.type !== 'ship' && !(u.type === 'heli' && u.pos.y < WATER + 30))) continue; const dx = u.pos.x - s.pos.x, dz = u.pos.z - s.pos.z, d = Math.hypot(dx, dz); if (d > 3200) continue;
-      const a = Math.atan2(dx, dz) - hd, r = d / 3200 * R; oc.fillStyle = u.team === s.team ? '#7cc4f0' : '#ff6a50'; oc.beginPath(); oc.arc(cx - Math.sin(a) * r, cy - Math.cos(a) * r, u.variant === 'carrier' ? 5 : 3.5, 0, TAU); oc.fill();
+      if (!u.alive || u === s || (u.type !== 'ship' && !(u.type === 'heli' && u.pos.y < WATER + 30))) continue; const dx = u.pos.x - s.pos.x, dz = u.pos.z - s.pos.z, d = Math.hypot(dx, dz); if (d > 6000) continue;
+      const a = Math.atan2(dx, dz) - hd, r = d / 6000 * R; oc.fillStyle = u.team === s.team ? '#7cc4f0' : '#ff6a50'; oc.beginPath(); oc.arc(cx - Math.sin(a) * r, cy - Math.cos(a) * r, u.variant === 'carrier' ? 5 : 3.5, 0, TAU); oc.fill();
     }
-    oc.font = '700 10px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillStyle = '#7dffa0'; oc.fillText(`SONAR ${Math.ceil(CTL.sonarT)} s · 3,2 km`, cx, cy + R + 13);
+    oc.font = '700 10px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillStyle = '#7dffa0'; oc.fillText(`SONAR ${Math.ceil(CTL.sonarT)} s · 6 km`, cx, cy + R + 13);
   }
 };
 const _ctlExitP = ctlExit;
@@ -11727,8 +11741,6 @@ SCP.cv.id = 'scopeC'; document.getElementById('ov').after(SCP.cv); SCP.ctx = SCP
   st.textContent = `#scopeC{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;display:none}
 body.scopeOn #scopeC{display:block}
 body.scopeOn #pzCross,body.scopeOn #bcFrame,body.possess.pzS #pzScope{display:none!important}
-body.possess.pzS #pzName,body.possess.pzS #pzInfo .bar{display:none}
-body.possess.pzS #pzInfo{width:auto;min-width:0;background:rgba(8,10,7,.38);border-color:transparent;padding:5px 10px}
 #infBlood{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(120,0,0,0) 46%,rgba(130,0,0,.5) 76%,rgba(70,0,0,.93) 100%)}
 #pzZoom{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));top:22%;display:none;appearance:none;font:700 12px var(--display,system-ui);color:#e8f0d8;background:rgba(14,17,11,.66);border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:10px 12px;touch-action:none;z-index:9}
 body.possess.pzS.scopeOn.sniperS #pzZoom{display:block}`;
@@ -11832,20 +11844,378 @@ updatePossess = dt => {
     SCP.rayT -= dt; if (SCP.rayT <= 0) { SCP.rayT = .1; SCP.ray = raycast(eye, L, 2600, u); }
     drawScope(S, u, clamp((VMX.adsT - .86) / .14, 0, 1));
   } else SCP.fov = 60;
-  // no health bar: the edges of the screen go red when you are hurt, and you heal after a few seconds out of fire
+  // the edges of the screen go red when you are badly hurt (the health bar is in the panel too)
   if (PZ.hpWas != null && u.hp < PZ.hpWas - .01) PZ.calmT = 0; PZ.calmT = (PZ.calmT || 0) + dt; PZ.hpWas = u.hp;
-  if (PZ.calmT > 4.5 && u.hp < u.maxHp) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * .14 * dt); PZ.hpWas = u.hp; }
-  const f = 1 - u.hp / u.maxHp, low = f > .65;
-  if (blood) blood.style.opacity = f < .25 ? 0 : clamp((f - .25) / .6, 0, .95) * (low ? .82 + .18 * Math.sin(SIMT * 7.5) : 1);
+  const f = 1 - u.hp / u.maxHp, low = f > .7;
+  if (blood) blood.style.opacity = f < .45 ? 0 : clamp((f - .45) / .5, 0, .85) * (low ? .82 + .18 * Math.sin(SIMT * 7.5) : 1);
   if (low && Snd.ctx && (PZ.beatT = (PZ.beatT || 0) - dt) <= 0) { PZ.beatT = .85; Snd.burst(u.pos, { f: 70, type: 'lowpass', dur: .12, vol: .35, rng: 30 }); }
   // weapon name instead of the soldier panel, no HP number on the bodycam
   const ex = pzEl('pzExtra'); if (ex) { const nm = S ? S.name + (S.fov.length > 1 ? ' ' + S.mag[SCP.zi] : '') : u.role === 'flame' ? 'Vlammenwerper' : 'Wapen'; if (!ex.textContent.startsWith(nm)) ex.textContent = nm + ' · ' + ex.textContent; }
-  const bn = document.getElementById('bcfName'); if (bn && / · \d+ HP$/.test(bn.textContent) && bn.textContent.includes('JIJ')) bn.textContent = bn.textContent.replace(/ · \d+ HP$/, '');
 };
 // while looking through an optic, the battlefield markers stay off the glass
 const _drawOverlayV = drawOverlay;
 drawOverlay = function (dt) { if (SCP.on && state === 'possess') { oc.clearRect(0, 0, innerWidth, innerHeight); return; } _drawOverlayV(dt); };
 const _unpossessV = unpossess;
 unpossess = () => { SCP.on = false; document.body.classList.remove('scopeOn', 'sniperS'); VMX.show = false; VMX.adsT = 0; if (VMX.cur) VMX.cur.visible = false; const b = document.getElementById('infBlood'); if (b) b.style.opacity = 0; PZ.hpWas = null; _unpossessV(); };
+
+// ================= RECON DRONES, AWACS, F-15 AND F-22, LONGER PERISCOPE VIEW, NO GIANT HEALTH BAR =================
+// ---------- the giants' health bar is gone for good ----------
+updateBossBar = function () { const el = document.getElementById('bossBar'), sh = document.getElementById('bossShow'); if (el && !el.hidden) el.hidden = true; if (sh && !sh.hidden) sh.hidden = true; };
+// ---------- shared: bake a model into one geometry with vertex colours ----------
+function bakeGeo(build) { const g = new THREE.Group(); build(mdlKit(g), g); const ms = []; g.traverse(o => { if (o.isMesh) ms.push(o); }); const geo = mergeRel(g, ms); ms.forEach(m => m.geometry.dispose()); return geo; }
+// ---------- spotting: what your recon drones and AWACS see gets a red marker on the screen and the minimap ----------
+const SPOT = new Map(); let spotT = 0;
+const isFoeOf = (u, team) => u.alive && !u.hidden && !u.removed && (u.type === 'zombie' || (u.team !== undefined && u.team !== team && u.team >= 0));
+function spotAround(p, r, team, t, filter) { let n = 0; for (const u of units) { if (!isFoeOf(u, team) || u.type === 'struct' && u.noTarget) continue; if (filter && !filter(u)) continue; const dx = u.pos.x - p.x, dz = u.pos.z - p.z; if (dx * dx + dz * dz > r * r) continue; const old = SPOT.get(u) || 0; if (old < t) SPOT.set(u, t); n++; } return n; }
+function updateSpot(dt) {
+  for (const [u, t] of SPOT) { const nt = t - dt; if (nt <= 0 || !u.alive || u.removed) SPOT.delete(u); else SPOT.set(u, nt); }
+  spotT -= dt; if (spotT > 0) return; spotT = .5;
+  for (const d of units) {
+    if (!d.recon || !d.alive || d.team !== CMD.team) continue;
+    if (d.recon === 'awacs') spotAround(d.pos, 3200, d.team, 6, u => u.type !== 'soldier' && u.type !== 'zombie' || u.D && u.D.boss);
+    else { spotAround(new V3(d.pos.x, 0, d.pos.z), 700, d.team, 6); if (d.home) spotAround(d.home, 450, d.team, 6); }
+  }
+}
+const SPOTNAME = u => u.type === 'soldier' ? 'soldaat' : u.type === 'zombie' ? (u.D && u.D.boss ? (u.D.mega ? 'BEHEMOTH' : 'reus') : 'zombie') : u.type === 'tank' ? (u.variant === 'aa' ? 'luchtafweer' : 'tank') : u.type === 'jet' ? 'vliegtuig' : u.type === 'heli' ? 'heli' : u.type === 'ship' ? shipName(u).toLowerCase() : u.type === 'drone' ? 'drone' : u.type === 'struct' ? 'gebouw' : u.type === 'truck' ? 'truck' : u.type;
+const _drawOverlayS = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayS(dt);
+  if (!SPOT.size || (state !== 'play' && state !== 'possess') || (typeof SCP !== 'undefined' && SCP.on) || (typeof BCW !== 'undefined' && BCW.unit)) return;
+  let n = 0; oc.font = '700 10px IBM Plex Mono, monospace'; oc.textAlign = 'center';
+  for (const [u] of SPOT) {
+    if (n > 70) break; const c = u.center ? u.center() : u.pos, q = project(c.clone().add(new V3(0, (u.radius || 2) + 3, 0))); if (!q || q[0] < 0 || q[1] < 0 || q[0] > innerWidth || q[1] > innerHeight) continue; n++;
+    const big = u.type !== 'soldier' && u.type !== 'zombie', s = big ? 7 : 5, pulse = .7 + .3 * Math.sin(SIMT * 5 + n);
+    oc.strokeStyle = `rgba(255,80,50,${pulse})`; oc.lineWidth = 2; oc.beginPath(); oc.moveTo(q[0], q[1] - s); oc.lineTo(q[0] + s, q[1]); oc.lineTo(q[0], q[1] + s); oc.lineTo(q[0] - s, q[1]); oc.closePath(); oc.stroke();
+    if (big || (u.D && u.D.boss)) { const d = Math.round(c.distanceTo(camera.position)); oc.fillStyle = 'rgba(0,0,0,.55)'; oc.fillText(`${SPOTNAME(u)} ${d > 999 ? (d / 1000).toFixed(1) + ' km' : d + ' m'}`, q[0] + 1, q[1] - s - 3); oc.fillStyle = '#ffb39a'; oc.fillText(`${SPOTNAME(u)} ${d > 999 ? (d / 1000).toFixed(1) + ' km' : d + ' m'}`, q[0], q[1] - s - 4); }
+  }
+};
+const _drawMinimapS = drawMinimap;
+drawMinimap = function () {
+  _drawMinimapS();
+  const k = 392 / (2 * WORLD), toS = (x, z) => [(x + WORLD) * k, (z + WORLD) * k];
+  for (const d of units) {
+    if (!d.recon || !d.alive || d.team !== CMD.team) continue; const [x, y] = toS(d.home ? d.home.x : d.pos.x, d.home ? d.home.z : d.pos.z);
+    mmc.strokeStyle = 'rgba(124,196,240,.55)'; mmc.setLineDash([4, 4]); mmc.lineWidth = 1.5; mmc.beginPath(); mmc.arc(x, y, (d.recon === 'awacs' ? 3200 : 700) * k, 0, TAU); mmc.stroke(); mmc.setLineDash([]);
+  }
+  mmc.strokeStyle = '#ffd0c0'; mmc.lineWidth = 1.5;
+  for (const [u] of SPOT) { const [x, y] = toS(u.pos.x, u.pos.z); mmc.beginPath(); mmc.arc(x, y, 5, 0, TAU); mmc.stroke(); }
+};
+// ---------- recon drone and AWACS: both are drones underneath that circle a point and never shoot ----------
+DRONE.recon = { hp: 110, speed: 46, turn: .75, r: 2.2, alt: 380 };
+DRONE.awacs = { hp: 1100, speed: 105, turn: .22, r: 14, alt: 980 };
+const RECON_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = team ? 0x8a8b7c : 0xbfc4c8, c2 = shade(c, .85), dk = 0x2b2d2f, gl = 0x1c2a36;
+  // small long-wing recon drone: hump nose with the camera ball, straight thin wings, V-tail, pusher prop at the back
+  K.lathe([[0, -3.1], [.22, -3.0], [.34, -2.2], [.42, -.4], [.5, .9], [.52, 1.9], [.42, 2.7], [.22, 3.25], [0, 3.4]], c, 0, 0, 0, 1, .95, 16);
+  K.lathe([[0, .2], [.3, .4], [.36, 1.6], [.24, 2.5], [0, 2.8]], c2, 0, .32, 0, 1.15, .7, 12);
+  K.sph(.28, gl, 0, -.42, 2.55, 1, 1, 1, 12); K.cyl(.12, .12, .2, dk, 0, -.22, 2.55);
+  const W = [[.3, .55], [6.2, .2], [6.2, -.25], [.3, -.45]]; K.plate(W, .1, c, 0, .18, 0, .01); K.plate(mirrorX(W), .1, c, 0, .18, 0, .01);
+  for (const s of [-1, 1]) { K.box(.05, .5, .4, c2, s * 6.2, .35, 0); K.fin([[-2.2, 0], [-2.9, 1.5], [-3.3, 1.5], [-3.25, 0]], .07, c, s * .2, .2, 0, s * -.65); }
+  K.box(.08, .06, .7, 0xd8d6cc, 0, -.3, .3); K.cyl(.035, .035, .6, dk, 0, .55, 1.0);
+  K.tube(.18, .12, .4, dk, 0, 0, -3.25, 10);
+}));
+const AWACS_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = team ? 0x8f9284 : 0xc9ccd0, c2 = shade(c, .86), dk = 0x2f3236, gl = 0x1c2a36, eng = 0x6c7076;
+  // E-3 Sentry: airliner body, swept wings with four engines, the radar dish sits on top (it turns, built separately)
+  K.lathe([[0, -21], [.9, -20.4], [1.6, -18], [2.05, -13], [2.1, 6], [2.05, 13], [1.8, 17], [1.3, 19.6], [.6, 21.3], [0, 21.9]], c, 0, 0, 0, 1, 1.05, 20);
+  K.box(2.6, .3, 1.6, gl, 0, 1.15, 19.0, .35);
+  for (let i = 0; i < 16; i++) K.box(.02, .28, .34, gl, 2.05, .7, 14 - i * 2); for (let i = 0; i < 16; i++) K.box(.02, .28, .34, gl, -2.05, .7, 14 - i * 2);
+  const W = [[1.9, 3.5], [21.5, -7.6], [21.5, -9.3], [1.9, -3.8]]; K.plate(W, .4, c2, 0, -.6, 0, .05); K.plate(mirrorX(W), .4, c2, 0, -.6, 0, .05);
+  for (const [x, z] of [[7.5, -.6], [13.5, -4.8], [-7.5, -.6], [-13.5, -4.8]]) { K.tube(.95, .8, 4.6, eng, x, -1.9, z + .9, 14); K.tube(.6, .6, .2, dk, x, -1.9, z + 3.3, 12); K.box(.25, 1.0, 2.6, c2, x, -1.1, z + .6); }
+  const H = [[1.0, -15.2], [8.8, -20.4], [8.8, -21.6], [1.0, -19.6]]; K.plate(H, .25, c2, 0, .5, 0); K.plate(mirrorX(H), .25, c2, 0, .5, 0);
+  K.fin([[-14.0, 0], [-19.5, 9.0], [-21.4, 9.0], [-21.0, 0]], .4, c2, 0, 1.4, 0, 0, .05); K.fin([[-19.3, 8.4], [-19.5, 9.05], [-21.4, 9.05], [-21.3, 8.4]], .45, team ? 0xa3271b : 0x2c5d8f, 0, 1.4, 0);
+  for (const s of [-1, 1]) K.box(.5, 4.2, 1.6, c2, s * 1.4, 3.6, -4.5, 0, 0, s * .35);
+}));
+const DOME_GEO = bakeGeo(K => { K.cyl(5.6, 5.6, .55, 0xe6e6e0, 0, 0, 0, 0, 0, 0, 28); K.cyl(5.62, 5.62, .2, 0x2c2d30, 0, .0, 0, 0, 0, 0, 28); K.cyl(1.4, 1.4, 1.2, 0x9a9c98, 0, -.6, 0, 0, 0, 0, 14); });
+function makeRecon(team, x, y, z, yaw, kind) {
+  const d = new Drone(team, x, y, z, yaw, 'reaper'); const V = DRONE[kind];
+  d.recon = kind; d.V = V; d.hp = d.maxHp = V.hp; d.radius = V.r; d.missiles = 0; d.speed = V.speed; d._hs[0].r = V.r * 1.4; d.life = kind === 'awacs' ? 1e9 : 300;
+  while (d.model.children.length) d.model.remove(d.model.children[0]);
+  d.model.add(new THREE.Mesh((kind === 'awacs' ? AWACS_GEO : RECON_GEO)[team], VCMAT));
+  if (kind === 'awacs') { d.dome = new THREE.Mesh(DOME_GEO, VCMAT); d.dome.position.set(0, 6.4, -4.5); d.model.add(d.dome); d.prop = null; }
+  else { d.prop = new THREE.Mesh(new THREE.BoxGeometry(1.5, .1, .04), mat(0x2a2c2e)); d.prop.position.set(0, 0, -3.5); d.model.add(d.prop); }
+  const nm = kind === 'awacs' ? 'AWACS-radarvliegtuig' : 'verkenningsdrone'; d.label = () => `${TEAMNAME[team]} ${nm}`;
+  return d;
+}
+UNAME.recon = ['verkenningsdrone', 'verkenningsdrones']; UNAME.awacs = ['AWACS', 'AWACS-vliegtuigen'];
+const _droneThinkR = Drone.prototype.think;
+Drone.prototype.think = function (dt) {
+  if (!this.recon) return _droneThinkR.call(this, dt);
+  const V = this.V, I = this.in; I.fire = false; this.missiles = 0; this.reloadT = 0;
+  if (this.recon === 'recon' && this.life < 0) { if (!this.gone) { this.gone = true; if (this.team === CMD.team) addFeed(null, null, '📡 Verkenningsdrone: batterij leeg, hij keert terug'); } this.remove(); return; }
+  const R = this.recon === 'awacs' ? 1500 : 270, w = this.speed / R, a = (this.orbA = (this.orbA ?? Math.atan2(this.pos.z - this.home.z, this.pos.x - this.home.x)) + w * dt * 1.05);
+  const hd = Math.hypot(this.home.x - this.pos.x, this.home.z - this.pos.z), goal = hd > R * 1.6 ? this.home : new V3(this.home.x + Math.cos(a + .5) * R, 0, this.home.z + Math.sin(a + .5) * R);
+  const gh = Math.max(getH(this.pos.x, this.pos.z), WATER), ahead = this.pos.clone().addScaledVector(this.forward(), this.speed * 4), ga = Math.max(getH(ahead.x, ahead.z), WATER);
+  this.aimAt(new V3(goal.x, Math.max(gh, ga) + V.alt, goal.z), dt, false);
+};
+const _droneUpdR = Drone.prototype.update;
+Drone.prototype.update = function (dt) {
+  if (this.recon) { this.missiles = 0; this.reloadT = 0; if (this.dome) this.dome.rotation.y += dt * .9; if (this.alive && this.isPlayerUnit()) this.think(dt); if (this.removed) return; }
+  return _droneUpdR.call(this, dt);
+};
+// ---------- fighters: F-15 Strike Eagle (heavy, lots of weapons) and F-22 Raptor (stealth, fast) ----------
+const EAGLE_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = team ? 0x6e7363 : 0x8a939c, c2 = shade(c, .86), c3 = shade(c, 1.07), dk = 0x2f3236, gl = 0x1f3445, ins = team ? 0xa3271b : 0x2c5d8f;
+  K.lathe([[0, 2.6], [.82, 2.9], [.86, 4.6], [.72, 6.4], [.5, 8.0], [.24, 9.3], [0, 9.9]], c, 0, .12, 0, 1, .92, 18);
+  K.lathe([[0, 8.9], [.33, 8.9], [.24, 9.32], [0, 9.92]], shade(c, .7), 0, .12, 0, 1, .92, 14);
+  K.box(2.3, .9, 6.6, c, 0, .05, -.3); K.box(1.5, .5, 6.0, c3, 0, .62, -.6);
+  for (const s of [-1, 1]) { K.box(.95, 1.15, 4.4, c2, s * 1.42, -.08, 1.6); K.box(.85, 1.0, .08, dk, s * 1.42, -.08, 3.82); K.tube(.64, .62, 5.4, c, s * .66, -.02, -4.0, 16); K.tube(.6, .5, 1.0, 0x3a3b3d, s * .66, -.02, -7.0, 16); K.tube(.46, .46, .1, 0x151515, s * .66, -.02, -7.5, 14); }
+  K.sph(.55, gl, 0, .78, 5.0, .9, .85, 2.7, 16); K.box(.05, .1, 1.3, dk, 0, 1.25, 4.6, .12);
+  const W = [[1.2, 2.2], [6.7, -2.9], [6.7, -3.8], [1.3, -4.0]]; K.plate(W, .22, c, 0, .02, 0, .02); K.plate(mirrorX(W), .22, c, 0, .02, 0, .02);
+  const H = [[1.0, -5.0], [3.9, -6.5], [3.9, -7.3], [1.0, -7.3]]; K.plate(H, .12, c, 0, -.02, 0); K.plate(mirrorX(H), .12, c, 0, -.02, 0);
+  for (const s of [-1, 1]) { K.fin([[-4.0, 0], [-5.9, 3.1], [-6.9, 3.1], [-7.0, 0]], .15, c, s * 1.25, .5, 0, s * -.08, .01); K.fin([[-5.85, 2.8], [-5.95, 3.12], [-6.9, 3.12], [-6.95, 2.8]], .18, ins, s * 1.25, .5, 0, s * -.08); K.cyl(.55, .55, .02, ins, s * 4.6, .02, -2.6, 0, 0, 0, 16); }
+  K.tube(.4, .4, 4.6, 0xb8bcbf, 0, -.78, -.2, 12); K.lathe([[0, 2.0], [.4, 2.1], [0, 3.0]], 0xb8bcbf, 0, -.78, 0, 1, 1, 10);
+  for (const s of [-1, 1]) for (const x of [2.8, 4.2]) { K.tube(.12, .12, 2.6, 0xe0e0da, s * x, -.4, -1.6, 8); K.box(.08, .3, .6, dk, s * x, -.18, -1.4); }
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) K.box(.32, .32, .9, 0x4b4f45, s * 1.42, -.78, 2.8 - i * 1.1);
+}));
+const RAPTOR_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = team ? 0x5f6458 : 0x6e7780, c2 = shade(c, .85), c3 = shade(c, 1.08), dk = 0x26292c, gl = 0xa0782a, ins = team ? 0x8c2a1e : 0x30475e;
+  K.lathe([[0, 2.4], [.92, 2.7], [.98, 4.4], [.82, 6.2], [.56, 7.8], [.28, 9.0], [0, 9.6]], c, 0, .05, 0, 1.25, .7, 18);
+  K.box(3.2, .8, 6.8, c, 0, .0, -.6); K.box(1.8, .5, 6.4, c3, 0, .5, -.8);
+  for (const s of [-1, 1]) { K.box(1.0, 1.0, 3.8, c2, s * 1.65, -.1, 1.8, 0, s * -.06, 0); K.box(.06, .8, .9, dk, s * 1.55, -.1, 3.65, 0, s * .45, 0); K.box(1.1, .55, 1.3, 0x2c2e30, s * .72, 0, -4.6); K.box(1.05, .1, .9, 0x1e2022, s * .72, .2, -5.3); }
+  K.sph(.6, gl, 0, .62, 4.6, .85, .72, 2.7, 16);
+  const W = [[1.6, 2.4], [6.6, -2.4], [6.2, -4.0], [3.0, -3.7], [1.6, -3.3]]; K.plate(W, .2, c, 0, .0, 0, .02); K.plate(mirrorX(W), .2, c, 0, .0, 0, .02);
+  const H = [[1.2, -4.0], [3.8, -5.3], [3.5, -6.4], [1.2, -5.9]]; K.plate(H, .12, c, 0, -.02, 0); K.plate(mirrorX(H), .12, c, 0, -.02, 0);
+  for (const s of [-1, 1]) { K.fin([[-2.6, 0], [-4.4, 2.6], [-5.5, 2.6], [-5.2, 0]], .14, c, s * 1.45, .4, 0, s * -.45, .01); K.fin([[-4.25, 2.3], [-4.4, 2.62], [-5.5, 2.62], [-5.4, 2.3]], .16, ins, s * 1.45, .4, 0, s * -.45); K.cyl(.5, .5, .02, ins, s * 4.6, .03, -2.4, 0, 0, 0, 16); }
+  for (const s of [-1, 1]) K.box(.06, .02, 3.6, dk, s * 1.0, -.42, -.4);
+}));
+const JSUB = {
+  eagle: { geo: EAGLE_GEO, name: 'F-15 Strike Eagle', hp: 380, msl: 8, bombs: 8, thrust: 42, rr: 2.4, pr: 1.15, cost: 520, sub: 'zwaar · 8 raketten · 8 bommen' },
+  raptor: { geo: RAPTOR_GEO, name: 'F-22 Raptor', hp: 260, msl: 6, bombs: 2, thrust: 48, rr: 3.2, pr: 1.45, cost: 560, sub: 'stealth · raketten zien hem slecht', stealth: true }
+};
+function makeJetSub(j, k) {
+  const S = JSUB[k], old = GEO_CACHE['jm' + j.team]; j.sub = k; j.stealth = !!S.stealth;
+  j.group.traverse(o => { if (o.isMesh && o.geometry === old) o.geometry = S.geo[j.team]; });
+  j.hp = j.maxHp = S.hp; j.missiles = S.msl; j.bombs = S.bombs; j.V = Object.assign({}, j.V, { thrust: S.thrust, rr: S.rr, pr: S.pr });
+  if (k === 'raptor') j.mslMeshes.forEach(m => m.visible = false); else j.mslMeshes.forEach(m => { m.visible = true; });
+  j.label = () => `${TEAMNAME[j.team]} ${S.name}`;
+  if (k === 'raptor') { const _u = j.update.bind(j); j.update = dt => { _u(dt); for (const m of j.mslMeshes) m.visible = false; }; }
+  return j;
+}
+UNAME.eagle = ['F-15 Strike Eagle', 'F-15’s']; UNAME.raptor = ['F-22 Raptor', 'F-22’s'];
+// stealth: missiles take much longer to lock on to a Raptor
+const _updLockS = Jet.prototype.updateLock;
+Jet.prototype.updateLock = function (dt) { _updLockS.call(this, dt); if (this.cand && this.cand.stealth && this.lockT > 0) this.lockT -= dt * .65; };
+// ---------- the request menu: new buttons ----------
+KINDS.eagle = { label: 'F-15 Eagle', sub: JSUB.eagle.sub }; KINDS.raptor = { label: 'F-22 Raptor', sub: JSUB.raptor.sub };
+KINDS.recon = { label: '📡 Verkenningsdrone', sub: 'ziet vijanden · roept steun' }; KINDS.awacs = { label: '🛰 AWACS', sub: 'radar · ziet alles in 3 km' };
+COST.eagle = JSUB.eagle.cost; COST.raptor = JSUB.raptor.cost; COST.recon = 160; COST.awacs = 420;
+if (typeof OILC !== 'undefined') { OILC.eagle = 3; OILC.raptor = 3; OILC.recon = 1; OILC.awacs = 2; }
+{
+  const addBtn = (after, kind) => { const ref = document.querySelector(`[data-tool="${after}"]`); if (!ref) return; const b = document.createElement('button'); b.className = 'tb'; b.dataset.tool = kind; b.innerHTML = `${KINDS[kind].label}<small>${KINDS[kind].sub}</small>`; ref.after(b); b.onclick = () => { setTool(tool && tool.kind === kind ? null : { kind, team: spawnSide }); b.blur(); if (tool) toggleTools(false); }; };
+  addBtn('bomber', 'eagle'); addBtn('eagle', 'raptor'); addBtn('kamikaze', 'recon'); addBtn('recon', 'awacs');
+}
+const NEWAIR = { eagle: 1, raptor: 1, recon: 1, awacs: 1 };
+const _placeAtN = placeAt;
+placeAt = function (p) {
+  if (!tool || !NEWAIR[tool.kind]) return _placeAtN(p);
+  const { kind, team } = tool; if (!pay(kind, team)) return;
+  deliver(kind, team, p); markers.push({ p: p.clone(), t: 0, col: team ? '#e2543c' : '#6fb2dc' });
+  if (!(keys.ShiftLeft || keys.ShiftRight)) setTool(null);
+};
+const _deliverN = deliver;
+deliver = function (kind, team, p) {
+  if (kind === 'eagle' || kind === 'raptor') {
+    const j = makeJetSub(new Jet(team, 0, 0, 0, 0, true, 'fighter'), kind);
+    j.driver = 'ai'; j.home = new V3(p.x, 0, p.z); j.order = { type: 'move', p: new V3(p.x, 0, p.z) }; launchFromAirfield(j);
+    addFeed(null, null, `${TEAMNAME[team]} ${JSUB[kind].name} taxiet naar de startbaan`); return j;
+  }
+  if (kind === 'recon' || kind === 'awacs') {
+    const b = BASES[team], sx = b.x, sz = b.z + (team ? 60 : -60), alt = kind === 'awacs' ? 700 : 260;
+    const d = makeRecon(team, sx, Math.max(getH(sx, sz), WATER) + alt, sz, Math.atan2(p.x - sx, p.z - sz), kind); d.home = new V3(p.x, 0, p.z);
+    if (team === CMD.team) addFeed(null, null, kind === 'awacs' ? '🛰 AWACS opgestegen · zijn radar ziet alle voertuigen, vliegtuigen en schepen in 3 km' : '📡 Verkenningsdrone onderweg · vijanden bij het doel krijgen een rood merkteken · tik op “📡 Kijk mee” om door zijn camera te kijken');
+    return d;
+  }
+  return _deliverN(kind, team, p);
+};
+// ---------- look through the recon drone: thermal camera, mark targets, call in support ----------
+const RCN = { therm: true };
+function supportAt(kind, p, team) {
+  if (RADIO.cd[kind] > 0) { CTL.msg = `${RNAME[kind][1]} is nog niet klaar · ${Math.ceil(RADIO.cd[kind])} s`; CTL.msgT = 1.4; return; }
+  if (kind === 'arty' && !BATTERIES[team].length) { CTL.msg = 'Er zijn geen kanonnen beschikbaar'; CTL.msgT = 1.4; return; }
+  RADIO.cd[kind] = RCD[kind]; const q = p.clone(); q.y = Math.max(getH(q.x, q.z), WATER);
+  markers.push({ p: q.clone(), t: 0, col: '#ff6a50' });
+  for (let i = 0; i < 8; i++) spawnP(q.clone().add(new V3(rnd(-1, 1), .5, rnd(-1, 1))), { tex: smokeTex, color: 0xd9482a, op: .7, size: 2, grow: 3, life: 6, vel: new V3(rnd(-.4, .4), rnd(1.5, 3), rnd(-.4, .4)), drag: .6 });
+  if (kind === 'a10') a10Run(team, q); else if (kind === 'arty') fireBattery(team, q, BATTERIES[team].length > 3 ? 12 : 9); else if (kind === 'air') airstrike(team, q);
+  addFeed(null, null, `📡 Drone-operator: ${RNAME[kind][1]} aangevraagd op het gemarkeerde doel`);
+}
+CTL.ext.recon = {
+  fov: 34, ownKeys: false,
+  enter(d) { CTL.aim.copy(d.home || d.pos); ctlClampAim(); CTL.cam.position.copy(d.pos); RCN.fl = null; },
+  ui: d => `<div class="tl"><button data-c="exit">✕ Terug</button><button data-c="therm">🌡 Warmtebeeld</button></div>
+<div class="br"><div class="row"><button data-c="zo">－</button><button data-c="zi">＋</button><button data-c="move">🛰 Cirkel hier</button></div>
+<div class="row"><button data-c="mark">📍 Markeer</button></div>
+<div class="row"><button data-c="s_arty">💥 Artillerie</button><button data-c="s_air">💣 Bommen</button><button data-c="s_a10">✈ A-10</button></div></div>
+<div class="help">Sleep / muis = camera richten · ＋ / － = zoomen · 📍 = vijanden bij het kruisje markeren (60 s zichtbaar voor iedereen) · 🛰 = de drone cirkelt boven het kruisje · steun valt op het kruisje · Esc = terug</div>`,
+  hello: d => `📡 Je kijkt door de ${d.recon === 'awacs' ? 'AWACS-camera' : 'camera van de verkenningsdrone'} · sleep om rond te kijken`,
+  update(dt) {
+    const d = CTL.obj; if (!d.alive || d.removed) { ctlExit(false); addFeed(null, null, '📡 Verbinding met de drone verloren'); return; }
+    const A = CTL.aim, dx = A.x - d.pos.x, dz = A.z - d.pos.z, r = Math.hypot(dx, dz), mx = d.recon === 'awacs' ? 4500 : 1600;
+    if (r > mx) { A.x = d.pos.x + dx / r * mx; A.z = d.pos.z + dz / r * mx; A.y = Math.max(getH(A.x, A.z), WATER); }
+    spotAround(A, 120, d.team, 4);
+  },
+  exit() { renderer.domElement.style.filter = ''; RCN.fl = null; },
+  camera(dt) { const d = CTL.obj, fl = RCN.therm ? 'grayscale(1) contrast(1.45) brightness(1.05)' : ''; if (RCN.fl !== fl || !renderer.domElement.style.filter !== !fl) { RCN.fl = fl; renderer.domElement.style.filter = fl; } CTL.cam.position.lerp(d.pos.clone().add(new V3(0, -2.5, 0)), Math.min(1, dt * 8)); CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(CTL.aim); },
+  hud(dt, pr, W, H) {
+    const d = CTL.obj, A = CTL.aim, q = pr(A.clone().add(new V3(0, 1, 0))), ink = RCN.therm ? '#f2f2f2' : '#9fe0ff';
+    let seen = 0;
+    for (const u of units) {
+      if (!isFoeOf(u, d.team)) continue; const c = u.center ? u.center() : u.pos; if (Math.hypot(c.x - A.x, c.z - A.z) > 1300) continue;
+      const p = pr(c); if (!p || p[0] < 0 || p[1] < 0 || p[0] > W || p[1] > H) continue; seen++;
+      const big = u.type !== 'soldier' && u.type !== 'zombie', b = big ? 13 : 7, mk = SPOT.has(u) && SPOT.get(u) > 6.5;
+      oc.strokeStyle = mk ? '#ff5a3a' : ink; oc.lineWidth = mk ? 2.2 : 1.4; oc.strokeRect(p[0] - b, p[1] - b, b * 2, b * 2);
+      if (big || mk) { oc.font = '700 10px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillStyle = oc.strokeStyle; oc.fillText(SPOTNAME(u).toUpperCase(), p[0], p[1] - b - 4); }
+    }
+    if (q) { oc.strokeStyle = ink; oc.lineWidth = 1.5; oc.beginPath(); oc.moveTo(q[0] - 30, q[1]); oc.lineTo(q[0] - 8, q[1]); oc.moveTo(q[0] + 8, q[1]); oc.lineTo(q[0] + 30, q[1]); oc.moveTo(q[0], q[1] - 30); oc.lineTo(q[0], q[1] - 8); oc.moveTo(q[0], q[1] + 8); oc.lineTo(q[0], q[1] + 30); oc.stroke(); oc.strokeRect(q[0] - 60, q[1] - 60, 120, 120); }
+    const hp = d.home ? pr(new V3(d.home.x, Math.max(getH(d.home.x, d.home.z), WATER) + 2, d.home.z)) : null; if (hp) { oc.strokeStyle = 'rgba(124,196,240,.7)'; oc.setLineDash([5, 5]); oc.beginPath(); oc.arc(hp[0], hp[1], 16, 0, TAU); oc.stroke(); oc.setLineDash([]); }
+    const cd = k => RADIO.cd[k] > 0 ? Math.ceil(RADIO.cd[k]) + ' s' : 'klaar';
+    const life = d.recon === 'recon' ? ` · batterij ${Math.max(0, Math.ceil(d.life / 60 * 10) / 10)} min` : '';
+    ctlLine([`${d.recon === 'awacs' ? 'AWACS' : 'VERKENNINGSDRONE'} · hoogte ${Math.round(d.agl())} m${life}`, `${seen} vijanden in beeld · ${SPOT.size} gemarkeerd · ${Math.round(Math.hypot(A.x - d.pos.x, A.z - d.pos.z))} m naar het kruisje`, `artillerie ${cd('arty')} · bommen ${cd('air')} · A-10 ${cd('a10')}`], ink);
+    // a thin scan line and a grain of noise give it a real drone-feed look
+    oc.fillStyle = 'rgba(255,255,255,.035)'; const sy = (SIMT * 140) % H; oc.fillRect(0, sy, W, 3);
+    oc.font = '700 11px IBM Plex Mono, monospace'; oc.textAlign = 'right'; oc.fillStyle = ink; oc.fillText(`● LIVE · ${RCN.therm ? 'WIT-HEET' : 'KLEUR'} · ${(55 / CTL.fov).toFixed(1)}×`, W - 16, IS_TOUCH ? 74 : 70);
+  }
+};
+const _ctlBuildUIR = ctlBuildUI;
+ctlBuildUI = function (kind, obj) {
+  _ctlBuildUIR(kind, obj); if (kind !== 'recon') return;
+  CTL.ui.querySelectorAll('[data-c]').forEach(b => {
+    const c = b.dataset.c; if (!['therm', 'move', 'mark', 's_arty', 's_air', 's_a10'].includes(c)) return;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); reconCmd(c); });
+  });
+};
+function reconCmd(c) {
+  if (!CTL.on || CTL.kind !== 'recon') return; const d = CTL.obj, A = CTL.aim;
+  if (c === 'therm') { RCN.therm = !RCN.therm; RCN.fl = null; }
+  else if (c === 'move') { d.home = A.clone(); d.orbA = null; CTL.msg = '🛰 De drone cirkelt nu boven het kruisje'; CTL.msgT = 1.6; }
+  else if (c === 'mark') { const n = spotAround(A, 160, d.team, 60); CTL.msg = n ? `📍 ${n} vijanden gemarkeerd · 60 s zichtbaar` : 'Geen vijanden bij het kruisje'; CTL.msgT = 1.6; if (Snd.ctx) Snd.burst(camera.position, { f: 1800, q: 8, dur: .15, vol: .12, rng: 40 }); }
+  else supportAt(c.slice(2), A, d.team);
+}
+addEventListener('keydown', e => {
+  if (!CTL.on || CTL.kind !== 'recon' || e.repeat) return;
+  const m = { KeyM: 'mark', KeyH: 'move', KeyT: 'therm', Digit1: 's_arty', Digit2: 's_air', Digit3: 's_a10' }[e.code]; if (m) { reconCmd(m); e.stopPropagation(); }
+}, true);
+const _zoomR = ctlZoom;
+ctlZoom = function (f) { if (CTL.on && CTL.kind === 'recon') { CTL.fov = clamp(CTL.fov * f, 3.5, 60); return; } if (CTL.on && CTL.kind === 'ship' && CTL.peri) { CTL.fov = clamp(CTL.fov * f, 2.2, 60); return; } return _zoomR(f); };
+const _possessR = possess;
+possess = function (u) { if (u && u.recon) { ctlEnter('recon', u); return; } return _possessR(u); };
+const _ctlCandR = ctlCandidate;
+ctlCandidate = function () { const c = _ctlCandR(); if (c) return c; const d = units.find(u => u.recon && u.alive && u.team === CMD.team && !u.removed); return d ? { kind: 'recon', obj: d } : null; };
+const _updCtlBtnR = updateCtlBtn;
+updateCtlBtn = function (dt) { _updCtlBtnR(dt); if (!CTL.btn.hidden && CTL.bT >= .29) { const o = ctlCandidate(); if (o && o.kind === 'recon') CTL.btn.textContent = o.obj.recon === 'awacs' ? '📡 KIJK MEE · AWACS' : '📡 KIJK MEE · VERKENNINGSDRONE'; } };
+// ---------- periscope: much further view ----------
+const _shipCamF = CTL.ext.ship.camera;
+CTL.ext.ship.camera = function (dt) {
+  _shipCamF(dt);
+  if (CTL.peri) { scene.fog.near = 3200 * WX.fog; scene.fog.far = 14000 * WX.fog; if (CTL.cam.far !== 18000) { CTL.cam.far = 18000; CTL.cam.updateProjectionMatrix(); } }
+  else if (CTL.cam.far !== 9000) { CTL.cam.far = 9000; CTL.cam.updateProjectionMatrix(); }
+};
+const _renderMainF = renderMain;
+renderMain = function (dt) {
+  // through the periscope, units far away stay drawn instead of being culled at 1.8 km
+  if (!(CTL.on && CTL.kind === 'ship' && CTL.peri && state === 'play' && CTL.obj)) { if (CTL.cam.far !== 9000 && !(CTL.on && CTL.kind === 'ship')) { CTL.cam.far = 9000; CTL.cam.updateProjectionMatrix(); } return _renderMainF(dt); }
+  const fo = CTL.obj.pos; cam.x = fo.x; cam.z = fo.z; ctlCamera(dt);
+  const cp = CTL.cam.position; for (const u of units) if (!u.hidden && u.group) { const dx = u.pos.x - cp.x, dz = u.pos.z - cp.z; u.group.visible = dx * dx + dz * dz < 9000 * 9000; }
+  renderer.render(scene, CTL.cam); ctlHud(dt); pipEl.hidden = true;
+};
+// ---------- tick ----------
+const _updateWavesR = updateWaves;
+updateWaves = function (dt) { _updateWavesR(dt); updateSpot(dt); };
+
+// ================= DETAILED TANKS AND DRONES =================
+// Same trick as the aircraft: richer geometry under the same cache keys and in the same local frames.
+// ---------- tanks: hull ('tb'), turret ('tt') and gun ('tg') ----------
+for (const team of [0, 1]) for (const v of ['mbt', 'light', 'heavy', 'aa']) {
+  const c = TANK_COL[team], c2 = shade(c, .84), c3 = shade(c, 1.1), dk = 0x24231f, tr = 0x2b2a26, rw = 0x3b3c37, gl = 0x9ab4c4;
+  mdlBake('tb' + team + v, K => {
+    // armoured hull seen from the side, with a sloped front
+    K.fin([[-3.35, .52], [3.0, .52], [3.55, 1.0], [3.62, 1.22], [2.2, 1.86], [-3.15, 1.86], [-3.45, 1.3]], 3.0, c, 0, 0, 0, 0, .03);
+    K.box(3.72, .1, 6.15, c2, 0, 1.84, -.2); K.box(3.0, .06, 1.25, c3, 0, 1.9, 1.75); K.box(3.72, .5, 6.15, c, 0, 1.58, -.2);
+    for (let i = 0; i < 5; i++) K.box(2.3, .04, .12, dk, 0, 1.91, -1.7 - i * .3);
+    K.box(2.7, .08, 1.0, dk, 0, 1.9, -2.95); K.box(3.0, 1.0, .12, c2, 0, 1.3, -3.42);
+    for (const s of [-1, 1]) {
+      // tracks: a rounded band, seven road wheels, sprocket at the back, idler at the front
+      K.fin([[-3.5, .78], [-3.28, .36], [-2.92, .1], [2.95, .1], [3.32, .36], [3.55, .82], [3.32, 1.02], [-3.3, 1.02]], .68, tr, s * 1.56, 0, 0);
+      for (let k = 0; k < 7; k++) { K.cyl(.37, .37, .2, rw, s * 1.92, .45, -2.55 + k * .85, 0, 0, Math.PI / 2, 14); K.cyl(.15, .15, .22, dk, s * 1.93, .45, -2.55 + k * .85, 0, 0, Math.PI / 2, 8); }
+      K.cyl(.43, .43, .26, dk, s * 1.9, .68, -3.18, 0, 0, Math.PI / 2, 12); K.cyl(.34, .34, .24, rw, s * 1.9, .64, 3.2, 0, 0, Math.PI / 2, 12);
+      for (let k = 0; k < 22; k++) K.box(.7, .04, .1, 0x1c1b18, s * 1.56, 1.03, -3.15 + k * .3);
+      // side skirts in panels
+      for (let k = 0; k < 5; k++) K.box(.08, .66, 1.12, k === 4 ? c3 : c, s * 1.97, 1.36, -2.25 + k * 1.15);
+      K.box(.5, .32, .85, c2, s * 1.4, 2.04, -1.7); K.box(.45, .28, .7, c2, s * 1.4, 2.02, -2.65);
+      K.cyl(.11, .11, .08, 0xe8e2c4, s * 1.2, 1.35, 3.5, Math.PI / 2, 0, 0, 10); K.box(.25, .12, .2, dk, s * .9, .62, 3.5);
+      if (v === 'heavy') { for (let k = 0; k < 4; k++) K.box(.22, .6, 1.25, c3, s * 2.08, 1.38, 1.9 - k * 1.3); K.box(.1, .7, .05, dk, s * 1.6, 1.4, -3.55); }
+    }
+    K.box(.5, .16, .55, dk, .7, 1.95, 2.0); K.box(.36, .1, .3, gl, .7, 2.02, 2.1);
+    if (v === 'heavy') { for (let i = -1; i <= 1; i++) K.box(.9, .45, .35, c3, i * .95, 1.45, 3.1, -.85, 0, 0); for (let i = -4; i <= 4; i++) K.box(.06, .9, .04, dk, i * .34, 1.35, -3.62); K.box(3.0, .05, .05, dk, 0, 1.8, -3.62); }
+  });
+  mdlBake('tt' + team + v, K => {
+    if (v === 'aa') {
+      // anti-aircraft turret: boxy with a search radar on the back and a tracking radar in front
+      K.box(2.4, 1.1, 2.9, c, 0, .55, -.4); K.box(2.0, .2, 2.4, c2, 0, 1.18, -.5);
+      K.cyl(.12, .12, 1.0, dk, 0, 1.7, -1.4); K.box(1.9, .08, .5, dk, 0, 2.2, -1.4, .25, 0, 0); for (let i = -3; i <= 3; i++) K.box(.04, .3, .45, 0x3a3b36, i * .27, 2.2, -1.4, .25, 0, 0);
+      K.cyl(.5, .5, .25, dk, 0, 1.0, 1.25, Math.PI / 2 - .2, 0, 0, 16); K.cyl(.4, .4, .05, 0x8a8c86, 0, 1.0, 1.4, Math.PI / 2 - .2, 0, 0, 16);
+      for (const s of [-1, 1]) { for (let k = 0; k < 3; k++) K.cyl(.06, .06, .3, dk, s * 1.25, .6 + k * .17, .4, Math.PI / 2 - .5, 0, s * .3, 7); K.box(.15, .7, 1.6, c2, s * 1.22, .6, -.6); }
+      K.cyl(.32, .36, .3, c2, -.6, 1.35, -.2, 0, 0, 0, 10); K.cyl(.015, .015, 2.4, dk, .9, 2.3, -1.8, 0, 0, 0, 4);
+      return;
+    }
+    // wedge turret: flat roof, pointed front armour, a bustle at the back
+    const H = v === 'heavy' ? .86 : .78;
+    K.plate([[-1.28, -1.9], [1.28, -1.9], [1.32, .85], [.6, 2.25], [-.6, 2.25], [-1.32, .85]], H, c, 0, H, 0, .03);
+    K.plate([[-1.18, -1.8], [1.18, -1.8], [1.2, .8], [.56, 2.1], [-.56, 2.1], [-1.2, .8]], .06, c2, 0, H + .06, 0);
+    K.box(2.3, .6, 1.05, c, 0, .47, -2.4); for (let k = 0; k < 4; k++) K.box(2.36, .04, .04, dk, 0, .55 + k * .1, -2.95);
+    for (const s of [-1, 1]) { K.box(.05, .26, 1.0, dk, s * 1.2, .82, -2.45); for (let k = 0; k < 4; k++) K.cyl(.07, .07, .3, dk, s * 1.25, .62, .4 - k * .18, -.6, 0, s * .55, 7); }
+    // gunner sight, commander's panoramic sight, hatch and machine gun
+    K.box(.42, .42, .52, c2, .62, H + .2, 1.05); K.box(.34, .3, .04, gl, .62, H + .22, 1.32);
+    K.cyl(.14, .16, .35, c2, -.58, H + .25, .15, 0, 0, 0, 10); K.box(.34, .3, .38, c2, -.58, H + .5, .15); K.box(.26, .2, .03, gl, -.58, H + .52, .35);
+    K.cyl(.4, .42, .14, c2, .55, H + .1, -.55, 0, 0, 0, 14); K.box(.07, .08, .85, dk, .55, H + .32, -.2); K.box(.08, .2, .1, dk, .55, H + .2, -.55);
+    K.cyl(.015, .015, 2.6, dk, -.95, H + 1.3, -2.1, 0, 0, 0, 4); K.cyl(.015, .015, 2.0, dk, .95, H + 1.0, -2.2, 0, 0, 0, 4);
+    if (v === 'heavy') { for (const s of [-1, 1]) for (let k = 0; k < 3; k++) K.box(.55, .5, .28, c3, s * .7, .45, 2.0 - k * .05, 0, s * -.65, 0); K.box(1.2, .3, .3, c3, 0, H + .02, 1.7); }
+  });
+}
+for (const v of ['mbt', 'light', 'heavy', 'aa']) mdlBake('tg' + v, K => {
+  const c = 0x34362f, dk = 0x1e1f1b, sl = 0x4a4c42;
+  if (v === 'aa') {
+    K.box(1.2, .62, .9, 0x3d3f37, 0, 0, .15);
+    for (const s of [-1, 1]) { K.box(.42, .55, 1.3, 0x45473e, s * 1.48, 0, .1); K.tube(.075, .075, 3.4, dk, s * 1.48, .05, 2.4, 10); K.tube(.12, .12, .45, dk, s * 1.48, .05, 4.05, 10); K.cyl(.06, .06, .9, dk, s * .9, 0, .1, 0, 0, Math.PI / 2, 8); }
+    return;
+  }
+  // mantlet, long smoothbore with thermal sleeve bands, fume extractor
+  K.box(.95, .62, .5, 0x3f4136, 0, 0, .12); K.box(.6, .4, .3, 0x3f4136, 0, 0, .45);
+  K.tube(.105, .12, 5.3, c, 0, 0, 2.95, 12);
+  for (const z of [1.2, 2.3, 3.4]) K.tube(.15, .15, .95, sl, 0, 0, z, 12);
+  K.tube(.18, .18, .55, sl, 0, 0, 4.25, 12); K.box(.12, .1, .14, dk, 0, .14, 5.5);
+  if (v === 'heavy') K.tube(.2, .2, .5, dk, 0, 0, 5.55, 12); else K.tube(.13, .13, .08, dk, 0, 0, 5.6, 12);
+});
+// ---------- drones: MQ-9 Reaper and a delta-wing kamikaze drone, swapped in on their first update ----------
+const DRN_GEO = {
+  reaper: [0, 1].map(team => bakeGeo(K => {
+    const c = team ? 0x7a7b6d : 0x8d959c, c2 = shade(c, .86), dk = 0x2a2c2e;
+    K.lathe([[0, -4.1], [.26, -3.9], [.42, -2.6], [.55, -.8], [.62, 1.0], [.66, 2.2], [.58, 3.1], [.38, 3.7], [0, 4.0]], c, 0, 0, 0, 1, 1.12, 18);
+    K.sph(.36, 0x23262a, 0, -.6, 2.75, 1, 1, 1, 14); K.cyl(.16, .16, .25, dk, 0, -.32, 2.75);
+    const W = [[.5, .9], [8.6, .45], [8.6, -.05], [.5, -.3]]; K.plate(W, .14, c, 0, .22, .3, .02); K.plate(mirrorX(W), .14, c, 0, .22, .3, .02);
+    for (const s of [-1, 1]) { K.fin([[-2.8, 0], [-3.6, 1.6], [-4.05, 1.6], [-3.95, 0]], .09, c, s * .35, .3, 0, s * -.75); K.tube(.11, .11, 1.6, 0xd8d6cc, s * 3.0, -.25, .3, 8); K.box(.06, .25, .25, dk, s * 3.0, -.05, .35); K.tube(.11, .11, 1.6, 0xd8d6cc, s * 4.3, -.25, .3, 8); K.box(.06, .25, .25, dk, s * 4.3, -.05, .35); }
+    K.fin([[-3.0, 0], [-3.55, -1.0], [-3.95, -1.0], [-3.9, 0]], .09, c2, 0, -.25, 0); K.tube(.2, .14, .4, dk, 0, 0, -4.0, 10);
+    K.box(.06, .5, .06, dk, 0, .75, 1.6); K.box(.5, .12, 1.2, c2, 0, .58, 1.0);
+  })),
+  kamikaze: [0, 1].map(team => bakeGeo(K => {
+    const c = team ? 0x6d6f5c : 0x7b8288, c2 = shade(c, .85), dk = 0x2a2c2e;
+    K.lathe([[0, -1.4], [.18, -1.3], [.26, -.6], [.27, .6], [.2, 1.25], [0, 1.55]], c, 0, 0, 0, 1, 1, 14);
+    const W = [[.2, .9], [1.6, -1.05], [1.6, -1.25], [.2, -1.25]]; K.plate(W, .06, c, 0, .04, 0); K.plate(mirrorX(W), .06, c, 0, .04, 0);
+    for (const s of [-1, 1]) K.fin([[-.85, -.3], [-1.05, .45], [-1.28, .45], [-1.25, -.3]], .04, c2, s * 1.6, .02, 0);
+    K.tube(.12, .1, .3, dk, 0, 0, -1.45, 10); K.lathe([[0, 1.1], [.2, 1.2], [0, 1.6]], 0x3d3f2c, 0, 0, 0, 1, 1, 10);
+  }))
+};
+const _droneUpdM = Drone.prototype.update;
+Drone.prototype.update = function (dt) {
+  if (!this._mdl) {
+    this._mdl = true; const G = !this.recon && DRN_GEO[this.variant];
+    if (G) {
+      const keep = this.glow; while (this.model.children.length) this.model.remove(this.model.children[0]); if (keep) this.model.add(keep);
+      this.model.add(new THREE.Mesh(G[this.team ? 1 : 0], VCMAT));
+      this.prop = new THREE.Mesh(new THREE.BoxGeometry(this.variant === 'reaper' ? 2.2 : 1.0, .1, .04), mat(0x2a2c2e)); this.prop.position.set(0, 0, this.variant === 'reaper' ? -4.25 : -1.62); this.model.add(this.prop);
+    }
+  }
+  return _droneUpdM.call(this, dt);
+};
 
 </script>
