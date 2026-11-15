@@ -13184,4 +13184,63 @@ deliver = function (kind, team, p) {
 const _updateWavesR4 = updateWaves;
 updateWaves = function (dt) { _updateWavesR4(dt); if (B52S.length) updateB52(dt); updateSkyTraffic(dt); };
 
+// ================= LOCK ON TARGETS FROM THE A-10 AND THE AC-130 (giants included) =================
+CTL.lock = null; CTL.lockMove = 0;
+function ctlLockToggle() {
+  if (!CTL.on || (CTL.kind !== 'gunship' && CTL.kind !== 'a10')) return;
+  if (CTL.lock) { CTL.lock = null; CTL.msg = '🎯 Doel losgelaten'; CTL.msgT = 1.2; return; }
+  const A = CTL.aim, team = CMD.team; let best = null, bs = 1e9;
+  for (const u of units) {
+    if (!u.alive || u.hidden || u.removed || (u.team === team) || (u.type !== 'zombie' && u.team === undefined) || u.type === 'struct' && u.noTarget) continue;
+    const boss = u.type === 'zombie' && u.D && u.D.boss, r = boss ? 60 + (u.D.sc || 1) * 2 : 70, d = Math.hypot(u.pos.x - A.x, u.pos.z - A.z); if (d > r) continue;
+    const s = d * (boss ? .2 : 1); if (s < bs) { bs = s; best = u; }
+  }
+  if (!best) { CTL.msg = 'Geen doel bij je kruisje · richt op een reus of voertuig en druk opnieuw'; CTL.msgT = 1.6; return; }
+  CTL.lock = best; CTL.lockMove = 0; CTL.msg = `🎯 VERGRENDELD: ${best.type === 'zombie' && best.D.boss ? bossName(best) : best.label().replace(/^(Blauw|Rood) /, '')}`; CTL.msgT = 1.6;
+  if (Snd.ctx) Snd.burst(camera.position, { f: 2200, q: 10, dur: .2, vol: .15, rng: 40 });
+}
+const lockAimPoint = u => { const c = u.center ? u.center().clone() : u.pos.clone(); if (u.type === 'zombie' && u.D && u.D.boss) c.y = Math.max(getH(u.pos.x, u.pos.z), WATER) + 1.1 * (u.D.sc || 1) * (u.D.mega ? .55 : .9); return c; };
+const _ctlClampL = ctlClampAim;
+ctlClampAim = function () {
+  _ctlClampL();
+  const L = CTL.lock; if (!L) return;
+  if (!CTL.on || !L.alive || L.removed || (CTL.kind !== 'gunship' && CTL.kind !== 'a10')) { if (CTL.on && L && !L.alive) { CTL.msg = '💥 Doel uitgeschakeld'; CTL.msgT = 1.6; } CTL.lock = null; return; }
+  const c = lockAimPoint(L); CTL.aim.set(c.x, c.y, c.z);
+};
+// pulling the aim far away lets go of the lock
+const _ctlMoveL = ctlMoveAim;
+ctlMoveAim = function (dx, dy) { if (CTL.lock) { CTL.lockMove += Math.hypot(dx, dy); if (CTL.lockMove < 140) return; CTL.lock = null; CTL.msg = '🎯 Doel losgelaten'; CTL.msgT = 1; } return _ctlMoveL(dx, dy); };
+// a button and the L key
+const _ctlEnterL = ctlEnter;
+ctlEnter = function (kind, obj) {
+  _ctlEnterL(kind, obj); CTL.lock = null;
+  if (!CTL.on || (kind !== 'gunship' && kind !== 'a10')) return;
+  const br = CTL.ui.querySelector('.br'); if (!br) return;
+  const b = document.createElement('button'); b.dataset.c = 'lock'; b.textContent = '🎯 LOCK'; b.style.cssText = 'border-color:#ff6a50;color:#ffb39a';
+  const row = br.querySelector('.row'); if (row) row.insertBefore(b, row.firstChild); else br.insertBefore(b, br.firstChild);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); ctlLockToggle(); });
+  const help = CTL.ui.querySelector('.help'); if (help) help.innerHTML = help.innerHTML.replace('Esc = terug', 'L = doel vergrendelen (ook reuzen) · Esc = terug');
+};
+addEventListener('keydown', e => { if (CTL.on && !e.repeat && e.code === 'KeyL' && (CTL.kind === 'gunship' || CTL.kind === 'a10')) { e.preventDefault(); e.stopPropagation(); ctlLockToggle(); } }, true);
+// the lock box with the target's health
+const _ctlHudL = ctlHud;
+ctlHud = function (dt) {
+  _ctlHudL(dt);
+  const L = CTL.lock; if (!CTL.on || !L || !L.alive) return;
+  const W = innerWidth, H = innerHeight, q = lockAimPoint(L).project(CTL.cam); if (q.z > 1) return;
+  const x = (q.x * .5 + .5) * W, y = (-q.y * .5 + .5) * H, b = 26 + Math.sin(SIMT * 8) * 3;
+  oc.strokeStyle = '#ff4a2a'; oc.lineWidth = 2.5; oc.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { oc.moveTo(x + sx * b, y + sy * (b - 10)); oc.lineTo(x + sx * b, y + sy * b); oc.lineTo(x + sx * (b - 10), y + sy * b); }
+  oc.stroke(); oc.beginPath(); oc.arc(x, y, 5, 0, TAU); oc.stroke();
+  const boss = L.type === 'zombie' && L.D && L.D.boss, nm = boss ? bossName(L).toUpperCase() : L.label().replace(/^(Blauw|Rood) /, '').toUpperCase();
+  oc.font = '700 12px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillStyle = 'rgba(0,0,0,.6)'; oc.fillRect(x - 90, y + b + 6, 180, 30);
+  oc.fillStyle = '#ffb39a'; oc.fillText(`🎯 ${nm}`, x, y + b + 19); oc.fillStyle = '#3a1410'; oc.fillRect(x - 80, y + b + 25, 160, 6); oc.fillStyle = '#ff5a3a'; oc.fillRect(x - 80, y + b + 25, 160 * Math.max(0, L.hp / L.maxHp), 6);
+};
+// the A-10's 30 mm cannon really hurts a giant now
+const _zDmgL = Zombie.prototype.damage;
+Zombie.prototype.damage = function (n, src, kind) {
+  if (this.D && this.D.boss && src && kind === 'bullet' && typeof A10S !== 'undefined' && A10S.some(A => A.owner === src)) n = Math.max(n, 160);
+  return _zDmgL.call(this, n, src, kind);
+};
+
 </script>
