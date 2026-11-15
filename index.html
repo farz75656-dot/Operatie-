@@ -12046,7 +12046,7 @@ CTL.ext.recon = {
 <div class="br"><div class="row"><button data-c="zo">－</button><button data-c="zi">＋</button><button data-c="move">🛰 Cirkel hier</button></div>
 <div class="row"><button data-c="mark">📍 Markeer</button></div>
 <div class="row"><button data-c="s_arty">💥 Artillerie</button><button data-c="s_air">💣 Bommen</button><button data-c="s_a10">✈ A-10</button></div></div>
-<div class="help">Sleep / muis = camera richten · ＋ / － = zoomen · 📍 = vijanden bij het kruisje markeren (60 s zichtbaar voor iedereen) · 🛰 = de drone cirkelt boven het kruisje · steun valt op het kruisje · Esc = terug</div>`,
+<div class="help">Muis of WASD = kruisje bewegen · scrollwiel of Q / E = zoomen · M = markeren · H = cirkel hier · T = warmtebeeld · Z = artillerie · B = bommen · V = A-10 · Esc = terug</div>`,
   hello: d => `📡 Je kijkt door de ${d.recon === 'awacs' ? 'AWACS-camera' : 'camera van de verkenningsdrone'} · sleep om rond te kijken`,
   update(dt) {
     const d = CTL.obj; if (!d.alive || d.removed) { ctlExit(false); addFeed(null, null, '📡 Verbinding met de drone verloren'); return; }
@@ -12093,7 +12093,7 @@ function reconCmd(c) {
 }
 addEventListener('keydown', e => {
   if (!CTL.on || CTL.kind !== 'recon' || e.repeat) return;
-  const m = { KeyM: 'mark', KeyH: 'move', KeyT: 'therm', Digit1: 's_arty', Digit2: 's_air', Digit3: 's_a10' }[e.code]; if (m) { reconCmd(m); e.stopPropagation(); }
+  const m = { KeyM: 'mark', KeyH: 'move', KeyT: 'therm', KeyZ: 's_arty', KeyB: 's_air', KeyV: 's_a10' }[e.code]; if (m) { reconCmd(m); e.stopPropagation(); }
 }, true);
 const _zoomR = ctlZoom;
 ctlZoom = function (f) { if (CTL.on && CTL.kind === 'recon') { CTL.fov = clamp(CTL.fov * f, 3.5, 60); return; } if (CTL.on && CTL.kind === 'ship' && CTL.peri) { CTL.fov = clamp(CTL.fov * f, 2.2, 60); return; } return _zoomR(f); };
