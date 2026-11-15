@@ -4105,12 +4105,12 @@ const _tankDie = Tank.prototype.die;
 Tank.prototype.die = function (src) {
   const wasPlayer = this === PZ.unit && state === 'possess';
   _tankDie.call(this, src);
-  const n = Math.random() < .65 ? 1 + (Math.random() < .5 ? 1 : 0) : 0;
+  const n = this.crewLost ? 0 : [0, 1, 2].filter(() => Math.random() < .7).length;   // three crew: commander, gunner, driver
   for (let i = 0; i < n; i++) setTimeout(() => {
-    const p = this.body.localToWorld(new V3((i ? -1 : 1) * 3, 0, rnd(-1, 1))); const s = new Soldier(this.team, p.x, p.z, 'rifle'); s.hp = 45;
+    const p = this.body.localToWorld(new V3((i % 2 ? -1 : 1) * 3, 0, rnd(-1, 1) + (i === 2 ? -3 : 0))); const s = new Soldier(this.team, p.x, p.z, 'rifle'); s.hp = 45;
     const b = BASES[this.team]; s.order = { type: 'move', p: new V3(b.x + rnd(-25, 25), 0, b.z + rnd(-25, 25)) };
     for (let k = 0; k < 4; k++) firePuff(s.pos.clone().add(new V3(0, 1, 0)), .6);
-    if (i === 0) addFeed(null, null, `Bemanning van de ${TEAMNAME[this.team].toLowerCase()} tank springt eruit`);
+    if (i === 0) addFeed(null, null, `Bemanning van de ${TEAMNAME[this.team].toLowerCase()} tank springt eruit · ${n} van de 3 leven nog`);
     if (wasPlayer && i === 0 && s.alive) possess(s);
   }, 600 + i * 500);
 };
@@ -11634,7 +11634,8 @@ const SCOPES = {
   mg: { kind: 'dot', fov: [44], mag: ['1×'], name: 'Machinegeweer · red dot', sightY: .12, sway: .35 },
   at: { kind: 'range', fov: [30], mag: ['2×'], name: 'Raketwerper · afstandsvizier', sightY: .1, sway: .4 },
   sniper: { kind: 'mil', fov: [11, 5], mag: ['6×', '12×'], name: 'Sluipschuttersgeweer', sightY: .105, sway: 1 },
-  flame: null
+  flame: null,
+  pistol: null
 };
 const scopeOf = u => u && u.type === 'soldier' ? (u.role in SCOPES ? SCOPES[u.role] : SCOPES.rifle) : null;
 function vmBuild(role) {
@@ -11677,6 +11678,15 @@ function vmBuild(role) {
     K.cyl(.012, .012, .03, DK, 0, .13, -.07); K.cyl(.012, .012, .03, DK, .026, .105, -.07, 0, 0, PI / 2);
     for (const z of [-.15, .0]) K.box(.032, .04, .016, MET, 0, .08, z);
     hands([.01, -.05, .08], [-.005, -.03, -.3]); muzzle = new V3(0, .035, -.8);
+  } else if (role === 'pistol') {
+    // M17-style pistol held in both hands
+    K.box(.032, .036, .19, 0x26272a, 0, .055, -.06); K.box(.034, .012, .18, 0x1b1c1e, 0, .078, -.06); for (let i = 0; i < 6; i++) K.box(.036, .03, .006, 0x151617, 0, .06, .02 + i * .008);
+    K.box(.03, .03, .16, 0x2e2f2b, 0, .025, -.05); K.box(.03, .1, .045, 0x2e2f2b, 0, -.03, .025, .25); K.box(.006, .006, .03, 0x111111, 0, .005, -.02);
+    K.box(.006, .01, .006, 0xd8d8d8, 0, .087, -.14); K.box(.012, .01, .006, 0x111111, 0, .087, .02); K.tube(.008, .008, .02, 0x0c0c0c, 0, .055, -.16, 8);
+    K.box(.05, .055, .085, GLV, .006, -.035, .05, .3); K.box(.05, .05, .08, GLV, -.022, -.045, .045, .3);
+    arm(.02, -.06, .08, .34, .05, .036, .6, .35, SLV); arm(.02, -.06, .08, .07, .04, .038, .6, .35, GLV);
+    arm(-.03, -.07, .07, .36, .052, .038, .62, -.42, SLV); arm(-.03, -.07, .07, .08, .042, .04, .62, -.42, GLV);
+    muzzle = new V3(0, .055, -.18);
   } else if (role === 'flame') {
     tube(.03, .03, .45, 0x3d3f38, 0, .03, -.22); tube(.02, .036, .08, DK, 0, .03, -.48); tube(.04, .04, .03, 0x6d5a2c, 0, .03, -.4);
     K.box(.03, .1, .045, POLY, 0, -.05, .04, .3); K.box(.03, .09, .04, POLY, 0, -.04, -.28, .1); K.sph(.009, 0xff9a2e, 0, .0, -.5);
@@ -11702,13 +11712,13 @@ function vmBuild(role) {
   g.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; const h = o.material.color.getHex(); o.material = VMX.mats[h] || (VMX.mats[h] = new THREE.MeshLambertMaterial(h === 0x6f99b4 || h === 0x7aa0b8 ? { color: h, transparent: true, opacity: .35, depthWrite: false } : { color: h })); } });
   g.visible = false; VMX.root.add(g); return g;
 }
-function vmGun(role) { const k = ['mg', 'at', 'sniper', 'flame'].includes(role) ? role : 'rifle'; return VMX.guns[k] || (VMX.guns[k] = vmBuild(k)); }
+function vmGun(role) { const k = ['mg', 'at', 'sniper', 'flame', 'pistol'].includes(role) ? role : 'rifle'; return VMX.guns[k] || (VMX.guns[k] = vmBuild(k)); }
 // pose: where the gun sits at the hip and when you aim
-const VMPOSE = { rifle: [.11, -.165, -.45], mg: [.12, -.175, -.47], at: [.15, -.17, -.4], sniper: [.11, -.165, -.46], flame: [.11, -.16, -.43] };
+const VMPOSE = { rifle: [.11, -.165, -.45], mg: [.12, -.175, -.47], at: [.15, -.17, -.4], sniper: [.11, -.165, -.46], flame: [.11, -.16, -.43], pistol: [.12, -.15, -.38] };
 function vmUpdate(dt, u, fp) {
   VMX.show = fp; if (VM) VM.visible = false;
   if (!fp) { if (VMX.cur) VMX.cur.visible = false; return; }
-  const role = ['mg', 'at', 'sniper', 'flame'].includes(u.role) ? u.role : 'rifle', g = vmGun(role);
+  const role = ['mg', 'at', 'sniper', 'flame', 'pistol'].includes(u.role) ? u.role : 'rifle', g = vmGun(role);
   if (VMX.cur !== g) { if (VMX.cur) VMX.cur.visible = false; VMX.cur = g; }
   const S = scopeOf(u), scoped = S && VMX.adsT > .86;
   g.visible = !scoped;
@@ -11850,7 +11860,7 @@ updatePossess = dt => {
   if (blood) blood.style.opacity = f < .45 ? 0 : clamp((f - .45) / .5, 0, .85) * (low ? .82 + .18 * Math.sin(SIMT * 7.5) : 1);
   if (low && Snd.ctx && (PZ.beatT = (PZ.beatT || 0) - dt) <= 0) { PZ.beatT = .85; Snd.burst(u.pos, { f: 70, type: 'lowpass', dur: .12, vol: .35, rng: 30 }); }
   // weapon name instead of the soldier panel, no HP number on the bodycam
-  const ex = pzEl('pzExtra'); if (ex) { const nm = S ? S.name + (S.fov.length > 1 ? ' ' + S.mag[SCP.zi] : '') : u.role === 'flame' ? 'Vlammenwerper' : 'Wapen'; if (!ex.textContent.startsWith(nm)) ex.textContent = nm + ' · ' + ex.textContent; }
+  const ex = pzEl('pzExtra'); if (ex) { const nm = S ? S.name + (S.fov.length > 1 ? ' ' + S.mag[SCP.zi] : '') : u.role === 'flame' ? 'Vlammenwerper' : u.role === 'pistol' ? 'Pistool' : 'Wapen'; if (!ex.textContent.startsWith(nm)) ex.textContent = nm + ' · ' + ex.textContent; }
 };
 // while looking through an optic, the battlefield markers stay off the glass
 const _drawOverlayV = drawOverlay;
@@ -12168,6 +12178,8 @@ for (const team of [0, 1]) for (const v of ['mbt', 'light', 'heavy', 'aa']) {
     K.box(.42, .42, .52, c2, .62, H + .2, 1.05); K.box(.34, .3, .04, gl, .62, H + .22, 1.32);
     K.cyl(.14, .16, .35, c2, -.58, H + .25, .15, 0, 0, 0, 10); K.box(.34, .3, .38, c2, -.58, H + .5, .15); K.box(.26, .2, .03, gl, -.58, H + .52, .35);
     K.cyl(.4, .42, .14, c2, .55, H + .1, -.55, 0, 0, 0, 14); K.box(.07, .08, .85, dk, .55, H + .32, -.2); K.box(.08, .2, .1, dk, .55, H + .2, -.55);
+    // the tank commander looks out of his hatch: helmet, headset and shoulders
+    K.box(.5, .32, .34, team ? 0x8a7d5a : 0x55603f, .55, H + .32, -.62); K.sph(.15, 0xc9a27e, .55, H + .58, -.6, 1, 1, 1, 10); K.sph(.19, 0x3a3d30, .55, H + .66, -.6, 1, .7, 1, 10); K.box(.36, .05, .05, 0x111111, .55, H + .6, -.6);
     K.cyl(.015, .015, 2.6, dk, -.95, H + 1.3, -2.1, 0, 0, 0, 4); K.cyl(.015, .015, 2.0, dk, .95, H + 1.0, -2.2, 0, 0, 0, 4);
     if (v === 'heavy') { for (const s of [-1, 1]) for (let k = 0; k < 3; k++) K.box(.55, .5, .28, c3, s * .7, .45, 2.0 - k * .05, 0, s * -.65, 0); K.box(1.2, .3, .3, c3, 0, H + .02, 1.7); }
   });
@@ -12768,5 +12780,408 @@ Convoy.prototype.update = function (dt) {
 };
 const _updateWavesL = updateWaves;
 updateWaves = function (dt) { _updateWavesL(dt); if (ISLF.length) updateIslandFlights(dt); };
+
+// ================= ROUND 3: DAY AND NIGHT, SEASONS, WEATHER, STORMS, WINTER =================
+// one day lasts 20 minutes; a season lasts two days. Weather changes with the season.
+const WTIME = { h: SET.tod === 'dusk' ? 18.3 : 10, day: 0, rate: 24 / 1200, season: MAPKEY === 'winter' ? 3 : MAPKEY === 'woestijn' ? 1 : 2, fixed: MAPKEY === 'winter' || MAPKEY === 'woestijn', snow: MAPKEY === 'winter' ? 1 : 0, snowT: 0, night: 0 };
+const SEASONS = [['Lente', '🌱'], ['Zomer', '☀️'], ['Herfst', '🍂'], ['Winter', '❄️']];
+const WXS = { state: 'clear', k: 0, tk: 0, cloud: 0, rain: 0, snowF: 0, storm: 0, sand: 0, t: rnd(120, 200), wind: new V3(), windT: new V3(), boltT: 6, flash: 0, base: null };
+const WXNAME = { clear: ['Helder', '☀️'], cloudy: ['Bewolkt', '☁️'], rain: ['Regen', '🌧'], storm: ['Onweer', '⛈'], snow: ['Sneeuw', '🌨'], blizzard: ['Sneeuwstorm', '❄️🌪'], sandstorm: ['Zandstorm', '🌪'] };
+// what the weather does: fog distance, cloud cover, rain, snow, storm
+const WXDEF = { clear: [1, 0, 0, 0, 0], cloudy: [.85, .55, 0, 0, 0], rain: [.6, .8, 1, 0, 0], storm: [.42, 1, 1.5, 0, 1], snow: [.55, .75, 0, 1, 0], blizzard: [.3, 1, 0, 2, .6], sandstorm: [.3, .7, 0, 0, .5] };
+function pickWeather() {
+  const s = WTIME.season, desert = MAPKEY === 'woestijn';
+  const W = desert ? { clear: .65, cloudy: .15, sandstorm: .2 } : s === 3 ? { clear: .25, cloudy: .25, snow: .32, blizzard: .18 } : s === 2 ? { clear: .3, cloudy: .3, rain: .25, storm: .15 } : s === 1 ? { clear: .55, cloudy: .2, rain: .1, storm: .15 } : { clear: .45, cloudy: .3, rain: .2, storm: .05 };
+  let r = Math.random(), k = 'clear'; for (const [n, p] of Object.entries(W)) { if ((r -= p) <= 0) { k = n; break; } } return k;
+}
+// ---------- precipitation: rain streaks and snowflakes around the camera ----------
+const PREC = (() => {
+  const NR = QUALITY.low ? 2500 : 5000, NS = QUALITY.low ? 2500 : 4500, B = 230, H = 170;
+  const rg = new THREE.BufferGeometry(), rp = new Float32Array(NR * 6); for (let i = 0; i < NR; i++) { const x = rnd(-B, B), y = rnd(0, H), z = rnd(-B, B); rp.set([x, y, z, x + .3, y + 2.4, z], i * 6); }
+  rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
+  const rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xaab4bc, transparent: true, opacity: .45 })); rain.frustumCulled = false; rain.visible = false; scene.add(rain);
+  const sg = new THREE.BufferGeometry(), sp = new Float32Array(NS * 3); for (let i = 0; i < NS; i++) sp.set([rnd(-B, B), rnd(0, H), rnd(-B, B)], i * 3);
+  sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  const snow = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: .5, transparent: true, opacity: .9, depthWrite: false })); snow.frustumCulled = false; snow.visible = false; scene.add(snow);
+  return { rain, snow, NR, NS, B, H };
+})();
+function updatePrec(dt) {
+  const inside = state === 'possess' || (typeof CTL !== 'undefined' && CTL.on), c = inside ? (CTL.on ? CTL.cam.position : camera.position) : new V3(cam.x, Math.max(getH(cam.x, cam.z), WATER) + PREC.H * .55, cam.z), W = WXS.wind;
+  const rk = WXS.rain, sk = WXS.snowF;
+  PREC.rain.visible = rk > .03; PREC.snow.visible = sk > .03;
+  if (PREC.rain.visible) {
+    const P = PREC.rain.geometry.attributes.position.array, n = Math.floor(PREC.NR * Math.min(1, rk)), B = PREC.B, H = PREC.H, base = c.y - H * .55, vy = -38 - WXS.storm * 10;
+    PREC.rain.position.set(c.x, 0, c.z); PREC.rain.geometry.setDrawRange(0, n * 2); PREC.rain.material.opacity = .3 + .25 * Math.min(1, rk);
+    for (let i = 0; i < n; i++) { const o = i * 6; let x = P[o] + W.x * dt, y = P[o + 1] + vy * dt, z = P[o + 2] + W.z * dt; if (y < base) y += H; if (x < -B) x += 2 * B; else if (x > B) x -= 2 * B; if (z < -B) z += 2 * B; else if (z > B) z -= 2 * B; P[o] = x; P[o + 1] = y; P[o + 2] = z; P[o + 3] = x + W.x * .06; P[o + 4] = y + 2.4; P[o + 5] = z + W.z * .06; }
+    PREC.rain.geometry.attributes.position.needsUpdate = true;
+  }
+  if (PREC.snow.visible) {
+    const P = PREC.snow.geometry.attributes.position.array, n = Math.floor(PREC.NS * Math.min(1, sk)), B = PREC.B, H = PREC.H, base = c.y - H * .55, t = SIMT, vy = -3.2 - sk * 1.5;
+    PREC.snow.position.set(c.x, 0, c.z); PREC.snow.geometry.setDrawRange(0, n); PREC.snow.material.size = .45 + sk * .2;
+    for (let i = 0; i < n; i++) { const o = i * 3; let x = P[o] + (W.x * (.6 + sk * .4) + Math.sin(t + i) * .7) * dt, y = P[o + 1] + vy * dt, z = P[o + 2] + (W.z * (.6 + sk * .4) + Math.cos(t * .7 + i) * .7) * dt; if (y < base) y += H; if (x < -B) x += 2 * B; else if (x > B) x -= 2 * B; if (z < -B) z += 2 * B; else if (z > B) z -= 2 * B; P[o] = x; P[o + 1] = y; P[o + 2] = z; }
+    PREC.snow.geometry.attributes.position.needsUpdate = true;
+  }
+}
+// ---------- stars and the moon ----------
+const NIGHTSKY = (() => {
+  const n = 1400, g = new THREE.BufferGeometry(), P = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const u = rnd(-1, 1), a = rnd(0, TAU), r = Math.sqrt(1 - u * u), y = Math.abs(u) * .95 + .05; P.set([Math.cos(a) * r * 5200, y * 5200, Math.sin(a) * r * 5200], i * 3); }
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false })); stars.frustumCulled = false; stars.renderOrder = -1; scene.add(stars);
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(120, 32), new THREE.MeshBasicMaterial({ color: 0xe8ecf4, transparent: true, opacity: 0, fog: false, depthWrite: false })); moon.frustumCulled = false; scene.add(moon);
+  return { stars, moon };
+})();
+// ---------- terrain and trees follow the seasons ----------
+const SEASONLOOK = { terr: [], orig: [] };
+function seasonMeshes() {
+  if (SEASONLOOK.terr.length) return SEASONLOOK.terr;
+  const list = [terrain]; scene.children.forEach(o => { if (o.isMesh && o !== terrain && o.geometry && o.geometry.attributes.color && Math.abs(o.position.x - ISLE.x) < 1 && Math.abs(o.position.z - ISLE.z) < 1) list.push(o); });
+  for (const m of list) { SEASONLOOK.terr.push(m); SEASONLOOK.orig.push(Float32Array.from(m.geometry.attributes.color.array)); }
+  return SEASONLOOK.terr;
+}
+function applySnowCover(k) {
+  const ms = seasonMeshes(), snow = new THREE.Color(0xeef2f4);
+  ms.forEach((m, j) => {
+    const C = m.geometry.attributes.color, O = SEASONLOOK.orig[j], N = m.geometry.attributes.normal.array, A = C.array;
+    for (let i = 0; i < C.count; i++) { const f = k * clamp((N[i * 3 + 1] - .78) / .15, 0, 1); A[i * 3] = O[i * 3] + (snow.r - O[i * 3]) * f; A[i * 3 + 1] = O[i * 3 + 1] + (snow.g - O[i * 3 + 1]) * f; A[i * 3 + 2] = O[i * 3 + 2] + (snow.b - O[i * 3 + 2]) * f; }
+    C.needsUpdate = true;
+  });
+  SEASONLOOK.k = k;
+}
+function applyTreeSeason() {
+  if (typeof treeMeshes === 'undefined' || !treeMeshes) return;
+  const s = WTIME.season, A = MAP.tree, base1 = new THREE.Color(A[0]), base2 = new THREE.Color(A[1]);
+  const t1 = s === 2 ? new THREE.Color(0xb8642a) : s === 3 ? new THREE.Color(0xc9d2d6) : s === 0 ? base1.clone().offsetHSL(0, .08, .06) : base1;
+  const t2 = s === 2 ? new THREE.Color(0xc98a2e) : s === 3 ? new THREE.Color(0xe4eaec) : s === 0 ? base2.clone().offsetHSL(0, .08, .06) : base2;
+  if (MAPKEY === 'woestijn' || MAPKEY === 'winter') return;
+  treeMeshes[1].material.color.copy(t1); treeMeshes[2].material.color.copy(t2);
+}
+// ---------- the clock ----------
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+function updateSky(dt) {
+  const h = WTIME.h, ph = ((h - 5.5 + 24) % 24) / 15, el = ph <= 1 ? Math.sin(ph * Math.PI) : -Math.sin((ph - 1) / .6 * Math.PI) * .6, az = Math.min(1, ph) * Math.PI;
+  const day = clamp((el + .08) / .3, 0, 1), gold = clamp(1 - Math.abs(el - .08) / .25, 0, 1) * day; WTIME.night = 1 - day;
+  const cl = WXS.cloud;
+  // sun by day, moon by night (always a little light so you can still play)
+  if (el > -.05) SUN_DIR.set(-Math.cos(az) * .9, Math.max(.12, el), Math.sin(az) * .4 + .3).normalize();
+  else SUN_DIR.set(Math.cos(az) * .7, Math.max(.35, -el), -.4).normalize();
+  sun.color.copy(_c1.set(0xfff0d6).lerp(_c2.set(0xffa765), gold * .8).lerp(_c2.set(0x8fa8ff), 1 - day));
+  sun.intensity = (lerp(.26, 1.05 + gold * .2, day)) * (1 - cl * .7) * (1 + WXS.flash * 2.5);
+  hemi.color.copy(_c1.set(0xc8d8e6).lerp(_c2.set(0x3a4a70), 1 - day)); hemi.groundColor.copy(_c1.set(0x4c4a36).lerp(_c2.set(0x14161c), 1 - day));
+  hemi.intensity = lerp(.3, .62, day) * (1 - cl * .32) + WXS.flash * 1.6;
+  const sky = camera.userData.sky.material.uniforms, gray = _c2.set(0x8c939a);
+  HORIZON.set(MAP.fog).lerp(_c1.set(0xd9a07a), gold * .7).lerp(_c1.set(0x0c1424), (1 - day) * .92).lerp(gray.clone().multiplyScalar(lerp(.25, 1, day)), cl * .55);
+  sky.top.value.set(MAP.sky[0]).lerp(_c1.set(0x34466f), gold * .6).lerp(_c1.set(0x03060f), (1 - day) * .97).lerp(gray.clone().multiplyScalar(lerp(.2, .9, day)), cl * .7);
+  sky.bot.value.set(MAP.sky[1]).lerp(_c1.set(0x050810), 1 - day);
+  if (WXS.flash > 0) { HORIZON.lerp(_c1.set(0xdfe6ff), WXS.flash * .7); sky.top.value.lerp(_c1.set(0xc8d0ff), WXS.flash * .6); }
+  if (scene.fog) scene.fog.color.copy(HORIZON);
+  // stars and moon
+  const sc = CTL && CTL.on ? CTL.cam.position : camera.position;
+  NIGHTSKY.stars.position.copy(sc); NIGHTSKY.stars.material.opacity = clamp(WTIME.night * 1.2 - .2, 0, 1) * (1 - cl);
+  const md = new V3(Math.cos(az) * .7, Math.max(.3, -el * .9 + .1), -.4).normalize(); NIGHTSKY.moon.position.copy(sc).addScaledVector(md, 5000); NIGHTSKY.moon.lookAt(sc); NIGHTSKY.moon.material.opacity = clamp(WTIME.night * 1.3 - .3, 0, 1) * (1 - cl * .8);
+  SET.tod = WTIME.night > .7 ? 'night' : WTIME.night > .25 || gold > .5 ? 'dusk' : 'day';
+  // winter: the snow cover grows, in spring it melts
+  const want = WTIME.season === 3 ? 1 : MAPKEY === 'winter' ? 1 : 0; WTIME.snow = clamp(WTIME.snow + (want > WTIME.snow ? 1 : -1) * dt / 240, 0, 1);
+  if (MAPKEY !== 'woestijn' && MAPKEY !== 'winter' && Math.abs((SEASONLOOK.k ?? -1) - WTIME.snow) > .06) applySnowCover(WTIME.snow);
+}
+// ---------- weather changes, wind, lightning ----------
+function updateWX(dt) {
+  if (state === 'play' || state === 'possess') { WTIME.h += dt * WTIME.rate; if (WTIME.h >= 24) { WTIME.h -= 24; WTIME.day++; if (!WTIME.fixed && WTIME.day % 2 === 0) { WTIME.season = (WTIME.season + 1) % 4; applyTreeSeason(); if (CMD) addFeed(null, null, `${SEASONS[WTIME.season][1]} Het is nu ${SEASONS[WTIME.season][0].toLowerCase()}${WTIME.season === 3 ? ' · koude, sneeuwstormen en minder eten · vliegtuigen hebben last van ijs' : WTIME.season === 0 ? ' · de sneeuw smelt' : ''}`); } } }
+  WXS.t -= dt;
+  if (WXS.t <= 0) {
+    const old = WXS.state; WXS.state = pickWeather(); WXS.t = rnd(150, 300);
+    if (WXS.state !== old && CMD) { const n = WXNAME[WXS.state]; const why = WXS.state === 'storm' ? ' · bliksem en turbulentie, vliegtuigen lopen gevaar' : WXS.state === 'blizzard' ? ' · bijna geen zicht, ijs op de vleugels, soldaten hebben het koud' : WXS.state === 'sandstorm' ? ' · bijna geen zicht' : ''; addFeed(null, null, `${n[1]} Het weer slaat om: ${n[0].toLowerCase()}${why}`); }
+    const a = rnd(0, TAU), sp = WXS.state === 'storm' ? rnd(14, 22) : WXS.state === 'blizzard' || WXS.state === 'sandstorm' ? rnd(16, 26) : rnd(2, 8); WXS.windT.set(Math.cos(a) * sp, 0, Math.sin(a) * sp);
+  }
+  const D = WXDEF[WXS.state], k = Math.min(1, dt / 25);
+  WXS.cloud = lerp(WXS.cloud, D[1], k); WXS.rain = lerp(WXS.rain, D[2], k); WXS.snowF = lerp(WXS.snowF, D[3], k); WXS.storm = lerp(WXS.storm, D[4], k); WXS.wind.lerp(WXS.windT, k);
+  WX.fog = lerp(WX.fog, D[0] * (WTIME.night > .5 ? .85 : 1), k);
+  // the old fixed weather particles are replaced by these
+  if (WX.pts) WX.pts.visible = false;
+  // lightning: a flash, a bolt, thunder a moment later; things under it get hit
+  WXS.flash = Math.max(0, WXS.flash - dt * 6);
+  if (WXS.storm > .5 && WXS.rain > .5) {
+    WXS.boltT -= dt;
+    if (WXS.boltT <= 0) {
+      WXS.boltT = rnd(4, 13) / WXS.storm; WXS.flash = 1;
+      const c = CTL && CTL.on ? CTL.cam.position : camera.position, a = rnd(0, TAU), r = rnd(150, 1400), x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r, gy = Math.max(getH(x, z), WATER);
+      const pts = []; let px = x, pz = z; for (let y = gy + 900; y > gy; y -= rnd(40, 90)) { pts.push(new V3(px, y, pz)); px += rnd(-18, 18); pz += rnd(-18, 18); } pts.push(new V3(x, gy, z));
+      const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xeef2ff, transparent: true, opacity: 1, fog: false })); scene.add(bolt);
+      setTimeout(() => { scene.remove(bolt); bolt.geometry.dispose(); }, 180);
+      if (Snd.ctx) setTimeout(() => Snd.burst(new V3(x, gy, z), { f: 70, type: 'lowpass', dur: 2.6, vol: .9, thump: .4, tf: 25, brown: true, rng: 4000 }), Math.min(3500, r * 2.9));
+      for (const u of units) {
+        if (!u.alive || u.hidden) continue; const air = u.type === 'jet' || u.type === 'heli' || u.type === 'drone';
+        const d = Math.hypot(u.pos.x - x, u.pos.z - z);
+        if (d < 14 || (air && d < 220 && Math.random() < .25)) { u.damage(air ? u.maxHp * .35 : 180, null, 'blast'); if (u.team === CMD.team && noteOnce('bolt', 15)) addFeed(null, null, air ? `⚡ De bliksem slaat in op ${u.label().toLowerCase()}!` : '⚡ Blikseminslag!'); }
+      }
+      explosion(new V3(x, gy + .5, z), .6, { r: 2 });
+    }
+  }
+}
+// ---------- aircraft feel the weather: turbulence, wind drift, icing ----------
+const _jetUpdW = Jet.prototype.update;
+Jet.prototype.update = function (dt) {
+  _jetUpdW.call(this, dt);
+  if (!this.alive || this.onGround) return;
+  const T = WXS.storm + (WXS.state === 'blizzard' ? .4 : 0) + WXS.wind.length() / 40; if (T < .08) return;
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd(-1, 1) * T * .012, rnd(-1, 1) * T * .006, rnd(-1, 1) * T * .02));
+  if (this.isPlayerUnit() && typeof FL !== 'undefined' && FL.arcade && FL.for === this) { FL.bank += rnd(-1, 1) * T * .03; FL.gam += rnd(-1, 1) * T * .006; } else this.q.multiply(q);
+  this.pos.addScaledVector(WXS.wind, dt * .5); this.pos.y += Math.sin(SIMT * 7 + this.pos.x) * T * dt * 3;
+  if (WTIME.season === 3 && WXS.snowF > .8 && this.speed > 120) this.speed -= dt * 4 * WXS.snowF;   // ice on the wings
+  if (this.isPlayerUnit() && T > .5 && noteOnce('turb', 30)) addFeed(null, null, `${WXS.state === 'blizzard' ? '❄ IJS EN STORM' : '⛈ ZWARE TURBULENTIE'} · houd je vliegtuig recht, de bliksem kan inslaan`);
+};
+const _heliUpdW = Heli.prototype.update;
+Heli.prototype.update = function (dt) {
+  _heliUpdW.call(this, dt);
+  if (!this.alive || this.state === 'unload') return;
+  if (this.agl && this.agl() > 6) { this.pos.addScaledVector(WXS.wind, dt * .35); if (WXS.storm > .3) this.pos.y += Math.sin(SIMT * 5 + this.pos.z) * WXS.storm * dt * 2; }
+};
+const _droneUpdW = Drone.prototype.update;
+Drone.prototype.update = function (dt) { _droneUpdW.call(this, dt); if (this.alive && WXS.wind.lengthSq() > 4) this.pos.addScaledVector(WXS.wind, dt * .4); };
+// ---------- winter is hard: more food and coal needed, less harvest; zombies are faster at night ----------
+const _zmEcoW = zmEconomySecond;
+zmEconomySecond = function () {
+  _zmEcoW();
+  if (!ZM.on || ZM.cured) return; const R = ZM.res;
+  if (WTIME.season === 3) {
+    const sold = units.reduce((a, u) => a + (u.alive && u.team === ZM.team && u.type === 'soldier' ? 1 : 0), 0);
+    R.food = Math.max(0, R.food - sold * .08 / 60); R.coal = Math.max(0, R.coal - (WXS.state === 'blizzard' ? 6 : 3) / 60);
+    if (R.coal <= 0 && noteOnce('cold', 90)) addFeed(null, null, '🥶 Geen kolen meer om te stoken · soldaten en burgers lijden onder de kou · stuur een bevoorradingsteam');
+    if (R.coal <= 0 || WXS.state === 'blizzard') for (const u of units) if (u.alive && u.team === ZM.team && u.type === 'soldier' && Math.random() < .2) u.hp = Math.max(1, u.hp - 1);
+  }
+  if (ZM.spMul0 === undefined) ZM.spMul0 = ZM.spMul;
+  ZM.spMul = ZM.spMul0 * (1 + WTIME.night * .22) * (WTIME.season === 3 ? .9 : 1);
+};
+// ---------- clock and weather on the screen ----------
+{
+  const st = document.createElement('style');
+  st.textContent = `#wxPill{font:600 11px var(--display,system-ui);letter-spacing:.04em;color:#e8f0d8;text-align:center;padding:3px 4px 1px;white-space:nowrap}
+body.touch #wxPill{font-size:10px}`;
+  document.head.appendChild(st);
+  const mb = document.getElementById('mapbox'); if (mb) { const d = document.createElement('div'); d.id = 'wxPill'; mb.appendChild(d); }
+}
+function updateWXHud() {
+  const el = document.getElementById('wxPill'); if (!el) return; WXS.hudT = (WXS.hudT || 0) - 1; if (WXS.hudT > 0) return; WXS.hudT = 20;
+  const hh = Math.floor(WTIME.h), mm = Math.floor((WTIME.h - hh) * 60), icon = WTIME.night > .6 ? '🌙' : WTIME.night > .2 ? '🌇' : '☀️', w = WXNAME[WXS.state], s = SEASONS[WTIME.season];
+  const t = `${icon} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${s[1]} ${s[0]} · ${w[1]} ${w[0]}`; if (el.textContent !== t) el.textContent = t;
+}
+// start of a game: the settings pick the hour; the first weather is calm
+const _setupBattleW = setupBattle;
+setupBattle = function (battle) {
+  _setupBattleW(battle);
+  WTIME.h = SET.tod === 'dusk' ? 18.3 : 10; WTIME.day = 0; WXS.state = SET.weather === 'neerslag' ? (MAPKEY === 'winter' ? 'snow' : MAPKEY === 'woestijn' ? 'sandstorm' : 'rain') : 'clear'; WXS.t = rnd(120, 200); applyTreeSeason(); ZM.spMul0 = ZM.spMul;
+};
+const _updateWavesTW = updateWaves;
+updateWaves = function (dt) { _updateWavesTW(dt); updateWX(dt); };
+const _renderMainTW = renderMain;
+renderMain = function (dt) { updateSky(dt); updatePrec(dt); updateWXHud(); return _renderMainTW(dt); };
+SET_OPTS.tod = [['day', 'Dag'], ['dusk', 'Zonsondergang']];
+
+// ================= ROUND 4: WEAPON SWITCHING, FPV DRONES, ARMED RECON DRONE, U-2, B-52, AIRLINERS =================
+// ---------- your soldier carries a main weapon, a pistol and can take a sniper rifle ----------
+ROLES.pistol = { rng: 130, chase: 60, dmg: 18, mag: 15, burst: [1, 3], cd: .25, pause: [.6, 1.2], spr: 1.2, snd: 'rifle' };
+const WPN = { names: { rifle: 'Geweer', at: 'Geweer', mg: 'Machinegeweer', sniper: 'Sluipschuttersgeweer', flame: 'Vlammenwerper', pistol: 'Pistool' } };
+function pzWeapon(slot) {
+  const u = PZ.unit; if (state !== 'possess' || !u || u.type !== 'soldier' || !u.alive) return;
+  if (!u.role0) { u.role0 = u.role; u.mags = {}; }
+  const list = [u.role0, 'pistol', u.role0 === 'sniper' ? 'rifle' : 'sniper'], want = slot === undefined ? list[(list.indexOf(u.role) + 1) % list.length] : list[slot];
+  if (!want || want === u.role) return;
+  u.mags[u.role] = u.mag; u.role = want; u.R = ROLES[want] || ROLES.rifle; u.mag = u.mags[want] ?? u.R.mag; PZ.reload = 0; PZ.ads = false; PZ.fireCd = .4;
+  if (typeof SCP !== 'undefined') SCP.zi = 0;
+  const lbl = { 0: '1', 1: '2', 2: '3' }; flashTip(`🔫 ${WPN.names[want] || want} · ${IS_TOUCH ? 'tik WAPEN om te wisselen' : '1 / 2 / 3 = wapen'}`);
+  if (Snd.ctx) Snd.burst(u.pos, { f: 1800, q: 4, dur: .08, vol: .2, rng: 40 });
+}
+function pzWeaponReset(u) { if (u && u.role0) { u.role = u.role0; u.R = ROLES[u.role0] || ROLES.rifle; u.mag = u.mags[u.role0] ?? u.R.mag; u.role0 = null; } }
+{
+  const b = document.createElement('button'); b.className = 'pzb so'; b.id = 'pzWeapon'; b.innerHTML = '🔫<br>WAPEN';
+  const ref = document.getElementById('pzReload'); if (ref) ref.parentNode.insertBefore(b, ref);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pzWeapon(); });
+  addEventListener('keydown', e => { if (state !== 'possess' || e.repeat || !PZ.unit || PZ.unit.type !== 'soldier') return; const k = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (k !== undefined) { pzWeapon(k); } });
+  const st = document.createElement('style'); st.textContent = '#pzWeapon{font-size:10px;line-height:1.2} body.fpvOn #pzFlyMode{display:none!important}'; document.head.appendChild(st);
+  const ks = document.getElementById('pzSoldier'); if (ks) ks.insertAdjacentHTML('beforeend', ' · <b>1 / 2 / 3</b> geweer · pistool · sluipschuttersgeweer');
+}
+const _updPossW = updatePossess;
+updatePossess = dt => {
+  const u = PZ.unit, pistol = u && u.type === 'soldier' && u.role === 'pistol', m0 = u ? u.mag : 0;
+  _updPossW(dt);
+  // the pistol is semi-automatic: one shot per press
+  if (pistol && u.mag < m0) { PZ.fire = false; PZ.fireCd = Math.max(PZ.fireCd, .17); }
+  // FPV goggles: a very wide lens
+  const d = PZ.unit, fpv = !!(state === 'possess' && d && d.fpv); document.body.classList.toggle('fpvOn', fpv);
+  if (fpv) { if (Math.abs(camera.fov - 100) > .5) { camera.fov = 100; camera.updateProjectionMatrix(); } const nm = pzEl('pzName'); if (nm && nm.textContent !== 'FPV-DRONE') nm.textContent = 'FPV-DRONE'; }
+};
+const _unpossW = unpossess;
+unpossess = () => { pzWeaponReset(PZ.unit); _unpossW(); };
+const _possW = possess;
+possess = function (u) { if (PZ.unit && PZ.unit !== u) pzWeaponReset(PZ.unit); return _possW(u); };
+// ---------- FPV drone: a small racing quadcopter with a bomb, flown through its camera ----------
+DRONE.fpv = { hp: 25, speed: 40, turn: 2.6, r: .7, alt: 35 };
+const FPV_GEO = bakeGeo(K => {
+  const dk = 0x1d1e20, cf = 0x2c2f33, red = 0xc62828;
+  K.box(.18, .06, .5, cf, 0, 0, 0); K.box(.16, .1, .22, 0x3a3d40, 0, .07, -.05); K.box(.1, .08, .08, 0x111111, 0, .05, .24); K.cyl(.025, .025, .04, 0x2a5ad8, 0, .05, .29, Math.PI / 2, 0, 0, 8);
+  for (const [x, z] of [[.28, .22], [-.28, .22], [.28, -.22], [-.28, -.22]]) { K.box(.36, .025, .04, cf, x / 2, 0, z / 2, 0, Math.atan2(x, z) + Math.PI / 2, 0); K.cyl(.035, .035, .06, dk, x, .03, z, 0, 0, 0, 8); }
+  K.box(.09, .09, .2, 0x55603f, 0, -.07, 0); K.box(.1, .02, .21, red, 0, -.02, 0); K.cyl(.01, .01, .12, 0x888888, .05, .12, -.2, .5, 0, 0, 4);
+});
+const FPV_PROP = new THREE.CylinderGeometry(.13, .13, .005, 14);
+function makeFPV(team, x, y, z, yaw) {
+  const d = new Drone(team, x, y, z, yaw, 'kamikaze'); d.fpv = true; d.V = DRONE.fpv; d.hp = d.maxHp = 25; d.radius = .7; d._hs[0].r = 1; d.speed = 30; d.life = 120; d._mdl = true;
+  while (d.model.children.length) d.model.remove(d.model.children[0]);
+  d.model.add(new THREE.Mesh(FPV_GEO, VCMAT)); d.props = [];
+  for (const [px, pz] of [[.28, .22], [-.28, .22], [.28, -.22], [-.28, -.22]]) { const p = new THREE.Mesh(FPV_PROP, new THREE.MeshBasicMaterial({ color: 0x9aa0a6, transparent: true, opacity: .35 })); p.position.set(px, .065, pz); d.model.add(p); d.props.push(p); }
+  d.model.scale.setScalar(2.2); d.prop = null; d.label = () => `${TEAMNAME[team]} FPV-drone`;
+  return d;
+}
+UNAME.fpv = ['FPV-drone', 'FPV-drones'];
+const _droneUpdF = Drone.prototype.update;
+Drone.prototype.update = function (dt) { if (this.fpv && this.props) for (const p of this.props) p.rotation.y += dt * 80; return _droneUpdF.call(this, dt); };
+// the goggles view: wide lens, on-screen display, a bit of static far from the pilot
+const _drawOverlayFPV = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayFPV(dt);
+  const d = PZ.unit; if (state !== 'possess' || !d || !d.fpv || !d.alive) return;
+  const W = innerWidth, H = innerHeight, x = oc, home = d.homeP || d.pos, dist = Math.hypot(d.pos.x - home.x, d.pos.z - home.z), sig = clamp(1 - dist / 1600, 0, 1);
+  x.save(); x.font = '700 14px IBM Plex Mono, monospace'; x.fillStyle = '#f2f2f2'; x.strokeStyle = 'rgba(0,0,0,.7)'; x.lineWidth = 3;
+  const t = (s, X, Y, a = 'left') => { x.textAlign = a; x.strokeText(s, X, Y); x.fillText(s, X, Y); };
+  const bat = Math.max(0, Math.round(d.life / 120 * 100));
+  t(`🔋 ${bat}%`, 18, H - 70); t(`${Math.round(d.speed * 3.6)} km/u`, 18, H - 50); t(`ALT ${Math.round(d.agl())} m`, W - 18, H - 50, 'right'); t(`📶 ${'▮'.repeat(Math.max(1, Math.round(sig * 5)))}${'▯'.repeat(5 - Math.max(1, Math.round(sig * 5)))}`, W - 18, H - 70, 'right');
+  t('● REC', W / 2, 34, 'center'); t(`${Math.round(dist)} m`, W / 2, H - 50, 'center');
+  x.strokeStyle = 'rgba(255,255,255,.85)'; x.lineWidth = 1.5; x.beginPath(); x.arc(W / 2, H / 2, 10, 0, TAU); x.moveTo(W / 2 - 28, H / 2); x.lineTo(W / 2 - 14, H / 2); x.moveTo(W / 2 + 14, H / 2); x.lineTo(W / 2 + 28, H / 2); x.stroke();
+  // artificial horizon from the drone's bank
+  x.save(); x.translate(W / 2, H / 2); x.rotate(-(d.bank || 0)); x.strokeStyle = 'rgba(255,255,255,.5)'; x.beginPath(); x.moveTo(-120, (d.pitch || 0) * 180); x.lineTo(-50, (d.pitch || 0) * 180); x.moveTo(50, (d.pitch || 0) * 180); x.lineTo(120, (d.pitch || 0) * 180); x.stroke(); x.restore();
+  if (sig < .5 || bat < 15) { const n = (1 - sig) * 220 + (bat < 15 ? 60 : 0); for (let i = 0; i < n; i++) { x.fillStyle = `rgba(255,255,255,${rnd(.05, .3)})`; x.fillRect(rnd(0, W), rnd(0, H), rnd(1, 3), 1); } if (sig < .2) t('⚠ ZWAK SIGNAAL', W / 2, H / 2 - 40, 'center'); }
+  if (bat < 15) t('⚠ BATTERIJ BIJNA LEEG', W / 2, H / 2 + 50, 'center');
+  x.restore();
+  pzEl('pzWarn').textContent = IS_TOUCH ? 'STUUR NAAR HET DOEL · VUUR = BOM' : 'STUUR NAAR HET DOEL · KLIK = BOM';
+};
+// ---------- the recon drone can shoot: Hellfire missiles and small bombs ----------
+const _reconUi = CTL.ext.recon.ui;
+CTL.ext.recon.ui = function (d) {
+  let h = _reconUi(d); if (d.recon !== 'recon') return h;
+  if (d.hf === undefined) { d.hf = 4; d.bm = 6; }
+  h = h.replace('<div class="row"><button data-c="mark">📍 Markeer</button></div>', '<div class="row"><button data-c="mark">📍 Markeer</button><button data-c="rk">🚀 Hellfire</button></div><button class="fire" data-c="fire">💣 BOM</button>');
+  return h.replace('· Esc = terug</div>', '· R = Hellfire · spatie / klik = bom · Esc = terug</div>');
+};
+const _reconUpd = CTL.ext.recon.update;
+CTL.ext.recon.update = function (dt) {
+  _reconUpd(dt); const d = CTL.obj; if (!CTL.on || !d || !d.alive || d.recon !== 'recon') return;
+  if (d.hf === undefined) { d.hf = 4; d.bm = 6; }
+  d.hfCd = Math.max(0, (d.hfCd || 0) - dt); d.bmCd = Math.max(0, (d.bmCd || 0) - dt); d.rearm = (d.rearm || 0) + dt; if (d.rearm > 60) { d.rearm = 0; if (d.hf < 4) d.hf++; if (d.bm < 6) d.bm++; }
+  const A = CTL.aim;
+  if (CTL.rk) {
+    CTL.rk = false;
+    if (!d.hf) { CTL.msg = 'Geen Hellfires meer · elke minuut komt er één bij'; CTL.msgT = 1.4; }
+    else if (d.hfCd > 0) { CTL.msg = 'Hellfire laadt'; CTL.msgT = .8; }
+    else { d.hf--; d.hfCd = 2.5; const from = d.pos.clone().add(new V3(0, -1.5, 0)), t = nearFoe(A, 40, d.team) || null, dir = (t ? t.center() : A).clone().sub(from).normalize(); launch('missile', from, dir.multiplyScalar(110), d, t); Snd.shot(from, 'rocket'); CTL.msg = `🚀 Hellfire los${t ? ' · doel vergrendeld' : ''}`; CTL.msgT = 1.2; }
+  }
+  if (CTL.fire && d.bmCd <= 0) {
+    if (!d.bm) { CTL.msg = 'Geen bommen meer'; CTL.msgT = 1; }
+    else {
+      d.bm--; d.bmCd = 1.2; const from = d.pos.clone().add(new V3(0, -1.2, 0)), h = Math.max(5, from.y - A.y), tf = Math.sqrt(2 * h / G);
+      launch('bomb', from, new V3((A.x - from.x) / tf, 0, (A.z - from.z) / tf), d); CTL.msg = `💣 Bom valt · inslag over ${tf.toFixed(0)} s`; CTL.msgT = 1.4;
+    }
+  }
+};
+const _reconHud = CTL.ext.recon.hud;
+CTL.ext.recon.hud = function (dt, pr, W, H) { _reconHud(dt, pr, W, H); const d = CTL.obj; if (d && d.recon === 'recon') { oc.font = '700 12px IBM Plex Mono, monospace'; oc.textAlign = 'right'; oc.fillStyle = '#ffd27a'; oc.fillText(`🚀 HELLFIRE ${d.hf ?? 4} · 💣 BOMMEN ${d.bm ?? 6}`, W - 16, (IS_TOUCH ? 74 : 70) + 18); } };
+// ---------- U-2 spy plane: flies so high nothing reaches it, sees everything in a wide circle ----------
+DRONE.u2 = { hp: 600, speed: 120, turn: .2, r: 9, alt: 2600 };
+const U2_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = 0x1e2124, c2 = 0x2a2e33, ins = team ? 0x6e2a22 : 0x2a3c52;
+  K.lathe([[0, -8.5], [.35, -8.2], [.6, -5], [.75, -1], [.8, 2], [.65, 5], [.4, 7], [0, 8.2]], c, 0, 0, 0, 1, 1.05, 16);
+  K.sph(.45, 0x10181f, 0, .6, 5, 1, .8, 1.8, 12); for (const s of [-1, 1]) K.box(.5, .7, 1.6, c2, s * .7, .1, 2.6);
+  const W = [[.6, 1.2], [15.5, .2], [15.5, -.6], [.6, -.8]]; K.plate(W, .16, c, 0, .1, 0, .01); K.plate(mirrorX(W), .16, c, 0, .1, 0, .01);
+  for (const s of [-1, 1]) { K.box(.1, .4, .25, c2, s * 15.4, -.1, -.2); K.box(.4, .25, .05, ins, s * 9, .2, -.2); }
+  K.fin([[-5.2, 0], [-7.6, 3.6], [-8.6, 3.6], [-8.4, 0]], .14, c, 0, .4, 0, 0, .02); const Hs = [[.4, -6.8], [3.6, -7.6], [3.6, -8.2], [.4, -8.3]]; K.plate(Hs, .1, c, 0, .4, 0); K.plate(mirrorX(Hs), .1, c, 0, .4, 0);
+  K.tube(.5, .45, 1.2, 0x111111, 0, 0, -8.6, 12);
+}));
+function makeU2(team, x, z, home) {
+  const d = new Drone(team, x, Math.max(getH(x, z), WATER) + 1800, z, Math.atan2(home.x - x, home.z - z), 'reaper'); const V = DRONE.u2;
+  d.recon = 'awacs'; d.u2 = true; d.V = V; d.hp = d.maxHp = V.hp; d.radius = V.r; d.missiles = 0; d.speed = V.speed; d._hs[0].r = V.r * 1.2; d.life = 1e9; d._mdl = true; d.noTarget = true;
+  while (d.model.children.length) d.model.remove(d.model.children[0]); d.model.add(new THREE.Mesh(U2_GEO[team], VCMAT)); d.prop = null; d.home = home.clone();
+  d.label = () => `${TEAMNAME[team]} U-2 spionagevliegtuig`;
+  return d;
+}
+// the U-2 also sees soldiers, from much higher up
+const _updateSpotU = updateSpot;
+updateSpot = function (dt) { _updateSpotU(dt); if (spotT !== .5) return; for (const d of units) if (d.u2 && d.alive && d.team === CMD.team) spotAround(d.home || d.pos, 2400, d.team, 6); };
+// ---------- B-52: a high-altitude carpet bombing run ----------
+const B52_GEO = [0, 1].map(team => bakeGeo(K => {
+  const c = team ? 0x6e6f60 : 0x5c6168, c2 = shade(c, .85), dk = 0x26292c, gl = 0x1b2833;
+  K.lathe([[0, -24], [.9, -23.5], [1.8, -20], [2.2, -10], [2.3, 8], [2.1, 16], [1.7, 21], [1.0, 23.5], [0, 24.5]], c, 0, 0, 0, 1, 1.15, 18);
+  K.box(2.6, .6, 1.5, gl, 0, 1.6, 20.5, .3, 0, 0);
+  const W = [[2.0, 5], [28, -10], [28, -12], [2.0, -5]]; K.plate(W, .5, c2, 0, 1.4, 0, .05); K.plate(mirrorX(W), .5, c2, 0, 1.4, 0, .05);
+  for (const s of [-1, 1]) for (const [x, z] of [[8, -.8], [16, -5.4]]) { K.box(.4, 1.6, 2.2, c2, s * x, .4, z); for (const o of [-.75, .75]) { K.tube(.62, .55, 4.2, 0x50545a, s * x + o, -.4, z + .4, 12); K.tube(.45, .45, .1, dk, s * x + o, -.4, z + 2.5, 10); } }
+  K.fin([[-15, 0], [-21, 11], [-24.5, 11], [-24, 0]], .5, c, 0, 1.4, 0, 0, .05); const Hs = [[1.5, -19], [11, -24], [11, -25.5], [1.5, -24]]; K.plate(Hs, .3, c2, 0, 1.6, 0); K.plate(mirrorX(Hs), .3, c2, 0, 1.6, 0);
+  K.box(.6, .6, .6, team ? 0xa3271b : 0x2c5d8f, 0, 4, -6);
+}));
+const B52S = [];
+function b52Run(team, p) {
+  const dir = new V3(rnd(-.25, .25), 0, team ? 1 : -1).normalize(), alt = Math.max(getH(p.x, p.z), WATER) + 2200, sp = 150, tf = Math.sqrt(2 * (alt - Math.max(getH(p.x, p.z), WATER)) / G);
+  const g = new THREE.Group(); g.add(new THREE.Mesh(B52_GEO[team], VCMAT)); g.scale.setScalar(1.1); scene.add(g);
+  const lead = sp * tf, start = p.clone().addScaledVector(dir, -(lead + 2600)); start.y = alt; g.position.copy(start); g.rotation.y = Math.atan2(dir.x, dir.z);
+  const own = { team, type: 'jet', alive: true, hidden: false, removed: false, pos: g.position, label: () => 'B-52', kind: () => 'b52', center: () => g.position };
+  B52S.push({ g, dir, sp, p: p.clone(), lead, own, n: 36, t: 0, trailT: 0 });
+  if (team === CMD.team) addFeed(null, null, `✈ B-52 vliegt op ${Math.round(alt)} m hoogte naar het doel · tapijtbombardement over ±${Math.round((2600 + lead) / sp)} s · uit de buurt blijven!`);
+  Snd.burst(p, { f: 120, type: 'lowpass', dur: 4, vol: .4, thump: .2, tf: 30, brown: true, rng: 6000 });
+}
+function updateB52(dt) {
+  for (let i = B52S.length - 1; i >= 0; i--) {
+    const B = B52S[i], g = B.g; g.position.addScaledVector(B.dir, B.sp * dt); B.t += dt;
+    const along = (g.position.x - B.p.x) * B.dir.x + (g.position.z - B.p.z) * B.dir.z;   // negative before the target
+    // release when the bombs will land around the target; they fall for about 20 seconds
+    if (B.n > 0 && along > -B.lead - 300 && along < -B.lead + 300) { B.rel = (B.rel || 0) - dt; if (B.rel <= 0) { B.rel = .12; B.n--; launch('bomb', g.position.clone().add(new V3(rnd(-3, 3), -3, rnd(-3, 3))), B.dir.clone().multiplyScalar(B.sp).add(new V3(rnd(-4, 4), 0, rnd(-4, 4))), B.own); } }
+    B.trailT -= dt; if (B.trailT <= 0) { B.trailT = .08; for (const s of [-1, 1]) for (const x of [8, 16]) spawnP(g.localToWorld(new V3(s * x, -.4, -4)), { tex: smokeTex, color: 0xffffff, op: .5, size: 2.4, grow: 3, life: 9, vel: new V3(0, 0, 0), drag: 1 }); }
+    if (along > 3200) { scene.remove(g); B52S.splice(i, 1); }
+  }
+}
+// ---------- airliners: civilian traffic high in the sky with contrails ----------
+const AIRLINER_GEO = bakeGeo(K => {
+  const w = 0xeef0f2, b = 0x1f4f8f, g = 0x8a8f96, gl = 0x1b2833;
+  K.lathe([[0, -18], [.8, -17], [1.7, -13], [2.0, -6], [2.0, 10], [1.8, 14], [1.2, 16.5], [0, 17.8]], w, 0, 0, 0, 1, 1.05, 18);
+  for (let i = 0; i < 18; i++) for (const s of [-1, 1]) K.box(.05, .22, .2, gl, s * 1.98, .45, 12 - i * 1.3);
+  K.box(2.6, .4, 30, b, 0, -.2, -1, 0, 0, 0); K.box(1.6, .5, .05, gl, 0, .6, 16.4, .5, 0, 0);
+  const W = [[1.8, 3], [17, -5], [17, -6.2], [1.8, -3.5]]; K.plate(W, .35, g, 0, -.6, 0, .03); K.plate(mirrorX(W), .35, g, 0, -.6, 0, .03);
+  for (const s of [-1, 1]) { K.tube(1.05, .9, 3.6, w, s * 6, -1.8, 0, 14); K.tube(.85, .85, .1, 0x222222, s * 6, -1.8, 1.8, 12); K.box(.2, 1, 1.6, g, s * 6, -1, -.2); K.box(.15, .8, .5, b, s * 17, -.2, -5.8); }
+  K.fin([[-11, 0], [-16, 7.5], [-18.2, 7.5], [-17.6, 0]], .35, b, 0, 1.4, 0, 0, .03); const Hs = [[1.2, -14], [7, -17.2], [7, -18.2], [1.2, -17.4]]; K.plate(Hs, .25, w, 0, .6, 0); K.plate(mirrorX(Hs), .25, w, 0, .6, 0);
+});
+const SKYTR = { list: [], t: rnd(30, 70) };
+function updateSkyTraffic(dt) {
+  SKYTR.t -= dt;
+  if (SKYTR.t <= 0 && SKYTR.list.length < 2) {
+    SKYTR.t = rnd(90, 200); const a = rnd(0, TAU), R = WORLD * 1.9, start = new V3(Math.cos(a) * R + WORLD * .3, rnd(1300, 1800), Math.sin(a) * R), end = new V3(-Math.cos(a + rnd(-.5, .5)) * R + WORLD * .3, start.y, -Math.sin(a + rnd(-.5, .5)) * R);
+    const g = new THREE.Mesh(AIRLINER_GEO, VCMAT); g.position.copy(start); const dir = end.clone().sub(start).normalize(); g.rotation.y = Math.atan2(dir.x, dir.z); scene.add(g);
+    SKYTR.list.push({ g, dir, sp: 230, end, tr: 0 });
+  }
+  for (let i = SKYTR.list.length - 1; i >= 0; i--) {
+    const A = SKYTR.list[i]; A.g.position.addScaledVector(A.dir, A.sp * dt); A.tr -= dt;
+    if (A.tr <= 0) { A.tr = .1; for (const s of [-1, 1]) spawnP(A.g.localToWorld(new V3(s * 6, -1.8, -2)), { tex: smokeTex, color: 0xffffff, op: .55, size: 3, grow: 5, life: 14, vel: new V3(), drag: 1 }); }
+    if (A.g.position.distanceTo(A.end) < 300 || Math.abs(A.g.position.x) > WORLD * 3) { scene.remove(A.g); SKYTR.list.splice(i, 1); }
+  }
+}
+// ---------- the request menu ----------
+KINDS.fpv = { label: '🥽 FPV-drone', sub: 'snel · jij vliegt · bom' }; KINDS.u2 = { label: '✈ U-2 spion', sub: 'heel hoog · ziet alles' }; KINDS.b52 = { label: '✈ B-52', sub: 'tapijtbom van 2 km hoog' };
+COST.fpv = 60; COST.u2 = 380; COST.b52 = 700; if (typeof OILC !== 'undefined') { OILC.fpv = 0; OILC.u2 = 2; OILC.b52 = 6; }
+UNAME.u2 = ['U-2', 'U-2’s']; UNAME.b52 = ['B-52', 'B-52’s'];
+{
+  const addBtn = (after, kind) => { const ref = document.querySelector(`[data-tool="${after}"]`); if (!ref) return; const b = document.createElement('button'); b.className = 'tb' + (kind === 'b52' ? ' x' : ''); b.dataset.tool = kind; b.innerHTML = `${KINDS[kind].label}<small>${KINDS[kind].sub}</small>`; ref.after(b); b.onclick = () => { setTool(tool && tool.kind === kind ? null : { kind, team: spawnSide }); b.blur(); if (tool) toggleTools(false); }; };
+  addBtn('awacs', 'fpv'); addBtn('fpv', 'u2'); addBtn('raptor', 'b52');
+}
+NEWAIR.fpv = 1; NEWAIR.u2 = 1; NEWAIR.b52 = 1;
+const _deliverR4 = deliver;
+deliver = function (kind, team, p) {
+  if (kind === 'fpv') {
+    // launched by a soldier near the spot: the closest friendly unit, or the base
+    let src = null, bd = 1e9; for (const u of units) { if (!u.alive || u.team !== team || u.type !== 'soldier') continue; const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z); if (d < bd) { bd = d; src = u; } }
+    const o = src && bd < 900 ? src.pos : BASES[team], d = makeFPV(team, o.x, Math.max(getH(o.x, o.z), WATER) + 6, o.z, Math.atan2(p.x - o.x, p.z - o.z));
+    d.home = new V3(p.x, 0, p.z); d.homeP = new V3(o.x, 0, o.z);
+    if (team === CMD.team && state === 'play') { addFeed(null, null, '🥽 FPV-drone stijgt op · jij vliegt hem · vuur = de bom ontploft'); setTimeout(() => { if (d.alive) possess(d); }, 50); }
+    return d;
+  }
+  if (kind === 'u2') { const b = BASES[team], d = makeU2(team, b.x, b.z, new V3(p.x, 0, p.z)); if (team === CMD.team) addFeed(null, null, '✈ U-2 spionagevliegtuig stijgt op · vliegt op 2,6 km hoogte en ziet alles in een cirkel van 2,4 km, ook soldaten'); return d; }
+  if (kind === 'b52') { b52Run(team, new V3(p.x, 0, p.z)); return null; }
+  return _deliverR4(kind, team, p);
+};
+const _updateWavesR4 = updateWaves;
+updateWaves = function (dt) { _updateWavesR4(dt); if (B52S.length) updateB52(dt); updateSkyTraffic(dt); };
 
 </script>
