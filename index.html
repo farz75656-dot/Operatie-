@@ -12583,4 +12583,190 @@ function updateWaves2(dt) {
 const _updateWavesW = updateWaves;
 updateWaves = function (dt) { _updateWavesW(dt); if (ZM.on && WAVES.length) updateWaves2(dt); };
 
+// ================= ROUND 2: SAFE LANDING ZONES, DOOR GUNNERS, BLACK MH-60 BLACK HAWK, AIRLIFT TO THE ISLAND, BIG TRUCKS =================
+// ---------- helicopters pick a clear landing zone ----------
+const hostileNear = (p, r, team) => { let n = 0; for (const u of units) { if (!u.alive || u.hidden || (u.team === team) || (u.type !== 'zombie' && (u.team === undefined || u.type === 'struct'))) continue; const dx = u.pos.x - p.x, dz = u.pos.z - p.z; if (dx * dx + dz * dz < r * r) n += u.type === 'zombie' && u.D && u.D.boss ? 6 : 1; } return n; };
+function clearLZ(p, team) {
+  if (hostileNear(p, 50, team) <= 1) return null;
+  let best = null, bs = 1e9;
+  for (const r of [60, 95, 130, 170, 220]) {
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * TAU + r * .01, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r, h = getH(x, z);
+      if (h < WATER + 1.2 || Math.abs(x) > WORLD - 40 && x < WORLD || Math.abs(z) > WORLD - 40 || groundNormal(x, z).y < .93) continue;
+      let blocked = false; for (const [a2, b2] of [[0, 0], [9, 0], [-9, 0], [0, 9], [0, -9]]) if (inBox(new V3(x + a2, getH(x + a2, z + b2) + 2, z + b2))) { blocked = true; break; }
+      if (blocked) continue;
+      const s = hostileNear(new V3(x, 0, z), 50, team) * 1000 + r; if (s < bs) { bs = s; best = new V3(x, 0, z); }
+    }
+    if (best && bs < 1000) break;
+  }
+  return best;
+}
+// ---------- door gunners: two miniguns in the cabin windows ----------
+function doorGuns(h, dt) {
+  h.dgT = (h.dgT || 0) - dt; h.dgS = h.dgS || [{ cd: 0, n: 0, t: null }, { cd: 0, n: 0, t: null }];
+  if (h.dgT <= 0) {
+    h.dgT = .35; const f = h.forward(), r = new V3(f.z, 0, -f.x); let L = null, Rr = null, bl = 1e9, br = 1e9;
+    for (const u of units) {
+      if (!u.alive || u.hidden || u.team === h.team || u.noTarget || (u.type !== 'zombie' && u.type !== 'soldier' && u.type !== 'tank' && u.type !== 'convoy')) continue;
+      const dx = u.pos.x - h.pos.x, dz = u.pos.z - h.pos.z, d2 = dx * dx + dz * dz; if (d2 > 125 * 125) continue;
+      const side = dx * r.x + dz * r.z; if (side < 0) { if (d2 < bl) { bl = d2; L = u; } } else if (d2 < br) { br = d2; Rr = u; }
+    }
+    h.dgS[0].t = L; h.dgS[1].t = Rr;
+  }
+  h.dgS.forEach((g, i) => {
+    const t = g.t; g.cd -= dt; if (!t || !t.alive || g.cd > 0) return;
+    g.n++; g.cd = g.n % 18 === 0 ? rnd(.6, 1.1) : .055;
+    const from = h.group.localToWorld(new V3(i ? -1.45 : 1.45, .1, 1.55)), c = t.center ? t.center() : t.pos, dir = c.clone().add(new V3(rnd(-.6, .6), .3, rnd(-.6, .6))).sub(from).normalize();
+    fireBullet(h, from, dir, { dmg: 30, range: 160, spread: .018, ap: .05, tracer: g.n % 3 === 0, from, tcol: 0xffc860 });
+    if (g.n % 4 === 0) { muzzle(from, .55, dir); if (g.n % 8 === 0) Snd.shot(from, 'mg'); }
+  });
+}
+const _heliUpdL = Heli.prototype.update;
+Heli.prototype.update = function (dt) {
+  if (this.alive && !this.isPlayerUnit()) {
+    // before descending into a hot zone the pilot looks for a clear spot nearby (evacuation pickups stay where the people wait)
+    if (this.state === 'in' && !this.lzOk && !this.M && this.dest.x < WORLD) {
+      const d = Math.hypot(this.dest.x - this.pos.x, this.dest.z - this.pos.z);
+      if (d < 280) {
+        this.lzOk = true; const q = clearLZ(this.dest, this.team);
+        if (q) { const moved = Math.round(Math.hypot(q.x - this.dest.x, q.z - this.dest.z)); this.dest.set(q.x, 0, q.z); if (this.team === CMD.team && noteOnce('lz', 6)) addFeed(null, null, `🚁 Piloot: landingszone ligt vol ${ZM.on ? 'zombies' : 'vijanden'}, we landen ${moved} m verderop`); }
+      }
+    }
+    if (this.state === 'out') this.lzOk = false;
+    // door gunners fire while flying low, landing and unloading
+    if (this.agl() < 90 && (this.state !== 'in' || Math.hypot(this.dest.x - this.pos.x, this.dest.z - this.pos.z) < 260)) doorGuns(this, dt);
+  }
+  return _heliUpdL.call(this, dt);
+};
+// ---------- the black MH-60M Black Hawk ----------
+for (const team of [0, 1]) mdlBake('hb' + team, K => {
+  const c = team ? 0x2b2a25 : 0x1f2327, c2 = shade(c, .78), c3 = shade(c, 1.35), gl = 0x101a22, dk = 0x141414, mt = 0x4a4e50, ins = team ? 0x6e2a22 : 0x2a3c52;
+  K.box(2.2, 1.6, 4.9, c, 0, -.2, -.2); K.tube(1.1, 1.1, 4.9, c, 0, .55, -.2, 18, 1, .5); K.box(1.9, .35, 4.6, c2, 0, -1.05, -.2);
+  K.lathe([[1.08, 0], [1.06, .4], [.96, 1.0], [.8, 1.45], [.56, 1.82], [.28, 2.05], [0, 2.12]], c, 0, -.16, 2.25, 1.0, .82);
+  K.box(.95, .78, .07, gl, .48, .62, 3.15, -.8, .28, 0); K.box(.95, .78, .07, gl, -.48, .62, 3.15, -.8, -.28, 0);
+  K.box(.06, .7, 1.15, gl, 1.06, .38, 2.65); K.box(.06, .7, 1.15, gl, -1.06, .38, 2.65); K.box(.55, .3, .06, gl, .42, -.45, 3.85, .5, 0, 0); K.box(.55, .3, .06, gl, -.42, -.45, 3.85, .5, 0, 0);
+  // FLIR ball under the nose, refuelling probe on the right, weather radar bulge
+  K.sph(.34, 0x2a2c2e, 0, -1.05, 3.55, 1, 1, 1, 14); K.cyl(.18, .18, .22, gl, 0, -1.08, 3.82, Math.PI / 2, 0, 0, 12); K.cyl(.12, .12, .5, dk, 0, -.8, 3.55);
+  K.tube(.07, .05, 4.2, mt, .95, .35, 5.3, 10); K.tube(.12, .07, .3, dk, .95, .35, 7.45, 10); K.box(.12, .12, 1.2, mt, .95, .1, 3.2);
+  for (const s of [-1, 1]) {
+    // open cargo doors with a gunner and an M134 minigun in each window
+    K.box(.05, 1.4, 1.75, shade(c, .7), s * 1.12, -.12, -.4); K.box(.06, .45, .45, gl, s * 1.12, .32, -.2);
+    K.box(.32, .26, .5, dk, s * 1.3, .1, 1.45); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; K.tube(.025, .025, .85, dk, s * 1.3 + Math.cos(a) * .06, .1 + Math.sin(a) * .06, 2.05, 5); }
+    K.box(.42, .55, .3, 0x3d4232, s * .78, .05, 1.35); K.sph(.17, 0x2b2f26, s * .78, .55, 1.4, 1, 1, 1, 10); K.box(.24, .1, .1, 0x111111, s * .82, .55, 1.56);
+    for (let k = 0; k < 3; k++) K.box(.06, .3, .3, gl, s * 1.12, .3, -1.1 - k * .55);
+    K.tube(.38, .34, 2.6, c3, s * .58, 1.18, -.55); K.cyl(.36, .36, .06, dk, s * .58, 1.18, .78, Math.PI / 2, 0, 0); K.box(.5, .4, 1.3, dk, s * .9, 1.2, -2.2, 0, s * .38, 0);
+    K.box(.12, .82, .12, mt, s * 1.0, -1.45, 1.15, 0, 0, s * .3); K.cyl(.32, .32, .22, dk, s * 1.25, -1.33, 1.15, 0, 0, Math.PI / 2); K.cyl(.14, .14, .26, mt, s * 1.25, -1.33, 1.15, 0, 0, Math.PI / 2);
+    // stub wings with external fuel tanks
+    K.box(2.4, .1, .7, c2, s * 2.2, .9, -.6, 0, 0, s * -.12); K.box(.1, .55, .1, dk, s * 2.9, .6, -.6); K.lathe([[0, -1.8], [.32, -1.4], [.36, 0], [.32, 1.4], [0, 1.9]], c3, s * 2.9, .2, -.6, 1, 1, 12);
+    K.box(.04, .04, 2.6, mt, s * .7, 1.0, 3.15, -.55, 0, 0); K.box(.04, .8, .04, mt, s * .6, -.6, 3.3, .3, 0, 0);
+  }
+  K.box(.5, .4, .7, dk, 1.05, 1.0, .9); K.box(.1, .1, .9, mt, 1.32, .9, 1.2);
+  K.box(1.35, .58, 2.6, c, 0, 1.25, -.25); K.sph(.75, c, 0, 1.18, 1.0, .9, .45, .9); K.cyl(.16, .2, .9, mt, 0, 1.95, -.3); K.cyl(.36, .36, .18, dk, 0, 2.36, -.3, 0, 0, 0, 10);
+  K.tube(.5, .26, 6.9, c, 0, .66, -5.95, 16); K.box(.05, .4, 5.5, c2, 0, .95, -5.6, -.03, 0, 0);
+  K.fin([[-8.75, .3], [-9.75, .3], [-10.55, 2.35], [-9.95, 2.45]], .28, c, 0, 0, 0, 0, .03); K.box(3.2, .08, .72, c, 0, .5, -9.55);
+  K.cyl(.17, .17, .32, mt, .2, 1.35, -9.8, 0, 0, Math.PI / 2); K.box(.08, 1.7, .12, mt, 0, -.5, -8.45); K.cyl(.2, .2, .14, dk, 0, -1.42, -8.45, 0, 0, Math.PI / 2);
+  K.box(.04, .55, .04, dk, 0, 1.0, 2.2, .4, 0, 0); K.box(.04, .45, .04, dk, 0, -1.4, -1.5); K.box(.4, .4, .05, ins, .9, .55, -4.6); K.box(.4, .4, .05, ins, -.9, .55, -4.6);
+  K.box(.9, .05, .9, 0x2c2e30, 0, .95, -3.0); K.box(.25, .25, .25, 0xd8d0b0, .65, -.15, -3.4);
+});
+// ---------- airlift: civilians at an airport fly to the island and land on its runway ----------
+const ISLF = [];
+function islandFlight(team, from, list) {
+  const g = buildCargoPlane(team), X = ISLE.x + 130, Y = WATER + 7, Zt = ISLE.z + 150;
+  g.position.set(from.x, Math.max(getH(from.x, from.z), WATER) + 140, from.z);
+  const F = { g, team, list, phase: 'cruise', sp: 95, app: new V3(X, Y + 260, ISLE.z + 1500), td: new V3(X, Y + 2.6, Zt), stop: new V3(X, Y + 2.6, ISLE.z - 70), t: 0 };
+  ISLF.push(F); return F;
+}
+function updateIslandFlights(dt) {
+  for (let i = ISLF.length - 1; i >= 0; i--) {
+    const F = ISLF[i], g = F.g, p = g.position; F.t += dt;
+    let goal = F.phase === 'cruise' ? F.app : F.phase === 'final' ? F.td : F.phase === 'roll' ? F.stop : null;
+    if (F.phase === 'cruise' || F.phase === 'final') {
+      const d = goal.clone().sub(p), L = d.length(); if (F.phase === 'final') F.sp = Math.max(62, F.sp - 6 * dt);
+      const v = d.multiplyScalar(F.sp / Math.max(1, L)); p.addScaledVector(v, dt);
+      const yaw = Math.atan2(v.x, v.z); g.rotation.set(-Math.atan2(v.y, Math.hypot(v.x, v.z)) * .6, yaw, 0, 'YXZ');
+      if (L < 30 && F.phase === 'cruise') F.phase = 'final';
+      else if (L < 6 && F.phase === 'final') { F.phase = 'roll'; addShake(p, .2); }
+    } else if (F.phase === 'roll') {
+      F.sp = Math.max(0, F.sp - 14 * dt); p.z -= F.sp * dt; p.y = F.td.y; g.rotation.set(0, Math.PI, 0);
+      if (F.sp <= 0 || p.z <= F.stop.z) { F.phase = 'unload'; F.t = 0; }
+    } else if (F.phase === 'unload') {
+      if (F.t > 1.5 && F.list.length) {
+        const S = isleStation(F.team), n = F.list.length;
+        for (const M of F.list) deliverOne(M, S, { x: p.x + rnd(-8, 8), z: p.z + rnd(-6, 6) });
+        if (F.team === CMD.team) addFeed(null, null, `✈🏝 Transportvliegtuig geland op het eiland · ${n} burgers stappen uit en gaan naar de screening`);
+        F.list = [];
+      }
+      if (F.t > 9) { F.phase = 'depart'; F.sp = 10; }
+    } else if (F.phase === 'depart') {
+      F.sp = Math.min(110, F.sp + 12 * dt); p.z -= F.sp * dt; if (F.sp > 66) p.y += (F.sp - 55) * .55 * dt; g.rotation.set(F.sp > 70 ? -.12 : 0, Math.PI, 0, 'YXZ');
+      if (p.z < ISLE.z - 1600) { scene.remove(g); ISLF.splice(i, 1); }
+    }
+  }
+}
+const _arrivedSafeL = arrivedSafe;
+arrivedSafe = function (S) {
+  if (!S.toIsle || S.kind !== 'air' || !S.flyN) return _arrivedSafeL(S);
+  const list = S.flyM.slice(), A = S.A, team = list[0] ? list[0].team : CMD.team;
+  islandFlight(team, { x: A.x, z: A.z }, list);
+  if (team === CMD.team) addFeed(null, null, `✈ Het transportvliegtuig uit ${S.name} vliegt met ${S.flyN} burgers naar het eiland`);
+  S.flyM = []; S.flyN = 0; if (S.kind === 'air') S.state = 'board'; S.idle = 0;
+};
+// the evacuation dialog gets a switch for airports: fly to the island instead of away
+const _askEvacL = askEvac;
+askEvac = function (C, p) {
+  _askEvacL(C, p);
+  const d = document.getElementById('evAsk'); if (!d) return;
+  const wrap = d.querySelector('#evToWrap'); if (!wrap) return;
+  const row = document.createElement('label'); row.id = 'evIsleAir'; row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:6px;font-size:12px;cursor:pointer';
+  row.innerHTML = `<input type="checkbox" id="evIsleChk" ${EVM.toIsleAir !== false ? 'checked' : ''}> ✈🏝 Vliegtuigen vanaf een luchthaven vliegen naar <b>het eiland</b> en landen daar (burgers gaan door de screening)`;
+  wrap.appendChild(row);
+  const go = d.querySelector('#evGo');
+  go.addEventListener('click', () => {
+    const on = d.querySelector('#evIsleChk') ? d.querySelector('#evIsleChk').checked : true; EVM.toIsleAir = on;
+    setTimeout(() => { const M = EVM.list[EVM.list.length - 1]; if (M && M.S && M.S.kind === 'air') { M.S.toIsle = on; if (on && M.team === CMD.team) addFeed(null, null, `✈🏝 ${M.S.name}: de vluchten gaan naar je eiland`); } }, 0);
+  }, true);
+};
+// ---------- big military trucks (HEMTT-style 8×8) and a Humvee ----------
+for (const team of [0, 1]) for (const kind of ['truck', 'tanker', 'evtruck', 'jeep']) mdlBake('cv' + kind + team, K => {
+  const c = team ? 0x8b7d5c : 0x56603f, c2 = shade(c, .82), c3 = shade(c, 1.12), dk = 0x1b1b1b, tire = 0x1f1f1e, gl = 0x1c2a36, mt = 0x55595b;
+  if (kind === 'jeep') {
+    // Humvee: wide and low, sloped bonnet, four doors, a gun ring on the roof
+    K.box(2.2, .5, 4.4, c2, 0, .95, 0); K.box(2.25, .75, 1.6, c, 0, 1.45, 1.4, -.12, 0, 0); K.box(2.2, 1.0, 2.6, c, 0, 1.75, -.55);
+    K.box(1.9, .5, .06, gl, 0, 2.0, .78, -.35, 0, 0); for (const s of [-1, 1]) { K.box(.06, .45, 1.0, gl, s * 1.11, 2.0, -.1); K.box(.06, .45, .9, gl, s * 1.11, 2.0, -1.2); }
+    K.box(2.3, .2, .3, dk, 0, 1.0, 2.25); for (const s of [-1, 1]) K.cyl(.1, .1, .06, 0xe8e2c4, s * .75, 1.5, 2.2, Math.PI / 2, 0, 0, 8);
+    K.cyl(.5, .5, .3, dk, 0, 2.4, -.6, 0, 0, 0, 12); K.box(.4, .35, .5, mt, 0, 2.65, -.5); K.tube(.05, .05, 1.1, dk, 0, 2.7, .3, 6); K.box(.7, .5, .06, c2, 0, 2.75, -.2);
+    for (const z of [-1.4, 1.4]) for (const s of [-1, 1]) { K.cyl(.48, .48, .38, tire, s * 1.05, .5, z, 0, 0, Math.PI / 2, 14); K.cyl(.26, .26, .4, mt, s * 1.06, .5, z, 0, 0, Math.PI / 2, 10); }
+    return;
+  }
+  const L = kind === 'truck' ? 7 : 8;
+  // chassis, four axles with big tyres
+  K.box(1.2, .4, L + .6, dk, 0, .95, 0);
+  for (const z of [L / 2 - .8, L / 2 - 2.1, -L / 2 + 2.0, -L / 2 + .7]) for (const s of [-1, 1]) { K.cyl(.6, .6, .44, tire, s * 1.12, .6, z, 0, 0, Math.PI / 2, 16); K.cyl(.32, .32, .46, mt, s * 1.13, .6, z, 0, 0, Math.PI / 2, 10); for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; K.box(.46, .12, .14, 0x151515, s * 1.12, .6 + Math.cos(a) * .58, z + Math.sin(a) * .58, a, 0, 0); } }
+  for (const s of [-1, 1]) K.box(.5, .1, L - .4, c2, s * 1.15, 1.25, 0);
+  // forward cab
+  const zc = L / 2 - .9;
+  K.box(2.5, 1.9, 2.0, c, 0, 2.15, zc); K.box(2.4, .9, .5, c2, 0, 1.45, zc + 1.15); K.box(2.6, .3, .35, dk, 0, 1.0, zc + 1.35);
+  for (let k = -3; k <= 3; k++) K.box(.08, .6, .06, dk, k * .25, 1.55, zc + 1.42);
+  K.box(2.3, .8, .06, gl, 0, 2.55, zc + 1.02, -.15, 0, 0); for (const s of [-1, 1]) { K.box(.06, .7, 1.2, gl, s * 1.26, 2.55, zc + .2); K.box(.08, .5, .3, dk, s * 1.42, 2.55, zc + 1.0); K.cyl(.12, .12, .08, 0xe8e2c4, s * .95, 1.6, zc + 1.42, Math.PI / 2, 0, 0, 8); K.box(.4, .14, .7, dk, s * 1.35, 1.25, zc + .2); }
+  K.box(2.5, .12, 2.0, c3, 0, 3.15, zc); K.cyl(.32, .32, .1, dk, -.5, 3.24, zc - .2, 0, 0, 0, 10); K.cyl(.1, .1, 1.6, dk, 1.1, 2.9, zc - 1.0, 0, 0, 0, 8); K.cyl(.13, .13, .2, mt, 1.1, 3.75, zc - 1.0, 0, 0, 0, 8);
+  // the back
+  const zb = -.95, Lb = L - 2.6;
+  if (kind === 'tanker') {
+    K.tube(1.15, 1.15, Lb, c3, 0, 2.3, zb, 18); for (const t of [-.4, 0, .4]) K.cyl(1.18, 1.18, .12, c2, 0, 2.3, zb + t * Lb, Math.PI / 2, 0, 0, 18);
+    K.box(.6, .1, Lb, dk, 0, 3.47, zb); for (let k = 0; k < 3; k++) K.cyl(.28, .28, .1, mt, 0, 3.47, zb - Lb / 2 + .8 + k * 1.5); K.box(.06, 1.6, .5, mt, 0, 2.3, zb - Lb / 2 - .1);
+    for (const s of [-1, 1]) K.cyl(.38, .38, .3, mt, s * 1.0, 1.2, -L / 2 + .2, 0, 0, Math.PI / 2, 10);
+  } else {
+    K.box(2.5, .22, Lb, c2, 0, 1.42, zb); for (const s of [-1, 1]) K.box(.08, .6, Lb, c, s * 1.22, 1.82, zb); K.box(2.5, .6, .08, c, 0, 1.82, zb - Lb / 2);
+    if (kind === 'truck') { K.box(2.46, 1.5, Lb - .2, 0x6b6b4a, 0, 2.85, zb); for (let k = 0; k < 5; k++) K.box(2.5, .08, .08, shade(0x6b6b4a, .8), 0, 3.62, zb - Lb / 2 + .4 + k * (Lb - .8) / 4); K.box(.04, .5, .5, 0xe8e8e0, 1.24, 2.9, zb); }
+  }
+  K.box(2.4, .5, .2, dk, 0, .95, -L / 2 - .25); for (const s of [-1, 1]) K.box(.25, .14, .06, 0xb3301f, s * 1.0, 1.15, -L / 2 - .36);
+});
+const _convUpdL = Convoy.prototype.update;
+Convoy.prototype.update = function (dt) {
+  if (!this.bigged) { this.bigged = true; if (this.variant !== 'jeep') { this.group.scale.setScalar(1.3); this.radius *= 1.3; this._hs.forEach(s => s.r = 2.7); } }
+  return _convUpdL.call(this, dt);
+};
+const _updateWavesL = updateWaves;
+updateWaves = function (dt) { _updateWavesL(dt); if (ISLF.length) updateIslandFlights(dt); };
+
 </script>
