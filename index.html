@@ -8759,12 +8759,12 @@ const OILC = { light: 3, mbt: 4, heavy: 5, aa: 3, fighter: 6, bomber: 6, nukebom
 const _payZ = pay;
 pay = function (kind, team) {
   const o = ZM.on && team === ZM.team ? OILC[kind] : 0;
-  if (o && ZM.res.oil < o) { flashTip(`Niet genoeg olie: ⛽ ${o} nodig, je hebt ${Math.floor(ZM.res.oil)} · je oliepompen leveren 15 per minuut, bevoorradingsteams brengen meer`); return false; }
+  if (o && ZM.res.oil < o) { flashTip(`Niet genoeg olie: ⛽ ${o} nodig, je hebt ${Math.floor(ZM.res.oil)} · je oliepompen en booreilanden leveren ${Math.round(oilYield(60) * 3)} per minuut`); return false; }
   const ok = _payZ(kind, team); if (ok && o) ZM.res.oil -= o; return ok;
 };
 function zmEconomySecond() {
   const R = ZM.res, T = ZM.team, sold = units.reduce((a, u) => a + (u.alive && u.team === T && u.type === 'soldier' ? 1 : 0), 0), civ = EVM.st['isle' + T] ? EVM.st['isle' + T].saved : 0;
-  R.food = clamp(R.food - (sold * .2 + civ * .08) / 60, 0, 600);   // production comes from the island's farm and mines (every 20 s)
+  R.food = clamp(R.food - (sold * .2 + civ * .08) / 60, 0, 5000);   // production comes from the island's farm and mines (every 20 s)
   ZM.need = (sold * .2 + civ * .08);
   if (ZM.cured) return;
   const L = ISL.lab; ZM.stat = L.hp <= 0 ? 'labo vernietigd' : R.med <= 0 ? 'geen medische voorraad · stuur een 🔍 bevoorradingsteam' : R.coal <= 0 ? 'geen kolen voor de stroom' : R.food <= 0 ? 'geen eten · de onderzoekers kunnen niet werken' : ZM.list.some(z => z.alive && z.isle) ? 'zombies op het eiland · onderzoek ligt stil' : '';
@@ -9503,15 +9503,17 @@ function updateCtlBtn(dt) {
   CTL.btn.hidden = !o; if (o) CTL.btn.textContent = o.kind === 'gunship' ? `🎮 BESTUUR AC-130 · ${Math.max(0, Math.ceil(o.obj.dur - Math.max(0, o.obj.t)))} s` : `🎮 BESTUUR A-10 · ${o.obj.ammo} kogels`;
 }
 // ---------- the island's farms, oil pumps and coal mine visibly deliver ----------
-const HARV = { t: 20, pops: [] };
+const HARV = { t: 20, pops: [] }, OIL_CAP = 9999;
+// oil: the pumps on the island give a lot, more workers pump more (the offshore rigs add even more, see p58)
+function oilYield(workers) { return 40 + workers * .5; }
 function islandHarvest(dt) {
   for (let i = HARV.pops.length - 1; i >= 0; i--) { HARV.pops[i].t += dt; if (HARV.pops[i].t > 3.2) HARV.pops.splice(i, 1); }
   HARV.t -= dt; if (HARV.t > 0) return; HARV.t = 20;
   const T = ISL.team, civ = EVM.st['isle' + T] ? EVM.st['isle' + T].saved : 0, workers = Math.min(60, civ);
-  const food = 6 + workers * .1, oil = 5, coal = 5;   // per 20 seconds: civilians on the island work the fields
-  if (ZM.on) { ZM.res.food = Math.min(600, ZM.res.food + food); ZM.res.oil = Math.min(300, ZM.res.oil + oil); ZM.res.coal = Math.min(300, ZM.res.coal + coal); }
-  else if (ECO.on) { ECO.money[T] = Math.min(1e14, ECO.money[T] + Math.round(food * 4 + oil * 10 + coal * 6)); }
-  const tag = (v, ic) => ZM.on ? `+${Math.round(v)} ${ic}` : `+◆ ${Math.round(v * (ic === '🍞' ? 4 : ic === '⛽' ? 10 : 6))}`;
+  const food = 6 + workers * .1, oil = oilYield(workers), coal = 5;   // per 20 seconds: civilians on the island work the fields
+  if (ZM.on) { ZM.res.food = Math.min(5000, ZM.res.food + food); ZM.res.oil = Math.min(OIL_CAP, ZM.res.oil + oil); ZM.res.coal = Math.min(300, ZM.res.coal + coal); }
+  else if (ECO.on) { ECO.money[T] = Math.min(1e14, ECO.money[T] + Math.round(food * 4 + oil * 4 + coal * 6)); }
+  const tag = (v, ic) => ZM.on ? `+${Math.round(v)} ${ic}` : `+◆ ${Math.round(v * (ic === '🍞' ? 4 : ic === '⛽' ? 4 : 6))}`;
   HARV.pops.push({ x: ISL.farm.x, z: ISL.farm.z, s: tag(food, '🍞'), t: 0 }, { x: ISL.oil.x, z: ISL.oil.z, s: tag(oil, '⛽'), t: 0 }, { x: ISL.mine.x, z: ISL.mine.z, s: tag(coal, '⛏'), t: 0 });
   HARV.food = food; HARV.workers = workers;
 }
@@ -13241,6 +13243,1124 @@ const _zDmgL = Zombie.prototype.damage;
 Zombie.prototype.damage = function (n, src, kind) {
   if (this.D && this.D.boss && src && kind === 'bullet' && typeof A10S !== 'undefined' && A10S.some(A => A.owner === src)) n = Math.max(n, 160);
   return _zDmgL.call(this, n, src, kind);
+};
+
+// ================= ROUND 5: CARRIER DETAILS AND INTERIOR, SAS, BRANCHES, DECISIONS, VIRUS MUTATIONS, SPACE STATION =================
+// ---------- carrier deck life: crew in coloured jerseys, Seahawks, tow tractors, CIWS, RAM, radars ----------
+const CARRIER_EXTRA = bakeGeo(K => {
+  const jer = [0xf2d23a, 0x6a3fa0, 0x3f8f4a, 0xc62828, 0xeeeeee, 0x8a5a2a, 0x2f6fd8], sk = 0xc9a27e;
+  const person = (x, z, c, ry = 0) => { K.box(.5, .7, .3, c, x, 7.9, z, 0, ry, 0); K.box(.42, .75, .26, 0x2a2b2d, x, 7.2, z, 0, ry, 0); K.sph(.14, sk, x, 8.4, z, 1, 1, 1, 8); K.sph(.17, c, x, 8.5, z, 1, .6, 1, 8); };
+  const crew = [[4, 20, 0], [6, 22, 1], [-3, 30, 2], [1, -20, 3], [3, -14, 4], [-8, -30, 0], [10, -4, 5], [12, 18, 6], [-2, 44, 2], [8, 34, 4], [-10, 10, 1], [5, -40, 0]];
+  crew.forEach(([x, z, k], i) => person(x, z, jer[k], i));
+  // Seahawk helicopters parked aft of the island
+  for (const [x, z] of [[-8, -52], [2, -52]]) { K.box(1.8, 1.6, 4.4, 0x6c7378, x, 8.2, z); K.lathe([[.9, 0], [.6, 1], [0, 1.5]], 0x6c7378, x, 8.1, z + 2.2, 1, .9, 10); K.tube(.4, .2, 5.5, 0x6c7378, x, 8.6, z - 4.6, 10); K.box(.1, 1.4, .9, 0x6c7378, x, 9.2, z - 7.2); K.box(5.5, .06, .3, 0x2a2b2c, x, 9.3, z, 0, .4, 0); K.box(5.5, .06, .3, 0x2a2b2c, x, 9.3, z, 0, -.9, 0); }
+  // tow tractors and a fuel truck
+  for (const [x, z, c] of [[2, 26, 0xd8d8d8], [-4, -24, 0xd8d8d8], [12, -24, 0xf2d23a]]) { K.box(1.6, .6, 2.6, c, x, 7.5, z); K.box(1.3, .6, .9, 0x2a2b2d, x, 8.1, z - .5); for (const s of [-1, 1]) for (const dz of [-.8, .8]) K.cyl(.32, .32, .25, 0x151515, x + s * .85, 7.3, z + dz, 0, 0, Math.PI / 2, 10); }
+  // CIWS gatling domes and RAM launchers on the sponsons
+  for (const [x, z] of [[16.5, 50], [-14, 52], [17, -55], [-21, -52]]) { K.cyl(.7, .8, 1.2, 0xd8d8d0, x, 7.6, z, 0, 0, 0, 12); K.sph(.75, 0xeeeee8, x, 9, z, 1, 1.2, 1, 12); K.tube(.08, .08, 1.6, 0x2a2b2c, x, 8.6, z + 1.2, 8); }
+  for (const [x, z] of [[17.5, 40], [-20.5, -44]]) { K.box(1.4, 1.2, 1.2, 0xd8d8d0, x, 7.8, z); for (let i = 0; i < 6; i++) K.cyl(.08, .08, 1.0, 0x55595b, x - .45 + (i % 3) * .45, 8.3 + Math.floor(i / 3) * .3, z + .3, Math.PI / 2, 0, 0, 6); }
+  // phased-array radar faces on the island and the landing lights
+  for (const [x, z, ry] of [[11.3, 4, Math.PI / 2], [17.7, 4, -Math.PI / 2]]) K.box(.1, 2.4, 2.4, 0x3a3f44, x, 16, z, 0, ry - Math.PI / 2, 0);
+  for (let z = -50; z <= 54; z += 8) { K.box(.2, .1, .2, 0x7fd0ff, 11.6, 7.06, z); K.box(.2, .1, .2, 0x7fd0ff, -13, 7.06, z); }
+});
+const _shipUpdC = Ship.prototype.update;
+Ship.prototype.update = function (dt) {
+  if (this.variant === 'carrier' && !this.cx) { this.cx = true; const m = new THREE.Mesh(CARRIER_EXTRA, VCMAT); this.model ? this.model.add(m) : this.group.add(m); }
+  return _shipUpdC.call(this, dt);
+};
+// ---------- walk around inside the carrier: hangar, berthing with bunk beds, the SAS room, the mess ----------
+const INT = { on: false, scene: null, cam: new THREE.PerspectiveCamera(70, 1, .05, 200), pos: new V3(0, 1.7, -20), yaw: 0, pitch: 0, keys: {}, rects: [], ship: null, joy: null, look: null, near: null, built: false, signs: [] };
+function textSprite(txt, col = '#ffd27a', w = 512) {
+  const c = document.createElement('canvas'); c.width = w; c.height = 96; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(10,12,10,.82)'; x.fillRect(0, 0, w, 96); x.strokeStyle = col; x.lineWidth = 4; x.strokeRect(2, 2, w - 4, 92);
+  x.font = '700 46px Chakra Petch, sans-serif'; x.fillStyle = col; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, w / 2, 50);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: true })); s.scale.set(w / 96 * .9, .9, 1); return s;
+}
+function buildInterior() {
+  const S = INT.scene = new THREE.Scene(); S.background = new THREE.Color(0x0e1012); S.fog = new THREE.Fog(0x0e1012, 30, 90);
+  S.add(new THREE.HemisphereLight(0xdfe6ee, 0x2a2824, .85)); const dl = new THREE.DirectionalLight(0xfff4e0, .5); dl.position.set(5, 10, 3); S.add(dl);
+  const team = CMD.team, G = new THREE.Group(); S.add(G); const K = mdlKit(G);
+  const GREY = 0x8d9296, DGREY = 0x5c6166, FLOOR = 0x4a5056, YEL = 0xd9b43a, BLU = 0x2c4d7a, WH = 0xe8e8e2, LAMP = 0xfff6d8;
+  const room = (x0, x1, z0, z1, h, floor = FLOOR) => { K.box(x1 - x0, .2, z1 - z0, floor, (x0 + x1) / 2, -.1, (z0 + z1) / 2); K.box(x1 - x0, .2, z1 - z0, DGREY, (x0 + x1) / 2, h + .1, (z0 + z1) / 2); };
+  const wall = (x0, z0, x1, z1, h, c = GREY) => { const L = Math.hypot(x1 - x0, z1 - z0); K.box(Math.abs(x1 - x0) < .01 ? .25 : L, h, Math.abs(z1 - z0) < .01 ? .25 : L, c, (x0 + x1) / 2, h / 2, (z0 + z1) / 2); };
+  const lamps = (x0, x1, z0, z1, h, step = 6) => { for (let x = x0 + step / 2; x < x1; x += step) for (let z = z0 + step / 2; z < z1; z += step) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, .08, .3), new THREE.MeshBasicMaterial({ color: LAMP })); m.position.set(x, h - .05, z); S.add(m); } };
+  // hangar bay
+  room(-14, 14, -30, 30, 8); wall(-14, -30, -14, 30, 8); wall(-14, -30, 14, -30, 8); wall(-14, 30, 14, 30, 8);
+  wall(14, -30, 14, -2, 8); wall(14, 2, 14, 30, 8); K.box(.3, 5.5, 4, DGREY, 14, 5.25, 0);
+  for (let z = -28; z <= 28; z += 4) K.box(28, .02, .15, YEL, 0, .01, z); for (let x = -12; x <= 12; x += 6) K.box(.12, .3, 60, 0x3a3f44, x, 7.6, 0);
+  // the elevator opening to the sea on the west side, with daylight
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(10, 6), new THREE.MeshBasicMaterial({ color: 0x9cc4e4 })); sea.position.set(-13.8, 3.5, 10); sea.rotation.y = Math.PI / 2; S.add(sea); K.box(.3, .3, 10.4, YEL, -13.8, 6.6, 10);
+  lamps(-14, 14, -30, 30, 8, 7);
+  // parked aircraft: two fighters with folded look, a Black Hawk, a tow tractor, weapon carts and crates
+  for (const [x, z, ry] of [[-7.5, -12, .35], [7.5, -6, -.35]]) for (const k of ['jm' + team, 'jg']) { const j = new THREE.Mesh(GEO_CACHE[k], VCMAT); j.position.set(x, 1.98, z); j.rotation.y = ry; G.add(j); }
+  const bh = new THREE.Mesh(GEO_CACHE['hb' + team], VCMAT); bh.position.set(-4, 1.7, 14); bh.rotation.y = 2.4; G.add(bh); const ro = new THREE.Mesh(GEO_CACHE.hr, VCMAT); ro.position.set(-4, 4.15, 14); ro.rotation.y = .5; G.add(ro);
+  K.box(1.6, .6, 2.6, 0xf2d23a, 6, .4, 10); K.box(1.3, .6, .9, 0x2a2b2d, 6, 1, 9.5);
+  for (let i = 0; i < 4; i++) { K.box(1.2, .5, 2.4, 0x3a3f36, 9, .45, 18 + i * 2.8); K.tube(.18, .18, 2.2, 0x6b6e70, 9, .85, 18 + i * 2.8, 8); }
+  for (let i = 0; i < 6; i++) K.box(1.2, 1.2, 1.2, i % 2 ? 0x55603f : 0x6b5a3a, -11 + (i % 3) * 1.3, .6 + Math.floor(i / 3) * 1.2, -26);
+  const hs = textSprite('HANGAR · VLIEGDEKSCHIP'); hs.position.set(0, 6.4, 29.6); S.add(hs);
+  // corridor
+  room(14, 20.5, -2, 2, 3.2); wall(14, -2, 18, -2, 3.2); wall(14, 2, 18, 2, 3.2);
+  room(18, 21, -24, 24, 3.2); wall(18, -24, 18, -2, 3.2); wall(18, 2, 18, 24, 3.2); wall(18, -24, 21, -24, 3.2); wall(18, 24, 21, 24, 3.2);
+  wall(21, -24, 21, -11, 3.2); wall(21, -9, 21, -1, 3.2); wall(21, 1, 21, 9, 3.2); wall(21, 11, 21, 24, 3.2);
+  for (let z = -22; z <= 22; z += 4) { const m = new THREE.Mesh(new THREE.BoxGeometry(.8, .06, .3), new THREE.MeshBasicMaterial({ color: LAMP })); m.position.set(19.5, 3.15, z); S.add(m); }
+  K.box(.08, .3, 48, 0x2a6a3a, 18.15, 2.6, 0); K.box(.06, .06, 48, 0x8a5a2a, 18.15, 2.9, 0);
+  // berthing: triple bunks with blue curtains and lockers
+  room(21, 34, 4, 24, 3.2); wall(21, 4, 34, 4, 3.2); wall(34, 4, 34, 24, 3.2); wall(21, 24, 34, 24, 3.2); lamps(21, 34, 4, 24, 3.2, 5);
+  for (const zz of [7, 12.5, 18]) for (const xx of [24, 28.5, 33]) {
+    const bx = xx - 1.2;
+    for (const lvl of [.35, 1.15, 1.95]) { K.box(.9, .08, 2.1, 0x3a3f44, bx, lvl, zz); K.box(.85, .14, 2.0, 0xd8d6cc, bx, lvl + .1, zz); K.box(.87, .05, 1.4, [0x3f4a5a, 0x4b5232, 0x5a3f3f][(lvl * 2 | 0) % 3], bx, lvl + .19, zz + .3); K.box(.4, .1, .3, WH, bx, lvl + .22, zz - .8); K.box(.02, .5, 1.9, BLU, bx - .44, lvl + .4, zz + .05); }
+    for (const [dx, dz] of [[-.45, -1.05], [.45, -1.05], [-.45, 1.05], [.45, 1.05]]) K.box(.06, 2.5, .06, 0x55595b, bx + dx, 1.25, zz + dz);
+    K.box(.6, 1.9, .6, 0x6b7378, bx + .9, .95, zz - .7); K.box(.02, .06, .2, 0x2a2b2c, bx + .61, 1.2, zz - .7);
+  }
+  const bs = textSprite('BEMANNINGSVERBLIJF', '#9fd4f5'); bs.position.set(21.2, 2.6, 10); bs.rotation.y = 0; bs.scale.multiplyScalar(.6); S.add(bs);
+  // SAS / special forces ready room
+  room(21, 34, -24, -4, 3.2); wall(21, -4, 34, -4, 3.2); wall(34, -24, 34, -4, 3.2); wall(21, -24, 34, -24, 3.2); lamps(21, 34, -24, -4, 3.2, 5);
+  K.box(3.6, .9, 2, 0x4a3a2a, 27.5, .45, -14); const mapT = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.8), new THREE.MeshBasicMaterial({ map: typeof mapImg !== 'undefined' ? new THREE.CanvasTexture(mapImg) : null, color: 0xffffff })); mapT.rotation.x = -Math.PI / 2; mapT.position.set(27.5, .92, -14); S.add(mapT);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.2), new THREE.MeshBasicMaterial({ color: 0x1d3a5a })); scr.position.set(27.5, 1.9, -23.85); S.add(scr);
+  for (let i = 0; i < 8; i++) { K.box(.8, 2.0, .6, 0x3d4232, 22.5 + i * 1.3, 1.0, -4.5); K.box(.6, .3, .1, 0x55603f, 22.5 + i * 1.3, 1.5, -4.82); K.box(.08, .9, .05, 0x1a1a1a, 22.3 + i * 1.3, 1.2, -4.85); }
+  for (let i = 0; i < 5; i++) { K.box(.08, 1.4, .3, 0x2a2b2c, 33.8, .9, -20 + i * .6); K.box(.12, .1, .5, 0x1a1a1a, 33.7, 1.3, -20 + i * .6); }
+  const op = (x, z, ry, sit) => { const y0 = sit ? .45 : 0; K.box(.5, .65, .3, 0x4b5232, x, y0 + 1.15, z, 0, ry, 0); K.box(.45, sit ? .5 : .85, .28, 0x3a3d30, x, y0 + (sit ? .55 : .45), z, 0, ry, 0); K.sph(.14, 0xc9a27e, x, y0 + 1.62, z, 1, 1, 1, 8); K.sph(.16, 0x2a2c26, x, y0 + 1.7, z, 1, .65, 1, 8); K.box(.32, .18, .3, 0x2f3328, x, y0 + 1.2, z + Math.cos(ry) * .2, 0, ry, 0); if (sit) K.box(.5, .45, .5, 0x55595b, x, .22, z); };
+  op(25.5, -12.8, Math.PI, true); op(29.5, -12.8, Math.PI, true); op(25.5, -15.2, 0, true); op(29.5, -15.2, 0, true); op(32, -14, -Math.PI / 2, false); op(23, -20, .5, false);
+  const ss = textSprite('SPECIAL FORCES · SAS', '#ff9a80'); ss.position.set(21.2, 2.6, -10); ss.scale.multiplyScalar(.6); S.add(ss);
+  // mess hall between the berthing and the SAS room: long tables, benches, a serving counter
+  room(21, 34, -4, 4, 3.2); lamps(21, 34, -4, 4, 3.2, 4);
+  for (const zz of [-1.9, 1.9]) { K.box(8, .08, 1.0, 0xb8b4a8, 28, .78, zz); for (const s of [-1, 1]) { K.box(8, .06, .35, 0x55595b, 28, .45, zz + s * .75); } for (const xx of [24.5, 31.5]) K.box(.08, .74, .08, 0x55595b, xx, .38, zz); for (let k = 0; k < 5; k++) { K.box(.36, .03, .26, 0x8a9096, 25 + k * 1.5, .83, zz - .25); K.box(.36, .03, .26, 0x8a9096, 25.6 + k * 1.5, .83, zz + .25); } }
+  K.box(.8, 1.0, 6.4, 0x9aa0a4, 32.6, .5, 0); K.box(.9, .06, 6.5, 0xd8d8d0, 32.6, 1.03, 0); for (let k = 0; k < 4; k++) K.cyl(.22, .2, .25, 0xc9c9c0, 32.6, 1.16, -2.2 + k * 1.45, 0, 0, 0, 10);
+  op(26, -2.6, Math.PI, true); op(30.5, 2.6, 0, true); op(33.5, 1.5, -Math.PI / 2, false);
+  const ms = textSprite('KANTINE', '#c8e6a0'); ms.position.set(21.2, 2.6, 0); ms.scale.multiplyScalar(.5); S.add(ms);
+  // walkable areas (x0, x1, z0, z1)
+  INT.rects = [[-13.6, 13.6, -29.6, 29.6], [13, 19, -1.6, 1.6], [18.4, 20.6, -23.6, 23.6], [20, 22, 9.2, 10.8], [20, 22, -10.8, -9.2], [20, 22, -.8, .8], [21.4, 33.6, 4.4, 23.6], [21.4, 33.6, -23.6, -4.4], [21.4, 31.9, -3.6, 3.6]];
+  INT.sasP = new V3(27.5, 0, -14); INT.bunkP = new V3(24, 0, 12.5);
+  const mergeAll = []; G.traverse(o => { if (o.isMesh && o.material && !o.material.isMeshBasicMaterial && !GEO_CACHE_VALUES.has(o.geometry)) mergeAll.push(o); });
+  if (mergeAll.length) { const geo = mergeRel(G, mergeAll); mergeAll.forEach(m => { m.parent.remove(m); m.geometry.dispose(); }); G.add(new THREE.Mesh(geo, VCMAT)); }
+  INT.built = true;
+}
+const GEO_CACHE_VALUES = { has: g => Object.values(GEO_CACHE).includes(g) };
+const intFree = (x, z) => INT.rects.some(([x0, x1, z0, z1]) => x > x0 + .3 && x < x1 - .3 && z > z0 + .3 && z < z1 - .3);
+function enterInterior(ship) {
+  if (!INT.built) buildInterior();
+  INT.on = true; INT.ship = ship; INT.pos.set(0, 1.7, -27); INT.yaw = 0; INT.pitch = 0; INT.keys = {};
+  document.body.classList.add('inInt'); intUI(true);
+  addFeed(null, null, '🚢 Je bent aan boord · WASD/joystick lopen, muis/slepen kijken · zoek de SAS-ruimte via de gang');
+}
+function exitInterior() { INT.on = false; INT.ship = null; document.body.classList.remove('inInt'); intUI(false); if (document.pointerLockElement) document.exitPointerLock(); }
+function intUI(on) {
+  let d = document.getElementById('intUI');
+  if (!d) {
+    d = document.createElement('div'); d.id = 'intUI'; document.body.appendChild(d);
+    d.innerHTML = `<button id="intExit">✕ Terug naar het dek</button><div id="intHint"></div><button id="intAct" hidden>E · Gebruiken</button><div id="intStick"><i></i></div>`;
+    const st = document.createElement('style'); st.textContent = `#intUI{position:fixed;inset:0;z-index:30;pointer-events:none;display:none}
+body.inInt #intUI{display:block} body.inInt #hud,body.inInt #side,body.inInt #bar,body.inInt #feed,body.inInt #score,body.inInt #mapbox,body.inInt #viewBtns,body.inInt #pts{visibility:hidden}
+#intExit{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));pointer-events:auto;appearance:none;background:rgba(14,16,12,.8);border:1px solid rgba(255,255,255,.3);color:#fff;font:700 13px var(--display);padding:9px 12px}
+#intHint{position:absolute;left:50%;bottom:calc(120px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:700 15px var(--display);color:#ffd27a;text-shadow:0 2px 4px #000;text-align:center}
+#intAct{position:absolute;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(40px + env(safe-area-inset-bottom,0px));pointer-events:auto;appearance:none;background:rgba(233,185,73,.25);border:1px solid #e9b949;color:#fff;font:700 14px var(--display);padding:14px 16px;border-radius:12px}
+#intStick{position:absolute;left:calc(40px + env(safe-area-inset-left,0px));bottom:calc(40px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);display:none} body.touch #intStick{display:block}
+#intStick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:rgba(255,255,255,.25)}
+.intCross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,255,255,.8)}`;
+    document.head.appendChild(st); const cr = document.createElement('div'); cr.className = 'intCross'; d.appendChild(cr);
+    d.querySelector('#intExit').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); exitInterior(); });
+    d.querySelector('#intAct').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); intUse(); });
+  }
+}
+function intUse() {
+  if (!INT.on) return;
+  if (INT.near === 'sas') {
+    const ship = INT.ship; exitInterior();
+    INT.sfFrom = ship; setTool({ kind: 'sf', team: CMD.team }); toggleTools(false);
+    addFeed(null, null, '🎯 SAS-briefing klaar · tik op de kaart waar het team moet landen · de Black Hawk vertrekt vanaf het vliegdekschip');
+  } else if (INT.near === 'bunk') { addFeed(null, null, '💤 De bemanning slaapt in shifts · 3 bedden boven elkaar, 60 per ruimte'); }
+}
+// moving inside: keys, mouse look, touch stick and drag
+addEventListener('keydown', e => { if (!INT.on) return; INT.keys[e.code] = true; if (e.code === 'Escape') exitInterior(); if (e.code === 'KeyE' && !e.repeat) intUse(); e.stopImmediatePropagation(); }, true);
+addEventListener('keyup', e => { if (!INT.on) return; INT.keys[e.code] = false; e.stopImmediatePropagation(); }, true);
+addEventListener('mousemove', e => { if (!INT.on || IS_TOUCH) return; if (document.pointerLockElement || e.buttons) { INT.yaw -= e.movementX * .0025; INT.pitch = clamp(INT.pitch - e.movementY * .0025, -1.2, 1.2); } });
+addEventListener('pointerdown', e => {
+  if (!INT.on || e.target.closest('#intExit,#intAct')) return;
+  if (e.pointerType === 'mouse') { if (renderer.domElement.requestPointerLock && !document.pointerLockElement) try { const r = renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (er) { } return; }
+  if (e.clientX < innerWidth * .45 && !INT.joy) INT.joy = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }; else if (!INT.look) INT.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+}, true);
+addEventListener('pointermove', e => {
+  if (!INT.on) return; const J = INT.joy, L = INT.look;
+  if (J && J.id === e.pointerId) { J.dx = clamp((e.clientX - J.x) / 50, -1, 1); J.dy = clamp((e.clientY - J.y) / 50, -1, 1); const k = document.querySelector('#intStick i'); if (k) k.style.transform = `translate(${J.dx * 35}px,${J.dy * 35}px)`; }
+  if (L && L.id === e.pointerId) { INT.yaw -= (e.clientX - L.x) * .005; INT.pitch = clamp(INT.pitch - (e.clientY - L.y) * .005, -1.2, 1.2); L.x = e.clientX; L.y = e.clientY; }
+}, true);
+const intUp = e => { if (INT.joy && INT.joy.id === e.pointerId) { INT.joy = null; const k = document.querySelector('#intStick i'); if (k) k.style.transform = ''; } if (INT.look && INT.look.id === e.pointerId) INT.look = null; };
+addEventListener('pointerup', intUp, true); addEventListener('pointercancel', intUp, true);
+function updateInterior(dt) {
+  const K = INT.keys, J = INT.joy;
+  let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + (J ? J.dx : 0), mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0) - (J ? J.dy : 0);
+  const sp = (K.ShiftLeft ? 6 : 3.4) * dt, f = new V3(Math.sin(INT.yaw), 0, Math.cos(INT.yaw)), r = new V3(-Math.cos(INT.yaw), 0, Math.sin(INT.yaw));
+  const mv = f.multiplyScalar(clamp(mz, -1, 1)).addScaledVector(r, clamp(mx, -1, 1)); if (mv.lengthSq() > 1) mv.normalize(); mv.multiplyScalar(sp);
+  const p = INT.pos; if (intFree(p.x + mv.x, p.z)) p.x += mv.x; if (intFree(p.x, p.z + mv.z)) p.z += mv.z;
+  const bob = (mx || mz) ? Math.sin(performance.now() / 160) * .04 : 0;
+  INT.cam.position.set(p.x, 1.7 + bob, p.z); INT.cam.lookAt(p.x + Math.sin(INT.yaw) * Math.cos(INT.pitch), 1.7 + bob + Math.sin(INT.pitch), p.z + Math.cos(INT.yaw) * Math.cos(INT.pitch));
+  INT.cam.aspect = innerWidth / innerHeight; INT.cam.updateProjectionMatrix();
+  INT.near = p.distanceTo(new V3(INT.sasP.x, 1.7, INT.sasP.z)) < 3.6 ? 'sas' : p.distanceTo(new V3(INT.bunkP.x, 1.7, INT.bunkP.z)) < 3 ? 'bunk' : null;
+  const hint = document.getElementById('intHint'), act = document.getElementById('intAct');
+  if (hint) hint.textContent = INT.near === 'sas' ? '🎯 SAS-team inzetten · druk E (of de knop) en tik daarna op de kaart' : INT.near === 'bunk' ? '💤 Stapelbedden van de bemanning' : p.x > 18 ? '' : 'Loop naar de deur aan de oostkant voor de gang';
+  if (act) { act.hidden = !INT.near; act.textContent = INT.near === 'sas' ? '🎯 SAS inzetten' : '💤 Bekijk'; }
+}
+// the SAS heli starts from the carrier deck
+const _deliverINT = deliver;
+deliver = function (kind, team, p) {
+  const r = _deliverINT(kind, team, p);
+  if (kind === 'sf' && INT.sfFrom && INT.sfFrom.alive) {
+    const C = INT.sfFrom, h = units.slice().reverse().find(u => u.type === 'heli' && u.sf && u.alive && u.state === 'in');
+    if (h) { const d = C.group.localToWorld(new V3(-6, 10, -20)); h.pos.copy(d); h.start = new V3(C.pos.x, 0, C.pos.z); h.yaw = Math.atan2(p.x - d.x, p.z - d.z); addFeed(null, null, '🚁 SAS-team vertrekt vanaf het vliegdekschip'); }
+    INT.sfFrom = null;
+  }
+  return r;
+};
+// a button in the selection panel when you select a carrier
+{
+  const a = document.getElementById('aWatch') || document.getElementById('aCtrl');
+  if (a) { const b = document.createElement('button'); b.className = 'act'; b.id = 'aInside'; b.innerHTML = '🛏 Binnenkant'; b.hidden = true; a.insertAdjacentElement('afterend', b); b.onclick = () => { const u = [...sel].find(o => o.alive && o.type === 'ship' && o.variant === 'carrier'); if (u) enterInterior(u); }; }
+}
+const _updSelINT = updateSelPanel;
+updateSelPanel = function () { _updSelINT(); const b = document.getElementById('aInside'); if (b) b.hidden = !(sel.size === 1 && [...sel][0].type === 'ship' && [...sel][0].variant === 'carrier'); };
+// ---------- branches: Army, Air Force, Navy, Special Forces tabs in the request menu ----------
+const BRANCH = {
+  air: ['fighter', 'bomber', 'eagle', 'raptor', 'b52', 'nukebomber', 'gbomber', 'transport', 'airstrike', 'apache', 'a10', 'gunship', 'quad', 'supAir', 'reaper', 'kamikaze', 'gcruise', 'swarm', 'recon', 'awacs', 'fpv', 'u2'],
+  navy: ['destroyer', 'sub', 'carrier', 'battleship', 'supSea'],
+  sf: ['sf', 'scav', 'cbrn', 'snipers', 'evacH', 'evacT']
+};
+{
+  const tools = document.getElementById('tools');
+  if (tools) {
+    const bar = document.createElement('div'); bar.id = 'brTabs';
+    bar.innerHTML = [['all', 'Alles'], ['army', '🪖 Leger'], ['air', '✈ Luchtmacht'], ['navy', '⚓ Marine'], ['sf', '🎯 Special Forces']].map(([k, t]) => `<button data-br="${k}"${k === 'all' ? ' class="on"' : ''}>${t}</button>`).join('');
+    const lbl = tools.querySelector('.lbl'); tools.insertBefore(bar, lbl ? lbl.nextSibling : tools.firstChild);
+    const st = document.createElement('style'); st.textContent = `#brTabs{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0 6px} #brTabs button{appearance:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#e8f0d8;font:700 11px var(--display);padding:5px 8px;cursor:pointer} #brTabs button.on{background:rgba(233,185,73,.25);border-color:#e9b949;color:#fff}`;
+    document.head.appendChild(st);
+    const branchOf = k => BRANCH.air.includes(k) ? 'air' : BRANCH.navy.includes(k) ? 'navy' : BRANCH.sf.includes(k) ? 'sf' : 'army';
+    const apply = br => {
+      bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.br === br));
+      tools.querySelectorAll('[data-tool]').forEach(b => { if (b.dataset.tool && !b.classList.contains('side')) b.style.display = br === 'all' || branchOf(b.dataset.tool) === br ? '' : 'none'; });
+      const art = document.getElementById('btnArtyCtl'); if (art) art.style.display = br === 'all' || br === 'army' ? '' : 'none';
+      tools.querySelectorAll('.trow').forEach(r => { const tb = [...r.querySelectorAll('[data-tool]')].filter(b => !b.classList.contains('side')), any = tb.length ? tb.some(b => b.style.display !== 'none') : br === 'all' || br === 'army'; r.style.display = any ? '' : 'none'; const l = r.previousElementSibling; if (l && l.classList.contains('lbl') && l !== tools.querySelector('.lbl')) l.style.display = any ? '' : 'none'; });
+    };
+    bar.addEventListener('click', e => { const b = e.target.closest('[data-br]'); if (b) apply(b.dataset.br); });
+  }
+}
+// ---------- decisions: every few minutes command asks you to choose ----------
+const DEC = { t: rnd(240, 360), open: null };
+const DECS = {
+  zombie: [
+    () => { const C = CITIES[(Math.random() * CITIES.length) | 0], n = cityName(C); return { t: `📻 Overlevenden in ${n} zitten vast op een dak`, d: 'Een Black Hawk kan ze halen, maar de stad zit vol zombies.', o: [['🚁 Haal ze op (◆ 300)', () => { if (ECO.money[CMD.team] >= 300) { ECO.money[CMD.team] -= 300; if (Math.random() < .78) { SCR.queue += 14; addFeed(null, null, `🚁 14 overlevenden uit ${n} veilig naar het eiland · screening`); } else addFeed(null, null, '💀 De Black Hawk is neergestort in de stad. Niemand overleefde.'); } else addFeed(null, null, 'Niet genoeg geld'); }], ['❌ Te gevaarlijk', () => addFeed(null, null, `📻 De radio uit ${n} valt stil…`)]] }; },
+    () => ({ t: '🧪 De wetenschappers willen een riskant experiment', d: 'Een levend monster van een reus onderzoeken kan het geneesmiddel versnellen, of er breekt iets uit in het labo.', o: [['🧪 Doe het', () => { if (Math.random() < .7) { ZM.cure = Math.min(99, ZM.cure + 8); addFeed(null, null, '🧪 Het experiment is gelukt: +8% geneesmiddel'); } else { for (let i = 0; i < 10; i++) { const z = zSpawn(ISL.lab.x + rnd(-15, 15), ISL.lab.z + rnd(-15, 15), 'runner'); if (z) z.isle = true; } addFeed(null, null, '☣ UITBRAAK IN HET LABO! Het experiment liep mis'); siren(); } }], ['🛡 Veilig spelen', () => addFeed(null, null, '🧪 Het onderzoek gaat rustig verder')]] }),
+    () => ({ t: '🍞 Voedseltekort in het kamp', d: 'De voorraad raakt op. Rantsoeneren maakt de mensen zwakker, eten kopen kost geld.', o: [['🥖 Koop eten (◆ 400)', () => { if (ECO.money[CMD.team] >= 400) { ECO.money[CMD.team] -= 400; ZM.res.food += 80; addFeed(null, null, '🍞 +80 eten gekocht'); } }], ['📏 Rantsoeneren', () => { ZM.res.food += 35; for (const u of units) if (u.alive && u.team === CMD.team && u.type === 'soldier') u.hp = Math.max(1, u.hp * .88); addFeed(null, null, '📏 Halve porties: +35 eten, je soldaten zijn wat zwakker'); }]] }),
+    () => ({ t: '🌊 Een veerboot vol vluchtelingen nadert het eiland', d: 'Ongeveer 30 mensen. Sommigen kunnen besmet zijn, de screening moet het opvangen.', o: [['🤝 Laat ze binnen', () => { SCR.queue += 30; addFeed(null, null, '🌊 30 vluchtelingen gaan door de screening'); }], ['🚫 Weigeren', () => addFeed(null, null, '🌊 De veerboot vaart weg…')]] }),
+    () => { const N = NEST.list.filter(n => n.alive).sort((a, b) => b.pos.x - a.pos.x)[0]; if (!N) return null; return { t: '☢ De generaal wil een broeinest platbombarderen', d: `Het broeinest bij ${N.where} kan in één keer weg, maar ook alles eromheen.`, o: [['💣 Bombarderen', () => { if (N.alive) { b52Run(CMD.team, N.pos.clone()); addFeed(null, null, '✈ B-52 onderweg naar het broeinest'); } }], ['✋ Niet doen', () => addFeed(null, null, '✋ Het broeinest blijft staan')]] }; }
+  ],
+  battle: [
+    () => ({ t: '🏳 De vijand vraagt om een wapenstilstand', d: 'Ze bieden geld om even op adem te komen. Of je valt net nu hard aan.', o: [['💰 Aanvaarden (+◆ 500)', () => { ECO.money[CMD.team] += 500; addFeed(null, null, '💰 +◆ 500'); }], ['💥 Weigeren en aanvallen', () => { const t = units.filter(u => u.alive && u.team !== CMD.team && u.team !== undefined && u.type === 'tank')[0]; if (t) { airstrike(CMD.team, t.pos.clone()); addFeed(null, null, '💣 Gratis luchtaanval op de vijand'); } }]] }),
+    () => ({ t: '🕵 Een vijandelijke spion is gevangen', d: 'Ondervragen geeft je de posities van de vijand, ruilen levert geld op.', o: [['🗣 Ondervragen', () => { for (const u of units) if (u.alive && u.team !== CMD.team && u.team !== undefined) SPOT.set(u, 40); addFeed(null, null, '🕵 Alle vijanden 40 s gemarkeerd'); }], ['🤝 Ruilen (+◆ 350)', () => { ECO.money[CMD.team] += 350; }]] }),
+    () => ({ t: '✈ Een bondgenoot biedt hulp', d: 'Een B-52 op hun kosten, of een flinke som geld.', o: [['✈ B-52', () => { const t = units.filter(u => u.alive && u.team !== CMD.team && u.team !== undefined && u.pos.x < WORLD)[0]; if (t) b52Run(CMD.team, t.pos.clone()); }], ['💰 Geld (+◆ 600)', () => { ECO.money[CMD.team] += 600; }]] }),
+    () => ({ t: '🛢 Een olieveld ontdekt achter de linies', d: 'Ontginnen geeft extra inkomsten, laten springen kost de vijand geld.', o: [['🛢 Ontginnen (+◆ 450)', () => { ECO.money[CMD.team] += 450; }], ['💥 Laten springen', () => { ECO.money[1 - CMD.team] = Math.max(0, ECO.money[1 - CMD.team] - 500); addFeed(null, null, '💥 De vijand verliest ◆ 500'); }]] })
+  ]
+};
+function showDecision() {
+  const list = ZM.on ? DECS.zombie : DECS.battle; let D = null; for (let k = 0; k < 5 && !D; k++) D = list[(Math.random() * list.length) | 0]();
+  if (!D) return; DEC.open = { D, t: 35 };
+  let el = document.getElementById('decCard');
+  if (!el) { el = document.createElement('div'); el.id = 'decCard'; document.body.appendChild(el); const st = document.createElement('style'); st.textContent = `#decCard{position:fixed;left:50%;top:calc(90px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;width:min(92vw,440px);background:rgba(14,16,12,.94);border:1px solid #e9b949;padding:12px 14px;font:500 13px/1.4 var(--display);color:#e8f0d8;box-shadow:0 8px 30px rgba(0,0,0,.5)} #decCard h4{margin:0 0 4px;color:#ffd27a;font-size:15px} #decCard .o{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap} #decCard .o button{flex:1;min-width:140px;appearance:none;background:rgba(233,185,73,.16);border:1px solid rgba(233,185,73,.6);color:#fff;font:700 13px var(--display);padding:9px 8px;cursor:pointer} #decCard small{opacity:.6}`; document.head.appendChild(st); }
+  el.innerHTML = `<h4>⚖ BESLISSING · ${D.t}</h4><div>${D.d}</div><div class="o">${D.o.map((o, i) => `<button data-i="${i}">${o[0]}</button>`).join('')}</div><small id="decT"></small>`; el.hidden = false;
+  el.querySelectorAll('[data-i]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); decide(+b.dataset.i); }));
+  if (Snd.ctx) Snd.burst(camera.position, { f: 900, q: 6, dur: .3, vol: .2, rng: 40 });
+}
+function decide(i) { const O = DEC.open; if (!O) return; DEC.open = null; const el = document.getElementById('decCard'); if (el) el.hidden = true; try { O.D.o[i][1](); } catch (e) { } }
+function updateDecisions(dt) {
+  if (state !== 'play' && state !== 'possess') return;
+  if (DEC.open) { DEC.open.t -= dt; const s = document.getElementById('decT'); if (s) s.textContent = `Geen keuze binnen ${Math.ceil(DEC.open.t)} s = de laatste optie`; if (DEC.open.t <= 0) decide(DEC.open.D.o.length - 1); return; }
+  DEC.t -= dt; if (DEC.t <= 0) { DEC.t = rnd(360, 540); showDecision(); }
+}
+// ---------- the virus mutates: new strains make the zombies harder and slow the cure down ----------
+const MUT = { n: 0, t: 480, rate: 1, list: [], pend: null };
+const STRAINS = [
+  ['B', 'sneller', () => { ZM.spMul0 = (ZM.spMul0 || ZM.spMul) * 1.1; }],
+  ['C', 'taaier (+15% leven)', () => { ZM.hpMul *= 1.15; }],
+  ['D', 'resistent tegen het geneesmiddel', () => { ZM.cure = Math.max(0, ZM.cure - 6); MUT.rate *= .85; }],
+  ['E', 'agressiever (meer zware zombies)', () => { ZM.hpMul *= 1.08; ZM.spMul0 = (ZM.spMul0 || ZM.spMul) * 1.05; }],
+  ['F', 'muteert snel (−8% geneesmiddel)', () => { ZM.cure = Math.max(0, ZM.cure - 8); MUT.rate *= .9; }]
+];
+function mutate() {
+  const S = STRAINS[MUT.n % STRAINS.length]; MUT.n++; S[2](); MUT.list.push({ name: S[0], what: S[1], done: false }); MUT.pend = MUT.list[MUT.list.length - 1];
+  addFeed(null, null, `🧬 HET VIRUS IS GEMUTEERD · stam ${S[0]}: ${S[1]}${STN.built ? ' · laat het ruimtestation de stam analyseren' : ''}`); siren();
+}
+// ---------- the space station ----------
+const STN = { built: true, view: false, sup: 60, rocket: null, an: null, scanCd: 0, scene: null, cam: new THREE.PerspectiveCamera(50, 1, 1, 60000), yaw: .6, pitch: .25, dist: 90, drag: null };
+function buildStation() {
+  const S = STN.scene = new THREE.Scene(); S.background = new THREE.Color(0x000004);
+  S.add(new THREE.AmbientLight(0x404858, .6)); const sl = new THREE.DirectionalLight(0xffffff, 1.4); sl.position.set(-1, .6, .4); S.add(sl);
+  // stars
+  const n = 2500, g = new THREE.BufferGeometry(), P = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const u = rnd(-1, 1), a = rnd(0, TAU), r = Math.sqrt(1 - u * u); P.set([Math.cos(a) * r * 30000, u * 30000, Math.sin(a) * r * 30000], i * 3); }
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3)); S.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, sizeAttenuation: false })));
+  // the Earth below, with clouds
+  const ec = document.createElement('canvas'); ec.width = 1024; ec.height = 512; const x = ec.getContext('2d'); x.fillStyle = '#1d4f86'; x.fillRect(0, 0, 1024, 512);
+  for (let i = 0; i < 2600; i++) { const px = rnd(0, 1024), py = rnd(60, 452), v = fbm(px / 140, py / 140, 4); if (v > .52) { x.fillStyle = v > .62 ? '#7a7a5a' : v > .57 ? '#4f6b35' : '#3e6a2f'; x.fillRect(px, py, rnd(4, 14), rnd(3, 10)); } }
+  x.fillStyle = '#e9eef2'; x.fillRect(0, 0, 1024, 40); x.fillRect(0, 472, 1024, 40);
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(6400, 64, 32), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(ec) })); earth.position.set(0, -6820, 0); earth.rotation.x = 1.15; S.add(earth); STN.earth = earth;
+  const cc = document.createElement('canvas'); cc.width = 1024; cc.height = 512; const y = cc.getContext('2d'); for (let i = 0; i < 1600; i++) { const px = rnd(0, 1024), py = rnd(0, 512); if (fbm(px / 90 + 7, py / 90, 4) > .55) { y.fillStyle = 'rgba(255,255,255,.5)'; y.fillRect(px, py, rnd(6, 22), rnd(3, 9)); } }
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(6430, 64, 32), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(cc), transparent: true, opacity: .8, depthWrite: false })); clouds.position.copy(earth.position); clouds.rotation.x = 1.15; S.add(clouds); STN.clouds = clouds;
+  const atm = new THREE.Mesh(new THREE.SphereGeometry(6520, 64, 32), new THREE.MeshBasicMaterial({ color: 0x6fb0ff, transparent: true, opacity: .14, side: THREE.BackSide })); atm.position.copy(earth.position); S.add(atm);
+  // the station: truss, solar wings, modules, radiators, a cupola
+  const st = new THREE.Group(); S.add(st); STN.st = st;
+  const geo = bakeGeo(K => {
+    const W = 0xd8d8d0, G = 0x9aa0a4, D = 0x3a3f44, GOLD = 0xc9a24a, BL = 0x1a2f6a;
+    K.box(64, 1.6, 1.6, G, 0, 0, 0); for (let i = -30; i <= 30; i += 3) K.box(.12, 1.7, 1.7, D, i, 0, 0);
+    for (const s of [-1, 1]) for (const xx of [24, 31]) for (const zs of [-1, 1]) { K.box(5.2, .08, 15, BL, s * xx, 0, zs * 9.5); for (let k = 0; k < 6; k++) K.box(5.25, .1, .06, GOLD, s * xx, 0, zs * 9.5 + (k - 2.5) * 2.5); K.box(.3, .3, 3, D, s * xx, 0, zs * 2.2); }
+    for (const s of [-1, 1]) { K.box(.12, 7, 5, 0xeeeeee, s * 12, 0, 6); K.box(.12, 7, 5, 0xeeeeee, s * 12, 0, -6); }
+    K.tube(2.1, 2.1, 9, W, 0, -3.2, 0, 16); K.tube(2.0, 2.0, 7, W, 0, -3.2, 9, 16); K.tube(2.1, 2.1, 8, W, 0, -3.2, -9, 16); K.box(2.6, 2.6, 2.6, G, 0, -3.2, 13.2);
+    K.tube(1.9, 1.9, 7, GOLD, 5.5, -3.2, -2, 16); K.tube(1.9, 1.9, 7, W, -5.5, -3.2, 3, 16); for (const s of [-1, 1]) K.tube(.9, .9, 1, D, s * 5.5, -3.2, s * 5.2, 12);
+    K.sph(1.1, 0x2a3a4a, 0, -5.6, -4, 1, .8, 1, 14); K.box(.8, .1, 4, GOLD, 0, -1.1, 0);
+    K.box(1.2, 1.2, 1.4, W, 0, -3.2, 16.6); K.tube(.8, 1.2, 2, W, 0, -3.2, 18.2, 12);
+  });
+  st.add(new THREE.Mesh(geo, VCMAT));
+  const lab = textSprite('🧪 RUIMTELAB', '#8fe8ff'); lab.position.set(5.5, 0, -2); lab.scale.multiplyScalar(1.4); st.add(lab);
+  // the supply capsule that docks when a rocket arrives
+  const cap = new THREE.Mesh(bakeGeo(K => { K.lathe([[0, 0], [1.6, .2], [1.8, 2.4], [1.0, 3.6], [0, 3.8]], 0xeeeeee, 0, 0, 0, 1, 1, 16); K.box(.1, 2.6, 4, 0x1a2f6a, 2.2, 0, 1.6); K.box(.1, 2.6, 4, 0x1a2f6a, -2.2, 0, 1.6); }), VCMAT);
+  cap.position.set(0, -3.2, 23.5); cap.rotation.x = Math.PI; cap.visible = false; st.add(cap); STN.cap = cap;
+}
+function stnUI(on) {
+  let d = document.getElementById('stnUI');
+  if (!d) {
+    d = document.createElement('div'); d.id = 'stnUI'; document.body.appendChild(d);
+    const st = document.createElement('style'); st.textContent = `#stnUI{position:fixed;inset:0;z-index:30;pointer-events:none;display:none} body.inStn #stnUI{display:block} body.inStn #hud,body.inStn #side,body.inStn #bar,body.inStn #score,body.inStn #mapbox,body.inStn #viewBtns,body.inStn #pts{visibility:hidden}
+#stnUI .p{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));width:min(86vw,340px);background:rgba(8,12,20,.86);border:1px solid #6fb0ff;padding:10px 12px;font:500 13px/1.45 var(--display);color:#dfe8ff;pointer-events:auto}
+#stnUI h4{margin:0 0 6px;color:#8fd0ff;font-size:15px} #stnUI button{display:block;width:100%;margin-top:6px;appearance:none;background:rgba(111,176,255,.14);border:1px solid rgba(111,176,255,.6);color:#fff;font:700 13px var(--display);padding:8px;text-align:left;cursor:pointer} #stnUI button:disabled{opacity:.4}
+#stnUI .bar{height:6px;background:rgba(255,255,255,.12);margin:3px 0 6px} #stnUI .bar i{display:block;height:100%;background:#6fd0e8}`;
+    document.head.appendChild(st);
+    d.addEventListener('pointerdown', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); e.stopPropagation(); stnCmd(b.dataset.s); });
+  }
+  document.body.classList.toggle('inStn', on);
+}
+function stnPanel() {
+  const d = document.getElementById('stnUI'); if (!d) return;
+  const zm = ZM.on, R = ZM.res || {}, mut = MUT.list.filter(m => !m.done);
+  const html = `<div class="p"><h4>🛰 RUIMTESTATION STAAL-1 · 410 km hoog</h4>
+${zm ? `<div>🧪 Ruimtelab: het geneesmiddel gaat <b>${STN.sup > 0 ? '+40% sneller' : 'niet sneller (geen voorraad)'}</b> · nu ${Math.floor(ZM.cure)}%</div>
+<div>📦 Voorraad aan boord ${Math.round(STN.sup)}%<span class="bar" style="display:block"><i style="width:${STN.sup}%"></i></span></div>
+<div>🧬 Virusstammen: ${MUT.list.length ? MUT.list.map(m => `${m.name}${m.done ? ' ✓' : ''}`).join(' · ') : 'nog geen mutaties'}${STN.an ? ` · analyse stam ${STN.an.m.name} ${Math.floor(STN.an.p * 100)}%` : ''}</div>
+<button data-s="rocket" ${STN.rocket ? 'disabled' : ''}>🚀 Bevoorradingsraket lanceren · ⛽ 80 raketbrandstof${STN.rocket ? ' · onderweg…' : ''}</button>
+<button data-s="analyse" ${!mut.length || STN.an || STN.sup <= 0 ? 'disabled' : ''}>🧬 Nieuwe stam analyseren${mut.length ? ` (stam ${mut[0].name})` : ''}</button>` : `<div>📡 Satellieten boven het slagveld.</div>`}
+<button data-s="scan" ${STN.scanCd > 0 ? 'disabled' : ''}>🛰 Satellietscan: alle vijanden 25 s zichtbaar${STN.scanCd > 0 ? ` · klaar over ${Math.ceil(STN.scanCd)} s` : ''}</button>
+<button data-s="exit">🌍 Terug naar de aarde</button></div>`;
+  if (d._h !== html) { d._h = html; d.innerHTML = html; }
+}
+function stnCmd(c) {
+  const T = CMD.team;
+  if (c === 'exit') { STN.view = false; stnUI(false); return; }
+  if (c === 'scan' && STN.scanCd <= 0) { STN.scanCd = 150; for (const u of units) if (isFoeOf(u, T)) SPOT.set(u, 25); addFeed(null, null, '🛰 Satellietscan: alle vijanden 25 s gemarkeerd'); }
+  if (c === 'rocket' && !STN.rocket) {
+    const R = ZM.res; if (ZM.on && R.oil < 80) { flashTip(`Niet genoeg olie voor de raket: ⛽ 80 nodig, je hebt ${Math.floor(R.oil)}`); return; }
+    if (ZM.on) R.oil -= 80; launchSupplyRocket();
+  }
+  if (c === 'analyse' && !STN.an) { const m = MUT.list.find(x => !x.done); if (m) { STN.an = { m, p: 0 }; addFeed(null, null, `🧬 Het ruimtelab analyseert stam ${m.name}`); } }
+  stnPanel();
+}
+// the rocket rises from the launch pad on the island
+const PAD = { x: ISLE.x - 250, z: ISLE.z + 160 };
+(function buildPad() {
+  const y = isleH(PAD.x, PAD.z) - .2;
+  const geo = worldGeo(K => {
+    K.box(30, 1.2, 30, 0x8f8b80, PAD.x, y + .6, PAD.z); K.box(10, 6, 10, 0x6e6a62, PAD.x, y + 3, PAD.z); K.box(6, .2, 6, 0x2a2b2c, PAD.x, y + 6.1, PAD.z);
+    for (let k = 0; k < 9; k++) K.box(2.4, 4.6, 2.4, 0xb8862b, PAD.x + 9, y + 3.6 + k * 4.6, PAD.z, 0, 0, 0); for (let k = 0; k < 9; k++) K.box(2.6, .3, 2.6, 0x6e5a2a, PAD.x + 9, y + 1.5 + k * 4.6, PAD.z);
+    K.box(5, .5, 1, 0x6e5a2a, PAD.x + 6.5, y + 30, PAD.z); K.cyl(4, 4, 6, 0xe8e8e2, PAD.x - 12, y + 3, PAD.z + 10, 0, 0, 0, 14);
+  });
+  scene.add(new THREE.Mesh(geo, VCMAT)); BOXES.push({ minX: PAD.x - 15, maxX: PAD.x + 15, minZ: PAD.z - 15, maxZ: PAD.z + 15, minY: y - 2, top: y + 6 });
+  PAD.y = y + 6.2;
+})();
+const ROCKET_GEO = bakeGeo(K => { K.tube(1.8, 1.8, 30, 0xeeeeee, 0, 0, 0, 16); K.lathe([[1.8, 15], [1.4, 18], [.6, 20], [0, 21]], 0xeeeeee, 0, 0, 0, 1, 1, 16); for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; K.box(.15, 3, 3, 0x2a2b2c, Math.cos(a) * 1.9, Math.sin(a) * 1.9, -13.5, 0, 0, a); } K.tube(1.85, 1.85, 1, 0x2a2b2c, 0, 0, 8, 16); K.box(.1, 6, .1, 0x1a2f6a, 1.81, 0, 2); });
+function launchSupplyRocket() {
+  const m = new THREE.Mesh(ROCKET_GEO, VCMAT); m.rotation.x = -Math.PI / 2; m.position.set(PAD.x, PAD.y + 15, PAD.z); scene.add(m);
+  STN.rocket = { m, t: 0, v: 0 }; addFeed(null, null, '🚀 Bevoorradingsraket vertrekt vanaf het eiland naar het ruimtestation'); if (Snd.ctx) Snd.burst(m.position, { f: 60, type: 'lowpass', dur: 6, vol: 1.3, thump: .3, tf: 25, brown: true, rng: 6000 });
+}
+function updateStation(dt) {
+  STN.scanCd = Math.max(0, STN.scanCd - dt);
+  const Rk = STN.rocket;
+  if (Rk) {
+    Rk.t += dt;
+    if (Rk.m) { Rk.v = Math.min(260, Rk.v + 12 * dt); Rk.m.position.y += Rk.v * dt; Rk.m.position.x += Rk.t > 8 ? Rk.v * .25 * dt : 0;
+      for (let i = 0; i < 3; i++) spawnP(Rk.m.position.clone().add(new V3(rnd(-1, 1), -16, rnd(-1, 1))), { tex: smokeTex, color: i ? 0xe6e2da : 0xffb04a, op: i ? .7 : .95, size: i ? rnd(4, 7) : 3, grow: i ? 3 : 1, life: i ? 6 : .5, vel: new V3(rnd(-3, 3), -rnd(10, 30), rnd(-3, 3)), drag: .6 });
+      if (Rk.m.position.y > PAD.y + 3500) { scene.remove(Rk.m); Rk.m = null; } }
+    if (Rk.t > 45) { STN.rocket = null; STN.sup = 100; if (STN.cap) STN.cap.visible = true; addFeed(null, null, '🛰 De capsule is gekoppeld aan het ruimtestation · voorraad 100%'); }
+  }
+  if (!ZM.on) return;
+  if (STN.an) { STN.an.p += dt / 90; if (STN.an.p >= 1) { STN.an.m.done = true; MUT.rate = Math.min(1, MUT.rate / .88); ZM.cure = Math.min(99, ZM.cure + 3); addFeed(null, null, `🧬 Stam ${STN.an.m.name} geanalyseerd: het onderzoek haalt de achterstand in (+3%)`); STN.an = null; } }
+  // mutations every eight minutes
+  if (!ZM.cured) { MUT.t -= dt; if (MUT.t <= 0) { MUT.t = rnd(420, 540); mutate(); } }
+}
+// the cure: the space lab adds 40% while it has supplies; mutations slow research down
+const _zmEcoS = zmEconomySecond;
+zmEconomySecond = function () {
+  const c0 = ZM.cure; _zmEcoS();
+  if (!ZM.on || ZM.cured) return; const gain = ZM.cure - c0;
+  if (gain > 0) { let g = gain * MUT.rate; if (STN.sup > 0) { g += gain * .4; STN.sup = Math.max(0, STN.sup - 100 / 600); } ZM.cure = Math.min(100, c0 + g); }
+};
+// switching to the station
+{
+  const vb = document.getElementById('viewBtns');
+  if (vb) { const b = document.createElement('button'); b.className = 'vb'; b.id = 'btnStn'; b.title = 'Ruimtestation'; b.textContent = '🛰'; vb.appendChild(b); b.onclick = () => { if (state !== 'play') return; if (!STN.scene) buildStation(); STN.view = true; stnUI(true); stnPanel(); }; }
+}
+addEventListener('pointerdown', e => { if (!STN.view || e.target.closest('#stnUI .p')) return; STN.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; }, true);
+addEventListener('pointermove', e => { const D = STN.drag; if (!STN.view || !D || D.id !== e.pointerId) return; STN.yaw -= (e.clientX - D.x) * .006; STN.pitch = clamp(STN.pitch + (e.clientY - D.y) * .004, -.6, 1.2); D.x = e.clientX; D.y = e.clientY; }, true);
+addEventListener('pointerup', e => { if (STN.drag && STN.drag.id === e.pointerId) STN.drag = null; }, true);
+addEventListener('wheel', e => { if (!STN.view) return; STN.dist = clamp(STN.dist * (e.deltaY > 0 ? 1.1 : .9), 40, 400); }, { passive: true });
+addEventListener('keydown', e => { if (STN.view && e.code === 'Escape') { STN.view = false; stnUI(false); e.stopImmediatePropagation(); } }, true);
+// ---------- rendering: the carrier interior or the station replace the normal view ----------
+const _renderMainI = renderMain;
+renderMain = function (dt) {
+  if (INT.on && INT.scene) { if (!INT.ship || !INT.ship.alive) { exitInterior(); addFeed(null, null, '🚢 Het vliegdekschip zinkt! Je bent terug op de kaart'); } else { updateInterior(dt); renderer.render(INT.scene, INT.cam); oc.clearRect(0, 0, innerWidth, innerHeight); return; } }
+  if (STN.view && STN.scene) {
+    if (state !== 'play') { STN.view = false; stnUI(false); return _renderMainI(dt); }
+    if (!STN.drag) STN.yaw += dt * .04; STN.st.rotation.y += dt * .01; if (STN.clouds) STN.clouds.rotation.y += dt * .004; if (STN.earth) STN.earth.rotation.y += dt * .002;
+    STN.cam.position.set(Math.sin(STN.yaw) * Math.cos(STN.pitch) * STN.dist, Math.sin(STN.pitch) * STN.dist, Math.cos(STN.yaw) * Math.cos(STN.pitch) * STN.dist); STN.cam.lookAt(0, -2, 0); STN.cam.aspect = innerWidth / innerHeight; STN.cam.updateProjectionMatrix();
+    renderer.render(STN.scene, STN.cam); oc.clearRect(0, 0, innerWidth, innerHeight); STN.pT = (STN.pT || 0) - dt; if (STN.pT <= 0) { STN.pT = .5; stnPanel(); } return;
+  }
+  return _renderMainI(dt);
+};
+// mutation and station status in the zombie panel
+const _updZmBoxS = updateZmBox;
+updateZmBox = function (dt) {
+  _updZmBoxS(dt); if (!ZM.on || !ZM.box || ZM.min) return;
+  let el = ZM.box.querySelector('#zmMut'); if (!el) { el = document.createElement('div'); el.id = 'zmMut'; ZM.box.appendChild(el); }
+  const t = `🧬 ${MUT.list.length ? 'stam ' + MUT.list[MUT.list.length - 1].name + (MUT.rate < .99 ? ` · onderzoek −${Math.round((1 - MUT.rate) * 100)}%` : '') : 'virus stabiel'} · 🛰 voorraad ${Math.round(STN.sup)}%`; if (el.textContent !== t) el.textContent = t;
+};
+const _setupBattleS = setupBattle;
+setupBattle = function (battle) { _setupBattleS(battle); MUT.n = 0; MUT.t = 480; MUT.rate = 1; MUT.list = []; STN.sup = 60; STN.an = null; STN.rocket = null; DEC.t = rnd(240, 360); DEC.open = null; };
+const _updateWavesS = updateWaves;
+updateWaves = function (dt) { _updateWavesS(dt); updateStation(dt); updateDecisions(dt); };
+
+// ================= OIL RIGS · PAUSE MENU · PRO FLIGHT CONTROLS ON PC · NIGHT VISION =================
+// ---------- lots of oil: three offshore rigs east of the island and a shuttle tanker ----------
+const RIGS = { list: [], per: 30, tk: null, smT: 0 };
+(function buildRigs() {
+  const wetAt = (a, d) => getH(ISLE.x + Math.cos(a) * d, ISLE.z + Math.sin(a) * d) < WATER - 4;
+  for (const a of [-.55, 0, .55]) {
+    let d = ISLE.r * .9; while (d < ISLE.r * 1.4 && !(wetAt(a, d) && wetAt(a, d + 40) && wetAt(a, d + 80))) d += 10;
+    if (a === 0) RIGS.shore = d + 15;
+    d += 75; RIGS.list.push({ x: Math.min(XMAX - 45, ISLE.x + Math.cos(a) * d), z: ISLE.z + Math.sin(a) * d, a });
+  }
+  const W = WATER;
+  const geo = worldGeo(K => {
+    for (const R of RIGS.list) {
+      const { x, z, a } = R, Y = W + 20, YEL = 0xc9a23a;
+      // four legs standing in the sea, cross bracing, the main deck with railings
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { K.cyl(1.5, 1.9, 44, YEL, x + sx * 13, W, z + sz * 13, 0, 0, 0, 10); K.cyl(2.3, 2.3, 1.4, 0x2a2b2c, x + sx * 13, W + .4, z + sz * 13, 0, 0, 0, 10); }
+      for (const s of [-1, 1]) for (const t of [-.745, .745]) { K.box(.5, .5, 35, 0xb08a2a, x + s * 13, W + 8, z, t, 0, 0); K.box(35, .5, .5, 0xb08a2a, x, W + 8, z + s * 13, 0, 0, t); }
+      K.box(36, 2.4, 36, 0x7d8388, x, Y + 1.2, z); K.box(36.2, .5, 36.2, YEL, x, Y - .1, z);
+      for (const s of [-1, 1]) { K.box(36, .12, .12, 0xe0c84a, x, Y + 3.5, z + s * 18); K.box(.12, .12, 36, 0xe0c84a, x + s * 18, Y + 3.5, z); }
+      // process modules, separators, pipes
+      K.box(14, 6, 12, 0x9aa0a4, x + 7, Y + 5.4, z - 9); K.box(10, 4, 10, 0x6e757b, x - 9, Y + 4.4, z - 10); K.box(14.2, .4, 12.2, 0x55595b, x + 7, Y + 8.6, z - 9);
+      for (const zz of [1, 7]) K.cyl(2.6, 2.6, 7, 0xe8e8e2, x + 12, Y + 6, z + zz, 0, 0, 0, 14);
+      for (const xx of [-2, 0, 2]) K.box(.55, .55, 30, xx ? 0x8a5a2a : 0x55595b, x + 3 + xx * .6, Y + 3, z);
+      K.cyl(.9, .9, 5, 0x2a2b2c, x + 16, Y + 2.5, z + 14, 0, 0, 0, 10);
+      // living quarters with windows, the helideck on top
+      K.box(16, 9, 11, 0xeae4d2, x - 8, Y + 7, z + 10); for (let k = 0; k < 3; k++) K.box(16.1, .6, 11.1, 0x2a3a4a, x - 8, Y + 4.4 + k * 2.6, z + 10);
+      K.cyl(8.5, 8.5, .5, 0x2e4a3a, x - 8, Y + 11.8, z + 10, 0, 0, 0, 24); K.box(.7, .1, 4.6, 0xffffff, x - 9.6, Y + 12.1, z + 10); K.box(.7, .1, 4.6, 0xffffff, x - 6.4, Y + 12.1, z + 10); K.box(3.2, .1, .7, 0xffffff, x - 8, Y + 12.1, z + 10);
+      // the drilling derrick
+      const dx = x + 4, dz = z + 6, y0 = Y + 2.4, H = 42;
+      K.box(10, 1.4, 10, 0x6e757b, dx, y0 + .7, dz);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) K.box(.45, H, .45, 0xd8d8d0, dx + sx * 2.6, y0 + H / 2, dz + sz * 2.6, -sz * .066, 0, sx * .066);
+      for (let k = 1; k < 9; k++) { const yy = y0 + k * 4.6, s = 4 - 2.8 * (k * 4.6) / H, c = k % 2 ? 0xc62828 : 0xd8d8d0; K.box(s * 2, .25, .25, c, dx, yy, dz + s); K.box(s * 2, .25, .25, c, dx, yy, dz - s); K.box(.25, .25, s * 2, c, dx + s, yy, dz); K.box(.25, .25, s * 2, c, dx - s, yy, dz); }
+      K.box(3.2, 1.6, 3.2, 0xc62828, dx, y0 + H + .6, dz);
+      // a crane on its pedestal
+      K.cyl(1.1, 1.3, 7, 0xd8b43a, x + 15, Y + 5.5, z - 15, 0, 0, 0, 10); K.box(2.4, 2.2, 3, 0xd8b43a, x + 15, Y + 9.5, z - 15); K.box(1, 1, 24, 0xd8b43a, x + 15, Y + 14, z - 4, -.42, 0, 0);
+      // the flare boom points out to sea
+      const t = .4, L = 22, cx = x + Math.cos(a) * 26, cz = z + Math.sin(a) * 26;
+      K.box(L, .9, .9, 0x8a8f94, cx, Y + 10, cz, 0, -a, t);
+      R.tip = new V3(x + Math.cos(a) * (26 + L / 2 * Math.cos(t)), Y + 10 + L / 2 * Math.sin(t) + 1.2, z + Math.sin(a) * (26 + L / 2 * Math.cos(t)));
+      R.top = new V3(dx, y0 + H + 2, dz);
+    }
+  });
+  const m = new THREE.Mesh(geo, VCMAT); m.receiveShadow = true; scene.add(m);
+  // lights that glow at night: deck corners, the red light on top of the derrick
+  const lg = worldGeo(K => { for (const R of RIGS.list) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) K.box(.7, .7, .7, 0xfff0b0, R.x + sx * 17.6, W + 24, R.z + sz * 17.6); K.box(1, 1, 1, 0xff3020, R.top.x, R.top.y, R.top.z); } });
+  scene.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ vertexColors: true })));
+  for (const R of RIGS.list) {
+    const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0xff8a2a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    const c = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0xfff2b0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    f.position.copy(R.tip); c.position.copy(R.tip); scene.add(f, c); R.fl = f; R.core = c;
+  }
+  // the shuttle tanker: loads at the middle rig, unloads near the island
+  const tg = bakeGeo(K => {
+    K.box(11, 5, 64, 0x7a2a22, 0, -1.6, 0); K.box(11, 3, 64, 0x2a2b2d, 0, 2.4, 0); K.box(7.6, 7, 7.6, 0x2a2b2d, 0, .9, 31.5, 0, Math.PI / 4, 0); K.box(7.6, 5, 7.6, 0x7a2a22, 0, -2, 31.5, 0, Math.PI / 4, 0);
+    K.box(10.6, .3, 63, 0x6e5a3a, 0, 4.05, 0); for (const s of [-1.6, 0, 1.6]) K.box(.4, .4, 48, 0x8a8f94, s, 4.5, 3);
+    K.box(4, .6, 1, 0x8a8f94, 0, 4.6, 4); K.cyl(.4, .4, 5, 0xd8b43a, 3.5, 6.6, 4, 0, 0, 0, 8); K.box(.5, .5, 7, 0xd8b43a, 3.5, 9, 6.5, -.5, 0, 0);
+    K.box(10.4, 8, 7, 0xeae4d2, 0, 8, -25); K.box(10.5, .9, 7.1, 0x2a3a4a, 0, 10.6, -25); K.box(14, .3, 3, 0xeae4d2, 0, 12.2, -23); K.box(3, 4.5, 3, 0xc62828, 0, 14, -28); K.box(3.05, .8, 3.05, 0x2a2b2d, 0, 16, -28);
+  });
+  const tk = new THREE.Mesh(tg, VCMAT); scene.add(tk);
+  const A = RIGS.list[0]; RIGS.tk = { m: tk, p: new V3(A.x - 6, W - .4, A.z + 34), ph: 'wait', t: 6, sp: 0, yaw: -Math.PI / 2 };
+  { const a = .27; let d = ISLE.r * .9; while (d < ISLE.r * 1.4 && !(wetAt(a, d) && wetAt(a, d + 40))) d += 10; RIGS.drop = { x: ISLE.x + Math.cos(a) * (d + 25), z: ISLE.z + Math.sin(a) * (d + 25) }; }
+  tk.position.copy(RIGS.tk.p); tk.rotation.y = RIGS.tk.yaw;
+})();
+function updateRigs(dt) {
+  const t = SIMT;
+  for (let i = 0; i < RIGS.list.length; i++) {
+    const R = RIGS.list[i], k = 1 + Math.sin(t * 13 + i * 2) * .12 + Math.sin(t * 29 + i) * .08;
+    R.fl.scale.set(10 * k, 15 * k, 1); R.core.scale.set(4.5 * k, 6 * k, 1); R.fl.position.y = R.tip.y + 3 * k; R.core.position.y = R.tip.y + 1.6;
+  }
+  RIGS.smT -= dt;
+  if (RIGS.smT <= 0) { RIGS.smT = .35; const R = RIGS.list[(Math.random() * RIGS.list.length) | 0]; if (R.tip.distanceTo(camera.position) < 2600) spawnP(R.tip.clone().add(new V3(0, 6, 0)), { tex: smokeTex, color: 0x3a3632, op: .5, size: 5, grow: 4, life: 6, vel: new V3(WXS.wind.x * .6 + rnd(-1, 1), rnd(5, 8), WXS.wind.z * .6 + rnd(-1, 1)), drag: .4 }); }
+  // the tanker loads at each rig in turn and unloads near the island
+  const T = RIGS.tk; if (!T) return;
+  if (!RIGS.route) { RIGS.route = RIGS.list.map(R => ({ x: R.x - 6, z: R.z + 34, w: 12, s: 'laden' })); RIGS.route.push({ x: RIGS.drop.x, z: RIGS.drop.z, w: 20, s: 'lossen' }); T.i = 0; T.ph = 'wait'; T.t = 6; }
+  if (T.ph === 'wait') { T.t -= dt; T.sp = Math.max(0, T.sp - dt * 2); if (T.t <= 0) { T.i = (T.i + 1) % RIGS.route.length; T.ph = 'move'; } }
+  else {
+    const g = RIGS.route[T.i], dx = g.x - T.p.x, dz = g.z - T.p.z, d = Math.hypot(dx, dz), err = angDiff(T.yaw, Math.atan2(dx, dz));
+    T.yaw += clamp(err, -.14 * dt, .14 * dt);
+    T.sp = Math.min(Math.max(1.5, 9 * Math.max(.2, Math.cos(err))) * (d < 90 ? Math.max(.3, d / 90) : 1), T.sp + dt * 1.2);
+    T.p.x += Math.sin(T.yaw) * T.sp * dt; T.p.z += Math.cos(T.yaw) * T.sp * dt;
+    if (d < 14) { T.ph = 'wait'; T.t = g.w; }
+    T.wT = (T.wT || 0) - dt; if (T.wT <= 0 && T.sp > 2 && T.p.distanceTo(camera.position) < 1500) { T.wT = .2; spawnP(new V3(T.p.x - Math.sin(T.yaw) * 30, WATER + .2, T.p.z - Math.cos(T.yaw) * 30), { color: 0xf2f8fa, op: .5, size: 3, grow: 2.5, life: 3, vel: new V3(0, .3, 0), drag: 1 }); }
+  }
+  T.m.position.set(T.p.x, WATER - .4 + Math.sin(t * .7) * .25, T.p.z); T.m.rotation.set(Math.sin(t * .5) * .012, T.yaw, Math.sin(t * .6) * .02);
+}
+// each rig pumps 30 oil every 20 seconds on top of the island's pumps
+const _oilYR = oilYield;
+oilYield = w => _oilYR(w) + RIGS.list.length * RIGS.per;
+const _isleHarvR = islandHarvest;
+islandHarvest = function (dt) {
+  _isleHarvR(dt);
+  if (HARV.t === 20) for (const R of RIGS.list) HARV.pops.push({ x: R.x, z: R.z, s: ZM.on ? `+${RIGS.per} ⛽` : `+◆ ${RIGS.per * 4}`, t: 0 });
+};
+const _setupBattleR = setupBattle;
+setupBattle = function (battle) { _setupBattleR(battle); if (ZM.on) ZM.res.oil = Math.max(ZM.res.oil, 400); };
+// ---------- pause menu ----------
+const PAUSE = { menu: false, was: false, sure: 0, mute: false };
+try { PAUSE.mute = localStorage.getItem('os_mute') === '1'; } catch (e) { }
+{
+  const st = document.createElement('style');
+  st.textContent = `#viewBtns{flex-wrap:wrap;justify-content:flex-end;max-width:180px} body.touch #viewBtns{max-width:158px} body.inInt #viewBtns,body.inStn #viewBtns{display:none}
+#pauseBtn{font-size:15px}
+#pauseMenu{position:fixed;inset:0;z-index:60;background:rgba(6,8,6,.62);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+#pauseMenu[hidden]{display:none}
+#pauseMenu .pc{width:min(90vw,380px);max-height:88vh;overflow:auto;background:rgba(16,19,13,.96);border:1px solid #e9b949;padding:16px;font:500 13px/1.45 var(--display);color:#e8f0d8;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+#pauseMenu h3{margin:0 0 4px;font-size:20px;letter-spacing:.12em;color:#ffd27a}
+#pauseMenu .inf{opacity:.75;margin-bottom:10px;font-size:12px}
+#pauseMenu button{display:block;width:100%;margin-top:7px;appearance:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);color:#fff;font:700 14px var(--display);padding:11px 12px;text-align:left;cursor:pointer}
+#pauseMenu button.big{background:rgba(233,185,73,.22);border-color:#e9b949;font-size:16px;text-align:center}
+#pauseMenu button.warn{border-color:rgba(255,106,80,.6);color:#ffb39a}
+#pauseMenu .keys{margin-top:8px;font-size:12px;line-height:1.55;background:rgba(0,0,0,.25);padding:8px 10px}
+#pauseMenu .keys b{color:#ffd27a}`;
+  document.head.appendChild(st);
+  const b = document.createElement('button'); b.id = 'pauseBtn'; b.className = 'vb'; b.title = 'Pauze (P)'; b.textContent = '⏸'; const vb0 = document.getElementById('viewBtns'); vb0 ? vb0.insertBefore(b, vb0.firstChild) : document.body.appendChild(b);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); PAUSE.menu ? closePause() : openPause(); });
+  const pm = document.createElement('div'); pm.id = 'pauseMenu'; pm.hidden = true; document.body.appendChild(pm);
+  pm.addEventListener('pointerdown', e => { e.stopPropagation(); const k = e.target.closest('[data-p]'); if (!k) { if (e.target === pm) closePause(); return; } e.preventDefault(); pauseCmd(k.dataset.p); });
+  ['pointerup', 'click', 'wheel', 'mousedown', 'touchstart'].forEach(ev => pm.addEventListener(ev, e => e.stopPropagation(), { passive: true }));
+}
+const applyMute = () => { try { if (Snd.master) Snd.master.gain.value = PAUSE.mute ? 0 : .6; } catch (e) { } };
+function pauseKeysHtml() {
+  if (IS_TOUCH) return `<b>Tikken</b> kiezen · <b>slepen</b> kader · <b>twee vingers</b> zoomen en draaien · <b>🎮</b> zelf besturen · <b>⏸</b> pauze`;
+  return `<b>Bevel</b>: WASD camera · scroll zoom · Q/E draaien · Spatie snelle pauze (bevelen geven kan) · P pauzemenu · Tab team · Esc annuleren<br>
+<b>Soldaat</b>: WASD lopen · muis mikken · L-klik vuren · R-klik vizier · R herladen · 1/2/3 wapen · G granaat · N nachtzicht<br>
+<b>Straaljager makkelijk</b>: muis of WASD sturen · Shift/R gas · Ctrl/F minder gas<br>
+<b>Straaljager PRO</b>: muis = stuurknuppel · W/S neus · A/D rollen · Q/E roer · Shift/R en Ctrl/F gas · Z ingedrukt rondkijken · I muis omkeren · M wissel makkelijk/PRO<br>
+<b>Altijd</b>: N nachtzicht · X flares · V zicht · Esc terug naar bevel`;
+}
+function renderPauseMenu() {
+  const pm = document.getElementById('pauseMenu'), s = Math.floor(SIMT), mm = String(Math.floor(s / 60)), ss = String(s % 60).padStart(2, '0');
+  const hh = Math.floor(WTIME.h), mi = String(Math.floor((WTIME.h % 1) * 60)).padStart(2, '0'), wx = WXNAME[WXS.state] || ['', ''];
+  pm.innerHTML = `<div class="pc"><h3>⏸ GEPAUZEERD</h3>
+<div class="inf">⏱ ${mm}:${ss} gespeeld · ${SEASONS[WTIME.season][1]} ${SEASONS[WTIME.season][0]} · dag ${WTIME.day + 1} · ${String(hh).padStart(2, '0')}:${mi} · ${wx[1]} ${wx[0]}${ZM.on ? ` · 🧪 ${Math.floor(ZM.cure)}% · ⛽ ${Math.floor(ZM.res.oil)}` : ''}</div>
+<button data-p="go" class="big">▶ Verder spelen</button>
+<button data-p="snd">${PAUSE.mute ? '🔇 Geluid: uit' : '🔊 Geluid: aan'}</button>
+<button data-p="nv">${NV.on ? '🌙 Nachtzicht: aan' : '🌙 Nachtzicht: uit'}</button>
+<button data-p="fly">🕹 Straaljagers: ${FL.arcade ? 'makkelijk' : 'PRO'}</button>
+<button data-p="keys">🎮 Besturing</button><div class="keys" ${PAUSE.keys ? '' : 'hidden'}>${pauseKeysHtml()}</div>
+<button data-p="again" class="warn">${PAUSE.sure ? '⚠ Zeker? Tik nog eens om opnieuw te beginnen' : '🔄 Opnieuw beginnen'}</button></div>`;
+}
+function openPause() {
+  if (PAUSE.menu || (state !== 'play' && state !== 'possess') || ECO.over) return;
+  PAUSE.menu = true; PAUSE.was = paused; PAUSE.sure = 0; setPaused(true); document.getElementById('paused').hidden = true;
+  if (document.pointerLockElement) try { document.exitPointerLock(); } catch (e) { }
+  try { if (Snd.ctx && Snd.ctx.state === 'running') Snd.ctx.suspend(); } catch (e) { }
+  renderPauseMenu(); document.getElementById('pauseMenu').hidden = false; document.getElementById('pauseBtn').textContent = '▶';
+}
+function closePause() {
+  if (!PAUSE.menu) return; PAUSE.menu = false; document.getElementById('pauseMenu').hidden = true; document.getElementById('pauseBtn').textContent = '⏸';
+  setPaused(PAUSE.was); try { if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); } catch (e) { }
+}
+function pauseCmd(c) {
+  if (c === 'go') return closePause();
+  if (c === 'snd') { PAUSE.mute = !PAUSE.mute; try { localStorage.setItem('os_mute', PAUSE.mute ? '1' : '0'); } catch (e) { } applyMute(); }
+  if (c === 'nv') nvToggle();
+  if (c === 'fly') { FL.arcade = !FL.arcade; try { localStorage.setItem('os_fly', FL.arcade ? 'arcade' : 'pro'); } catch (e) { } const b = document.getElementById('pzFlyMode'); if (b) b.innerHTML = FL.arcade ? '🕹<br>MAKKELIJK' : '🕹<br>PRO'; }
+  if (c === 'keys') PAUSE.keys = !PAUSE.keys;
+  if (c === 'again') { if (PAUSE.sure) { location.reload(); return; } PAUSE.sure = 1; }
+  renderPauseMenu();
+}
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (PAUSE.menu && (e.code === 'Escape' || e.code === 'KeyP')) { e.preventDefault(); e.stopImmediatePropagation(); closePause(); return; }
+  if (PAUSE.menu) { if (e.code !== 'Tab') { e.stopImmediatePropagation(); } return; }
+  if (e.code === 'KeyP' && (state === 'play' || state === 'possess') && !(CTL.on && CTL.kind === 'ship') && !INT.on && !STN.view) { e.preventDefault(); e.stopImmediatePropagation(); openPause(); }
+}, true);
+// Esc closes the menu, it does not also send you back to command
+const _unpossP = unpossess; unpossess = function (...a) { if (PAUSE.menu) return; return _unpossP.apply(this, a); };
+const _ctlExitPM = ctlExit; ctlExit = function (...a) { if (PAUSE.menu) return; return _ctlExitPM.apply(this, a); };
+// nothing moves while the menu is open, not even the plane you fly
+const _updPossP = updatePossess;
+updatePossess = dt => { if (PAUSE.menu) return; _updPossP(dt); };
+const _snInitP = Snd.init.bind(Snd);
+Snd.init = function () { const r = _snInitP(); applyMute(); return r; };
+// ---------- PRO flight on PC: the mouse is the stick, no autopilot, real G forces ----------
+const PRO = { on: false, sx: 0, sy: 0, inv: false, g: 1, gMax: 1, black: 0, red: 0, ab: false, f0: null, beepT: 0, warn: '', mode: null };
+try { PRO.inv = localStorage.getItem('os_inv') === '1'; } catch (e) { }
+const _updPJ_P = updatePossessJet;
+updatePossessJet = function (j, dt, ldx, ldy) {
+  const pro = !FL.arcade && !IS_TOUCH;
+  if (PRO.mode !== FL.arcade) { PRO.mode = FL.arcade; const k = pzEl('pzJetKeys'); if (k && !IS_TOUCH) k.innerHTML = FL.arcade ? '<b>Muis of WASD</b> sturen (makkelijk) · <b>Shift/R</b> meer gas · <b>Ctrl/F</b> minder gas · <b>L-klik</b> kanon · <b>R-klik</b> raket · <b>Spatie</b> bom · <b>G</b> auto-bom · <b>V</b> zicht · <b>M</b> PRO-besturing · <b>N</b> nachtzicht · <b>P</b> pauze' : '<b>PRO</b> · <b>Muis</b> stuurknuppel · <b>W/S</b> neus · <b>A/D</b> rollen · <b>Q/E</b> roer · <b>Shift/R</b> gas (100% = naverbrander) · <b>Ctrl/F</b> minder gas · <b>Z</b> (ingedrukt) rondkijken · <b>I</b> muis omkeren · <b>L-klik</b> kanon · <b>R-klik</b> raket · <b>Spatie</b> bom · <b>X</b> flares · <b>M</b> makkelijk · <b>P</b> pauze'; }
+  if (!pro) { PRO.on = false; return _updPJ_P(j, dt, ldx, ldy); }
+  if (!PRO.on || PRO.for !== j) { PRO.sx = PRO.sy = 0; PRO.black = PRO.red = 0; PRO.gMax = 1; PRO.f0 = null; PRO.for = j; }
+  PRO.on = true;
+  const K = c => keys[c] ? 1 : 0, look = !!K('KeyZ'), B = j.variant === 'bomber';
+  // the mouse moves a stick that springs back to the middle when you stop moving it
+  if (!look) { PRO.sx = clamp(PRO.sx + ldx * .0034, -1, 1); PRO.sy = clamp(PRO.sy + (PRO.inv ? ldy : -ldy) * .0034, -1, 1); }
+  const kk = Math.exp(-dt * (ldx || ldy ? .5 : 2.6)); PRO.sx *= kk; PRO.sy *= kk;
+  if (JZ.auto && !j.onGround && Math.abs(PRO.sx) + Math.abs(PRO.sy) > .18) { JZ.auto = false; addFeed(null, null, 'Autopiloot uit · PRO-besturing'); }
+  if (JZ.run && !j.onGround && Math.abs(PRO.sx) + Math.abs(PRO.sy) > .25) { JZ.run = null; j.bombTgt = null; }
+  _updPJ_P(j, dt, look ? ldx : 0, look ? ldy : 0);
+  if (!j.alive) return;
+  JZ.aim.copy(j.forward());
+  if (JZ.auto || JZ.run) { PRO.warn = ''; return; }
+  const I = j.in;
+  const kRoll = K('KeyD') - K('KeyA') + K('ArrowRight') - K('ArrowLeft'), kPitch = K('KeyS') - K('KeyW') + K('ArrowDown') - K('ArrowUp');
+  const auth = 1 - Math.max(PRO.black, PRO.red) * .75;
+  I.roll = clamp(PRO.sx + kRoll, -1, 1) * auth * (B ? .7 : 1);
+  I.pitch = clamp(PRO.sy + kPitch, -1, 1) * auth * (B ? .8 : 1);
+  I.yaw = (K('KeyE') - K('KeyQ')) * .9;
+  if (j.onGround) { I.yaw = clamp(I.yaw + I.roll * .8, -1, 1); I.roll = 0; }
+  // the flight computer limits the pull to 9 G (bombers 2.5 G)
+  const sf = clamp(j.speed / 130, .25, 1.1), lim = B ? 2.5 : 9, gPull = j.speed * Math.abs(I.pitch) * j.V.pr * sf / G;
+  if (gPull > lim) I.pitch *= lim / gPull;
+  // afterburner at full throttle
+  PRO.ab = JZ.thr > .97 && !j.onGround && !B; if (PRO.ab) j.speed = Math.min(360, j.speed + 9 * dt);
+  // G force from how fast the nose moves, plus gravity
+  const f = j.forward(), up = j.up();
+  if (PRO.f0 && dt > 0) { const pr = f.clone().sub(PRO.f0).dot(up) / dt, gNow = j.onGround ? 1 : clamp(j.speed * pr / G + up.y, -5, 13); PRO.g = lerp(PRO.g, gNow, Math.min(1, dt * 5)); }
+  PRO.f0 = (PRO.f0 || new V3()).copy(f); PRO.gMax = Math.max(PRO.gMax, PRO.g);
+  PRO.black = clamp(PRO.black + (PRO.g > 8 ? (PRO.g - 8) * .16 : -.3) * dt, 0, 1);
+  PRO.red = clamp(PRO.red + (PRO.g < -2.5 ? (-2.5 - PRO.g) * .3 : -.4) * dt, 0, 1);
+  // warnings: ground ahead, too slow, blacking out
+  let w = '', danger = false;
+  if (!j.onGround) {
+    for (const t of [1, 2, 3, 4.5]) { const p = j.pos.clone().addScaledVector(j.vel, t); if (p.y < Math.max(getH(p.x, p.z), WATER) + 12) { w = '⚠ OPTREKKEN! OPTREKKEN!'; danger = true; break; } }
+    if (!w && j.speed < 90) { w = '⚠ OVERTREK · neus omlaag en gas'; danger = true; }
+    if (!w && PRO.black > .55) w = 'G-LOC · laat de stuurknuppel wat los';
+    if (!w && PRO.red > .5) w = 'REDOUT · te veel negatieve G';
+  }
+  PRO.warn = w; PRO.beepT -= dt; if (danger && PRO.beepT <= 0 && Snd.ctx) { PRO.beepT = .45; Snd.burst(camera.position, { f: 1400, q: 12, dur: .12, vol: .22, rng: 40 }); }
+  const pw = pzEl('pzWarn'); if (pw && !pw.textContent.startsWith('RAKET')) pw.textContent = '';
+};
+// the afterburner flame is longer
+const _jetUpdP = Jet.prototype.update;
+Jet.prototype.update = function (dt) { _jetUpdP.call(this, dt); if (this.alive && PRO.on && PRO.ab && this === PZ.unit && this.glow) { this.glow.scale.z *= 1.9; this.glow.material.opacity = 1; } };
+// M switches easy/PRO, I flips the mouse
+addEventListener('keydown', e => {
+  if (e.repeat || state !== 'possess' || !PZ.unit || PZ.unit.type !== 'jet') return;
+  if (e.code === 'KeyM') { const b = document.getElementById('pzFlyMode'); if (b) b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); }
+  if (e.code === 'KeyI' && !FL.arcade) { PRO.inv = !PRO.inv; try { localStorage.setItem('os_inv', PRO.inv ? '1' : '0'); } catch (er) { } addFeed(null, null, PRO.inv ? '🖱 Muis omgekeerd: muis naar voren = neus omlaag' : '🖱 Muis normaal: muis naar voren = neus omhoog'); }
+});
+{
+  const b = document.getElementById('pzFlyMode');
+  if (b) b.addEventListener('pointerdown', () => { if (!FL.arcade && !IS_TOUCH) setTimeout(() => addFeed(null, null, '🕹 PRO: muis = stuurknuppel (rollen en neus) · W/S neus · A/D rollen · Q/E roer · Shift/R gas · Z rondkijken · I muis omkeren · geen autopiloot, echte G-krachten'), 0); });
+}
+// the fighter HUD: pitch ladder, heading tape, speed, altitude, G, throttle and the stick
+const _drawFlightAimP = drawFlightAim;
+drawFlightAim = function (oc) {
+  _drawFlightAimP(oc);
+  const j = PZ.unit; if (!PRO.on || state !== 'possess' || !j || j.type !== 'jet' || !j.alive || JZ.view === 2) return;
+  const W = innerWidth, H = innerHeight, cx = W / 2, cy = H / 2, GR = '#7dff9a', cp = camera.position;
+  const f = j.forward(), head = Math.atan2(f.x, f.z), pitchDeg = Math.asin(clamp(f.y, -1, 1)) * 180 / Math.PI;
+  oc.save(); oc.strokeStyle = GR; oc.fillStyle = GR; oc.lineWidth = 1.6; oc.font = '600 12px IBM Plex Mono, monospace'; oc.shadowColor = 'rgba(0,0,0,.6)'; oc.shadowBlur = 3;
+  // pitch ladder in the world, so it always lines up with the real horizon
+  const rw = new V3(Math.cos(head), 0, -Math.sin(head));
+  for (let a = -80; a <= 80; a += 10) {
+    if (Math.abs(a - pitchDeg) > 32) continue;
+    const ar = a * Math.PI / 180, d = new V3(Math.sin(head) * Math.cos(ar), Math.sin(ar), Math.cos(head) * Math.cos(ar)), C = cp.clone().addScaledVector(d, 1000);
+    const L = a === 0 ? 260 : 110, gap = a === 0 ? 40 : 34;
+    const p1 = project(C.clone().addScaledVector(rw, gap)), p2 = project(C.clone().addScaledVector(rw, L)), q1 = project(C.clone().addScaledVector(rw, -gap)), q2 = project(C.clone().addScaledVector(rw, -L));
+    if (!p1 || !p2 || !q1 || !q2) continue; if (Math.abs(p1[1] - cy) > H * .42 || Math.abs(p1[0] - cx) > W * .45) continue;
+    oc.setLineDash(a < 0 ? [7, 5] : []); oc.beginPath(); oc.moveTo(p1[0], p1[1]); oc.lineTo(p2[0], p2[1]); oc.moveTo(q1[0], q1[1]); oc.lineTo(q2[0], q2[1]); oc.stroke();
+    if (a) { oc.setLineDash([]); oc.textAlign = 'left'; oc.fillText(String(a), p2[0] + 5, p2[1] + 4); oc.textAlign = 'right'; oc.fillText(String(a), q2[0] - 5, q2[1] + 4); }
+  }
+  oc.setLineDash([]);
+  // heading tape
+  const hd = ((head * 180 / Math.PI) % 360 + 360) % 360, ty = IS_TOUCH ? 96 : 132;
+  oc.beginPath(); oc.moveTo(cx - 150, ty); oc.lineTo(cx + 150, ty); oc.stroke(); oc.textAlign = 'center';
+  for (let k = Math.ceil((hd - 30) / 5) * 5; k <= hd + 30; k += 5) { const x = cx + (k - hd) * 5, deg = ((k % 360) + 360) % 360; oc.beginPath(); oc.moveTo(x, ty); oc.lineTo(x, ty - (deg % 10 ? 4 : 8)); oc.stroke(); if (deg % 30 === 0) oc.fillText(deg === 0 ? 'N' : deg === 90 ? 'O' : deg === 180 ? 'Z' : deg === 270 ? 'W' : String(deg / 10).padStart(2, '0'), x, ty - 12); }
+  oc.beginPath(); oc.moveTo(cx, ty + 2); oc.lineTo(cx - 5, ty + 9); oc.lineTo(cx + 5, ty + 9); oc.closePath(); oc.fill();
+  // speed (left) and altitude (right)
+  const box = (x, y, w, txt, sub) => { oc.strokeRect(x - w / 2, y - 13, w, 26); oc.font = '700 15px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillText(txt, x, y + 5); oc.font = '600 11px IBM Plex Mono, monospace'; if (sub) oc.fillText(sub, x, y + 28); };
+  box(cx - 200, cy, 78, String(Math.round(j.speed * 3.6)), `km/u · M${(j.speed / 340).toFixed(2)}`);
+  box(cx + 200, cy, 78, String(Math.round(j.pos.y - WATER)), `m · R ${Math.round(j.agl())}`);
+  const vs = j.vel.y; oc.font = '600 11px IBM Plex Mono, monospace'; oc.textAlign = 'center'; oc.fillText(`${vs >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(vs))} m/s`, cx + 200, cy - 22);
+  // G, throttle and the afterburner
+  const gx = cx - 200, gy = cy + 66; oc.textAlign = 'center'; oc.font = '700 14px IBM Plex Mono, monospace';
+  oc.fillStyle = PRO.g > 8 || PRO.g < -2 ? '#ff6a50' : GR; oc.fillText(`${PRO.g.toFixed(1)} G`, gx, gy); oc.fillStyle = GR; oc.font = '600 11px IBM Plex Mono, monospace'; oc.fillText(`max ${PRO.gMax.toFixed(1)}`, gx, gy + 14);
+  oc.fillText(`GAS ${Math.round(JZ.thr * 100)}%${PRO.ab ? ' · NAVERBRANDER' : ''}`, gx, gy + 30);
+  oc.fillText(`PITCH ${pitchDeg >= 0 ? '+' : ''}${pitchDeg.toFixed(0)}°`, cx + 200, cy + 66);
+  // where the mouse stick is
+  const sx = W - 96, sy = H - 200; oc.strokeRect(sx - 34, sy - 34, 68, 68); oc.beginPath(); oc.moveTo(sx - 34, sy); oc.lineTo(sx + 34, sy); oc.moveTo(sx, sy - 34); oc.lineTo(sx, sy + 34); oc.globalAlpha = .4; oc.stroke(); oc.globalAlpha = 1;
+  oc.beginPath(); oc.arc(sx + PRO.sx * 30, sy - PRO.sy * 30 * (PRO.inv ? -1 : 1), 5, 0, TAU); oc.fill(); oc.font = '600 10px IBM Plex Mono, monospace'; oc.fillText('STUUR', sx, sy + 48);
+  oc.font = '700 11px IBM Plex Mono, monospace'; oc.fillText('PRO', cx, ty + 24);
+  // warnings
+  if (PRO.warn) { oc.font = '700 18px Chakra Petch, sans-serif'; oc.fillStyle = Math.sin(SIMT * 14) > 0 ? '#ff5a3a' : '#ffd27a'; oc.fillText(PRO.warn, cx, cy + 120); }
+  oc.restore();
+  // blackout and redout
+  const v = Math.max(PRO.black, PRO.red);
+  if (v > .02) { const g = oc.createRadialGradient(cx, cy, Math.min(W, H) * (.55 - v * .45), cx, cy, Math.max(W, H) * .7); const c = PRO.red > PRO.black ? '120,0,0' : '0,0,0'; g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},${Math.min(1, v * 1.1)})`); oc.fillStyle = g; oc.fillRect(0, 0, W, H); if (v > .85) { oc.fillStyle = `rgba(${c},${(v - .85) * 5})`; oc.fillRect(0, 0, W, H); } }
+};
+// ---------- night vision ----------
+const NV = { on: false, b: -1, gT: 0 };
+{
+  const st = document.createElement('style');
+  st.textContent = `#nvO{position:fixed;inset:0;pointer-events:none;z-index:1;display:none} body.nvOn #nvO{display:block} body.inStn #nvO{display:none}
+#nvO .grain{position:absolute;inset:-80px;opacity:.2;mix-blend-mode:screen}
+#nvO .tube{position:absolute;inset:0;display:none;background:radial-gradient(ellipse 58% 72% at 50% 50%,transparent 63%,rgba(0,6,0,.94) 79%)} body.possess #nvO .tube{display:block}
+#nvO .lbl{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:700 11px IBM Plex Mono,monospace;letter-spacing:.24em;color:#9dff9a;text-shadow:0 0 6px #2f8f3a}
+.nvBtn.on{background:rgba(80,200,90,.3)!important;border-color:#7dff9a!important;color:#d8ffd8!important}`;
+  document.head.appendChild(st);
+  const o = document.createElement('div'); o.id = 'nvO'; o.innerHTML = '<div class="grain"></div><div class="tube"></div><div class="lbl">NACHTZICHT · GEN III</div>'; document.body.appendChild(o);
+  const c = document.createElement('canvas'); c.width = c.height = 160; const x = c.getContext('2d'), im = x.createImageData(160, 160);
+  for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = v * .6; im.data[i + 1] = v; im.data[i + 2] = v * .6; im.data[i + 3] = 255; }
+  x.putImageData(im, 0, 0); NV.grain = o.querySelector('.grain'); NV.grain.style.backgroundImage = `url(${c.toDataURL()})`;
+  // buttons: next to the view buttons (command view) and with the possess buttons
+  const vb = document.getElementById('viewBtns');
+  if (vb) { const b = document.createElement('button'); b.className = 'vb nvBtn'; b.id = 'btnNV'; b.title = 'Nachtzicht (N)'; b.textContent = '🌙'; vb.appendChild(b); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); nvToggle(); }); }
+  const pb = pzEl('pzBtns');
+  if (pb) { const b = document.createElement('button'); b.className = 'pzb nvBtn'; b.id = 'pzNV'; b.innerHTML = '🌙<br>NVG'; const cam = pzEl('pzCam'); cam ? pb.insertBefore(b, cam) : pb.appendChild(b); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); nvToggle(); }); }
+}
+function nvToggle(on = !NV.on) {
+  NV.on = on; document.body.classList.toggle('nvOn', on); NV.b = -1;
+  document.querySelectorAll('.nvBtn').forEach(b => b.classList.toggle('on', on));
+  if (!on) renderer.domElement.style.filter = '';
+  if (Snd.ctx) Snd.burst(camera.position, { f: on ? 3200 : 1800, q: 14, dur: .25, vol: .12, rng: 40 });
+  if (state === 'play' || state === 'possess') addFeed(null, null, on ? '🌙 Nachtzicht aan · groen beeld, je ziet in het donker (N om uit te zetten)' : '🌙 Nachtzicht uit');
+}
+addEventListener('keydown', e => {
+  if (e.repeat || e.code !== 'KeyN' || PAUSE.menu || INT.on) return;
+  if (state !== 'play' && state !== 'possess') return; if (CTL.on && CTL.kind === 'ship') return;
+  nvToggle();
+});
+// amplified light: the scene gets brighter at night, the picture turns green and grainy
+const _updSkyNV = updateSky;
+updateSky = function (dt) {
+  _updSkyNV(dt); if (!NV.on || STN.view) return;
+  const n = WTIME.night; hemi.intensity *= 1 + 1.9 * n; sun.intensity *= 1 + 1.1 * n;
+};
+const _renderMainNV = renderMain;
+renderMain = function (dt) {
+  if (NV.on) {
+    const space = STN.view; let b = space ? 0 : Math.round((.92 + .95 * WTIME.night) * 20) / 20;
+    if (b !== NV.b) { NV.b = b; renderer.domElement.style.filter = space ? '' : `grayscale(1) sepia(.85) hue-rotate(58deg) saturate(2.1) brightness(${b}) contrast(1.18)`; }
+    NV.gT -= dt; if (NV.gT <= 0 && NV.grain) { NV.gT = .05; NV.grain.style.transform = `translate(${(Math.random() * 80) | 0}px,${(Math.random() * 80) | 0}px)`; }
+  }
+  return _renderMainNV(dt);
+};
+const _updateWavesRig = updateWaves;
+updateWaves = function (dt) { _updateWavesRig(dt); updateRigs(dt); };
+// ---------- rain and snow over the whole screen in the command view (the 3D drops only cover the area around the camera) ----------
+const SPREC = { c: null, x: null, r: [], s: [], vis: false, right: new V3() };
+{
+  const c = document.createElement('canvas'); c.id = 'precC'; c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1';
+  const ov = document.getElementById('ov'); ov ? ov.parentNode.insertBefore(c, ov) : document.body.appendChild(c); SPREC.c = c; SPREC.x = c.getContext('2d');
+}
+function drawScreenPrec(dt) {
+  const C = SPREC.c, X = SPREC.x, rk = WXS.rain, sk = WXS.snowF;
+  const inside = state === 'possess' || CTL.on || INT.on || STN.view;
+  if ((state !== 'play' && state !== 'possess') || inside || (rk < .03 && sk < .03)) { if (SPREC.vis) { X.clearRect(0, 0, C.width, C.height); SPREC.vis = false; } return; }
+  if (C.width !== innerWidth || C.height !== innerHeight) { C.width = innerWidth; C.height = innerHeight; }
+  SPREC.vis = true; const W = C.width, H = C.height; X.clearRect(0, 0, W, H);
+  const cp = camera.position, alt = cp.y - Math.max(getH(cp.x, cp.z), WATER), far = clamp((alt - 40) / 260, .35, 1), mv = paused ? 0 : dt;
+  SPREC.right.setFromMatrixColumn(camera.matrixWorld, 0); const slant = clamp((WXS.wind.x * SPREC.right.x + WXS.wind.z * SPREC.right.z) * .035, -.45, .45);
+  // rain streaks
+  const nr = Math.floor((QUALITY.low ? 240 : 420) * Math.min(1.2, rk) * far), R = SPREC.r, storm = WXS.storm;
+  while (R.length < nr) R.push({ x: Math.random() * W, y: Math.random() * H, v: rnd(900, 1400), l: rnd(12, 26), k: Math.random() < .25 });
+  if (nr > 0) {
+    for (const thick of [false, true]) {
+      X.beginPath(); X.lineWidth = thick ? 1.6 : 1; X.strokeStyle = thick ? 'rgba(205,215,225,.42)' : 'rgba(190,200,212,.3)';
+      for (let i = 0; i < nr; i++) { const d = R[i]; if (d.k !== thick) continue; const L = d.l * (1 + storm * .6); d.y += d.v * mv; d.x += d.v * slant * mv; if (d.y > H + L) { d.y = -L; d.x = Math.random() * (W + 200) - 100; } if (d.x > W + 60) d.x -= W + 120; else if (d.x < -60) d.x += W + 120; X.moveTo(d.x, d.y); X.lineTo(d.x - slant * L, d.y - L); }
+      X.stroke();
+    }
+  }
+  // snowflakes
+  const ns = Math.floor((QUALITY.low ? 220 : 380) * Math.min(1.5, sk) * far), S = SPREC.s, t = SIMT;
+  while (S.length < ns) S.push({ x: Math.random() * W, y: Math.random() * H, v: rnd(40, 95), s: rnd(1.5, 3.6), p: rnd(0, 6) });
+  if (ns > 0) {
+    X.fillStyle = 'rgba(255,255,255,.82)'; const side = slant * 260 * (1 + sk);
+    for (let i = 0; i < ns; i++) { const f = S[i]; f.y += f.v * (1 + sk * .4) * mv; f.x += (side + Math.sin(t * 1.3 + f.p) * 22) * mv; if (f.y > H + 4) { f.y = -4; f.x = Math.random() * W; } if (f.x > W + 6) f.x -= W + 12; else if (f.x < -6) f.x += W + 12; X.fillRect(f.x, f.y, f.s, f.s); }
+  }
+}
+const _renderMainSP = renderMain;
+renderMain = function (dt) { const r = _renderMainSP(dt); drawScreenPrec(dt); return r; };
+
+// ================= INSIDE THE SPACE STATION: float through the lab, the crew quarters, the cupola and the supply capsule =================
+const SINT = { built: false, scene: null, regs: [], vel: new V3(), spots: [], crew: [], scr: null, scrT: 0, helix: null, msg: '', msgT: 0, earth: null };
+function buildSpaceInterior() {
+  const S = SINT.scene = new THREE.Scene(); S.background = new THREE.Color(0x000004);
+  S.add(new THREE.HemisphereLight(0xf2f6ff, 0x8a8f9a, .95)); const dl = new THREE.DirectionalLight(0xffffff, .55); dl.position.set(-1, -1.5, .6); S.add(dl);
+  // the Earth below the cupola and the stars (scaled down, it looks the same from in here)
+  if (!STN.scene) buildStation();
+  const e = new THREE.Mesh(new THREE.SphereGeometry(640, 48, 24), STN.earth.material); e.position.set(0, -690, 0); e.rotation.x = 1.15; S.add(e); SINT.earth = e;
+  const cl = new THREE.Mesh(new THREE.SphereGeometry(643, 48, 24), STN.clouds.material); cl.position.copy(e.position); cl.rotation.x = 1.15; S.add(cl); SINT.clouds = cl;
+  const n = 1500, g = new THREE.BufferGeometry(), P = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const u = rnd(-1, 1), a = rnd(0, TAU), r = Math.sqrt(1 - u * u); P.set([Math.cos(a) * r * 3000, u * 3000, Math.sin(a) * r * 3000], i * 3); }
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3)); S.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.3, sizeAttenuation: false })));
+  const G = new THREE.Group(); S.add(G);
+  const geo = bakeGeo(K => {
+    const WALL = 0xe6e6de, RACK = 0xcfd2d4, DARK = 0x55595e, RAIL = 0xd8c070, BLUE = 0x2f5aa8, T = .08;
+    // a square module along z from z0 to z1 with walls, racks and handrails, open where it meets the node
+    const module = (z0, z1, cap) => {
+      const L = z1 - z0, zc = (z0 + z1) / 2;
+      K.box(2.4, T, L, WALL, 0, -1.15, zc); K.box(2.4, T, L, WALL, 0, 1.15, zc); K.box(T, 2.4, L, WALL, -1.15, 0, zc); K.box(T, 2.4, L, WALL, 1.15, 0, zc);
+      if (cap) K.box(2.4, 2.4, T, WALL, 0, 0, cap);
+      for (let z = Math.min(z0, z1) + .6; z < Math.max(z0, z1) - .5; z += 1.05) {
+        // racks: four faces, each a panel with drawers and switches
+        for (const [x, y, w, h] of [[-1.08, 0, T, 1.9], [1.08, 0, T, 1.9], [0, -1.08, 1.9, T], [0, 1.08, 1.9, T]]) {
+          K.box(w || .06, h || .06, .95, RACK, x, y, z);
+          const ox = x ? -Math.sign(x) * .05 : 0, oy = y ? -Math.sign(y) * .05 : 0;
+          for (let k = -1; k <= 1; k++) K.box(x ? .04 : .5, x ? .5 : .04, .26, k ? 0xb8bcc0 : 0xe8e8e2, x + ox, y + oy + (x ? k * .6 : 0), z + (x ? 0 : k * .28) - (y ? 0 : 0));
+        }
+        K.box(.05, .05, .9, RAIL, -.95, .95, z); K.box(.05, .05, .9, RAIL, .95, -.95, z);
+      }
+      // cables along a corner
+      K.box(.07, .07, L, 0x3a3a3a, -1.0, -1.0, zc); K.box(.05, .05, L, 0x8a3a2a, 1.0, 1.0, zc);
+    };
+    // node 1: the hub with hatches to all modules
+    const hub = 2.2, hole = 1.1;
+    const face = (axis, s) => { // a 4.4 x 4.4 wall with a square hatch in the middle
+      const p = s * (hub + T / 2), strip = hub - hole, mid = hole + strip / 2;
+      for (const k of [-1, 1]) {
+        if (axis === 'z') { K.box(4.4, strip, T, WALL, 0, k * mid, p); K.box(strip, 2.2, T, WALL, k * mid, 0, p); }
+        if (axis === 'x') { K.box(T, strip, 4.4, WALL, p, k * mid, 0); K.box(T, 2.2, strip, WALL, p, 0, k * mid); }
+        if (axis === 'y') { K.box(4.4, T, strip, WALL, 0, p, k * mid); K.box(strip, T, 2.2, WALL, k * mid, p, 0); }
+      }
+      // the hatch frame
+      if (axis === 'z') { K.box(2.5, .12, .2, DARK, 0, 1.2, p); K.box(2.5, .12, .2, DARK, 0, -1.2, p); K.box(.12, 2.5, .2, DARK, 1.2, 0, p); K.box(.12, 2.5, .2, DARK, -1.2, 0, p); }
+      if (axis === 'x') { K.box(.2, .12, 2.5, DARK, p, 1.2, 0); K.box(.2, .12, 2.5, DARK, p, -1.2, 0); K.box(.2, 2.5, .12, DARK, p, 0, 1.2); K.box(.2, 2.5, .12, DARK, p, 0, -1.2); }
+      if (axis === 'y') { K.box(2.5, .2, .12, DARK, 0, p, 1.2); K.box(2.5, .2, .12, DARK, 0, p, -1.2); K.box(.12, .2, 2.5, DARK, 1.2, p, 0); K.box(.12, .2, 2.5, DARK, -1.2, p, 0); }
+    };
+    face('z', 1); face('z', -1); face('x', 1); face('y', -1);
+    K.box(T, 4.4, 4.4, WALL, -hub - T / 2, 0, 0); K.box(4.4, T, 4.4, WALL, 0, hub + T / 2, 0);
+    for (const y of [-1.6, 0, 1.6]) K.box(.06, .06, 3.6, RAIL, -2.1, y, 0);
+    K.box(.5, .7, 1.2, 0x9aa0a4, -2.0, -1.2, 1.3); K.box(.5, .5, .5, 0xf0f0f0, 1.9, 1.7, -1.7); K.box(.4, .4, .4, 0xf0f0f0, 1.95, 1.65, -1.1);
+    // the lab and the crew module
+    module(2.2, 12, 12.04); module(-2.2, -12, -12.04);
+    // the cupola under the node: a short tube and a chamber with big windows
+    K.box(2.4, .8, T, WALL, 0, -2.6, 1.15); K.box(2.4, .8, T, WALL, 0, -2.6, -1.15); K.box(T, .8, 2.4, WALL, 1.15, -2.6, 0); K.box(T, .8, 2.4, WALL, -1.15, -2.6, 0);
+    const cy = -3.0;
+    for (const s of [-1, 1]) { K.box(3.4, .12, .12, 0x9aa0a4, 0, cy, s * 1.65); K.box(.12, .12, 3.4, 0x9aa0a4, s * 1.65, cy, 0); K.box(3.4, .12, .12, 0x9aa0a4, 0, cy - 1.5, s * 1.65); K.box(.12, .12, 3.4, 0x9aa0a4, s * 1.65, cy - 1.5, 0); }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) K.box(.14, 1.5, .14, 0x9aa0a4, sx * 1.65, cy - .75, sz * 1.65);
+    for (const s of [-1, 1]) { K.box(.12, 1.5, .12, 0x9aa0a4, s * .55, cy - .75, 1.65); K.box(.12, 1.5, .12, 0x9aa0a4, s * .55, cy - .75, -1.65); K.box(.12, 1.5, .12, 0x9aa0a4, 1.65, cy - .75, s * .55); K.box(.12, 1.5, .12, 0x9aa0a4, -1.65, cy - .75, s * .55); }
+    // the round window at the bottom: an octagon frame
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; K.box(1.2, .12, .12, 0x9aa0a4, Math.cos(a) * 1.15, cy - 1.5, Math.sin(a) * 1.15, 0, -a + Math.PI / 2, 0); }
+    K.box(3.4, .12, .9, WALL, 0, cy + .02, 1.25); K.box(3.4, .12, .9, WALL, 0, cy + .02, -1.25); K.box(.9, .12, 1.6, WALL, 1.25, cy + .02, 0); K.box(.9, .12, 1.6, WALL, -1.25, cy + .02, 0);
+    K.box(.9, .35, .5, DARK, 0, cy - .3, 1.3); K.box(.8, .04, .45, 0x1a2a3a, 0, cy - .1, 1.3);
+    // the docking tunnel and the supply capsule
+    for (const [y, z, w, h] of [[-1.15, 0, 0, T], [1.15, 0, 0, T], [0, -1.15, T, 0], [0, 1.15, T, 0]]) K.box(3.8, h || 2.4, w || 2.4, WALL, 4.1, y, z);
+    K.box(3.6, 3, T, 0xd8d4c8, 7.8, 0, 1.5); K.box(3.6, 3, T, 0xd8d4c8, 7.8, 0, -1.5); K.box(3.6, T, 3, 0xd8d4c8, 7.8, 1.5, 0); K.box(3.6, T, 3, 0xd8d4c8, 7.8, -1.5, 0); K.box(T, 3, 3, 0xd8d4c8, 9.6, 0, 0);
+    K.box(T, 3, 1, 0xd8d4c8, 6.0, 0, 1.0); K.box(T, 3, 1, 0xd8d4c8, 6.0, 0, -1.0); K.box(T, .95, 1.2, 0xd8d4c8, 6.0, 1.05, 0); K.box(T, .95, 1.2, 0xd8d4c8, 6.0, -1.05, 0);
+    for (let i = 0; i < 10; i++) K.box(.55, .45, .4, 0xeeeee8, 7 + (i % 3) * .8, -1.2 + Math.floor(i / 3) * .5, i % 2 ? 1.15 : -1.15);
+    // crew quarters: four sleeping stations in the walls of the crew module
+    for (const [z, sx] of [[-5, -1], [-5, 1], [-8.4, -1], [-8.4, 1]]) {
+      K.box(.12, 2.1, 1.2, 0xf0f0ea, sx * 1.0, 0, z); K.box(.06, 1.6, .7, BLUE, sx * .92, 0, z); K.box(.06, .35, .55, 0xe8e8e0, sx * .9, .78, z); K.box(.04, .3, .25, 0x1a2a3a, sx * .9, .3, z + .4);
+      K.box(.02, .22, .16, [0xd8a040, 0x6aa04a, 0xc05050, 0x5070c0][(z * sx + 9) & 3], sx * .9, -.2, z + .45);
+    }
+    // the lab: the glovebox where the cure is made, a freezer and a big screen
+    K.box(1.9, .12, 1.3, DARK, 0, -.55, 10.8); K.box(1.9, .9, .06, DARK, 0, -.1, 11.45); K.box(.06, .9, 1.3, DARK, -.95, -.1, 10.8); K.box(.06, .9, 1.3, DARK, .95, -.1, 10.8);
+    for (const s of [-1, 1]) K.cyl(.12, .12, .5, 0x1a1a1a, s * .4, -.2, 10.15, Math.PI / 2, 0, 0, 10);
+    K.box(.6, .8, .6, 0xf0f0f0, -.75, .55, 8.6); K.box(.5, .6, .05, 0x8ab0d0, -.75, .55, 8.28);
+    K.box(.8, .5, .06, DARK, .6, .5, 7.2); K.box(.5, .3, .04, DARK, -.6, -.7, 6); K.box(.45, .03, .32, DARK, -.6, -.85, 6);
+  });
+  G.add(new THREE.Mesh(geo, VCMAT));
+  // lights: LED strips, rack LEDs, laptop screens
+  const lg = bakeGeo(K => {
+    for (const z of [-11, -9, -7, -5, -3, 3, 5, 7, 9, 11]) { K.box(.9, .03, .2, 0xf4f8ff, 0, 1.1, z); K.box(.9, .03, .2, 0xf4f8ff, 0, -1.1, z); }
+    for (const [x, z] of [[-1.5, -1.5], [1.5, 1.5], [-1.5, 1.5], [1.5, -1.5]]) K.box(.8, .03, .2, 0xf4f8ff, x, 2.15, z);
+    for (let i = 0; i < 70; i++) { const z = (i % 2 ? 1 : -1) * rnd(2.6, 11.6), side = (i * 7) % 4, c = [0x40ff60, 0xff4030, 0xffc040, 0x40c0ff][i % 4]; K.box(side < 2 ? .02 : .05, side < 2 ? .05 : .02, .05, c, side === 0 ? -1.03 : side === 1 ? 1.03 : rnd(-.8, .8), side < 2 ? rnd(-.8, .8) : side === 2 ? -1.03 : 1.03, z); }
+    K.box(.47, .27, .02, 0x3a7ac0, -.6, -.69, 5.97); K.box(.02, .22, .14, 0x4a9ad0, 0, 0, 0);
+  });
+  G.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ vertexColors: true })));
+  // the glovebox glass and the virus sample: a green double helix
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.8, .85, 1.25), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: .14, depthWrite: false })); glass.position.set(0, -.1, 10.8); G.add(glass);
+  const hx = new THREE.Group(); hx.position.set(0, -.15, 10.8); G.add(hx); SINT.helix = hx;
+  const bm = new THREE.MeshBasicMaterial({ color: 0x6aff7a }), bm2 = new THREE.MeshBasicMaterial({ color: 0xc6ff5a }), sg = new THREE.SphereGeometry(.035, 6, 4);
+  for (let i = 0; i < 18; i++) { const a = i * .55, y = -.3 + i * .035; for (const [k, m] of [[0, bm], [Math.PI, bm2]]) { const s = new THREE.Mesh(sg, m); s.position.set(Math.cos(a + k) * .12, y, Math.sin(a + k) * .12); hx.add(s); } }
+  // the research screen
+  const sc = document.createElement('canvas'); sc.width = 512; sc.height = 256; SINT.scr = { c: sc, x: sc.getContext('2d'), tex: new THREE.CanvasTexture(sc) };
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .75), new THREE.MeshBasicMaterial({ map: SINT.scr.tex })); scr.position.set(0, .55, 11.97); scr.rotation.y = Math.PI; G.add(scr);
+  const sc2 = new THREE.Mesh(new THREE.PlaneGeometry(.74, .44), new THREE.MeshBasicMaterial({ map: SINT.scr.tex })); sc2.position.set(.6, .5, 7.16); sc2.rotation.y = Math.PI; G.add(sc2);
+  // signs
+  const sign = (t, c, x, y, z, s = .32) => { const sp = textSprite(t, c); sp.position.set(x, y, z); sp.scale.multiplyScalar(s); G.add(sp); };
+  sign('🧪 RUIMTELAB · GENEESMIDDEL', '#8fe8ff', 0, .85, 2.5); sign('💤 BEMANNING', '#9fd4f5', 0, .85, -2.5); sign('🌍 KOEPEL', '#c8e6a0', 0, -1.95, .9); sign('🚀 CAPSULE', '#ffd27a', 2.4, .9, 0);
+  // the crew floating at work
+  const astro = (x, y, z, ry, rz, shirt) => {
+    const a = new THREE.Group(), k = mdlKit(a);
+    k.box(.42, .55, .26, shirt, 0, .3, 0); k.box(.4, .5, .24, 0x6b6450, 0, -.22, 0); k.box(.16, .5, .18, 0x6b6450, -.11, -.65, .08, .5, 0, 0); k.box(.16, .5, .18, 0x6b6450, .11, -.68, -.04, .2, 0, 0);
+    k.sph(.13, 0xc9a27e, 0, .72, 0, 1, 1.1, 1, 10); k.sph(.14, 0x3a2a1a, 0, .79, -.03, 1, .7, 1, 10);
+    k.box(.12, .45, .12, shirt, -.28, .35, .12, -.9, 0, .3); k.box(.12, .45, .12, shirt, .28, .3, .14, -1.1, 0, -.3); k.box(.18, .12, .05, 0x2a5aa8, .14, .45, .14);
+    a.position.set(x, y, z); a.rotation.set(0, ry, rz); G.add(a); SINT.crew.push({ a, y, ph: rnd(0, 6) });
+  };
+  astro(.3, -.1, 9.6, 0, .1, 0x2f4f8f); astro(-.5, .2, 6.2, Math.PI / 2, -.2, 0x3a3a3a); astro(.4, .3, -6.6, -Math.PI / 2, .3, 0x5a6a3a); astro(-1.2, -.5, 0, Math.PI / 2, 1.2, 0x2f4f8f);
+  // where you can float: overlapping boxes [x0,x1,y0,y1,z0,z1]
+  SINT.regs = [[-2.2, 2.2, -2.2, 2.2, -2.2, 2.2], [-1.1, 1.1, -1.1, 1.1, 0, 12], [-1.1, 1.1, -1.1, 1.1, -12, 0], [-1.1, 1.1, -3.1, 0, -1.1, 1.1], [-1.65, 1.65, -4.55, -2.95, -1.65, 1.65], [0, 6.2, -1.1, 1.1, -1.1, 1.1], [5.8, 9.6, -1.5, 1.5, -1.5, 1.5]];
+  SINT.spots = [{ k: 'lab', p: new V3(0, .1, 9.9), r: 1.6 }, { k: 'cupola', p: new V3(0, -3.7, 0), r: 1.4 }, { k: 'sleep', p: new V3(0, 0, -6.7), r: 2 }, { k: 'dock', p: new V3(7.6, 0, 0), r: 1.8 }];
+  SINT.built = true;
+}
+const sFree = (x, y, z) => SINT.regs.some(([x0, x1, y0, y1, z0, z1]) => x > x0 + .32 && x < x1 - .32 && y > y0 + .32 && y < y1 - .32 && z > z0 + .32 && z < z1 - .32);
+function drawResearchScreen() {
+  const S = SINT.scr; if (!S) return; const x = S.x, W = 512, H = 256;
+  x.fillStyle = '#06121c'; x.fillRect(0, 0, W, H); x.strokeStyle = '#2f8fcf'; x.lineWidth = 4; x.strokeRect(4, 4, W - 8, H - 8);
+  x.fillStyle = '#8fe8ff'; x.font = '700 30px Chakra Petch, sans-serif'; x.textAlign = 'left';
+  if (ZM.on) {
+    x.fillText('GENEESMIDDEL', 24, 50); x.font = '700 64px IBM Plex Mono, monospace'; x.fillStyle = '#6aff7a'; x.fillText(Math.floor(ZM.cure) + '%', 24, 122);
+    x.fillStyle = '#123'; x.fillRect(24, 140, 464, 22); x.fillStyle = '#6aff7a'; x.fillRect(24, 140, 464 * Math.min(1, ZM.cure / 100), 22);
+    x.font = '600 22px IBM Plex Mono, monospace'; x.fillStyle = '#cfe8ff';
+    x.fillText(`labo ${STN.sup > 0 ? '+40% sneller' : 'GEEN VOORRAAD'} · voorraad ${Math.round(STN.sup)}%`, 24, 196);
+    x.fillText(`virus: ${MUT.list.length ? MUT.list.map(m => 'stam ' + m.name + (m.done ? ' ✓' : ' ?')).join('  ') : 'stabiel'}`, 24, 228);
+  } else { x.fillText('SATELLIETNETWERK', 24, 50); x.font = '600 24px IBM Plex Mono, monospace'; x.fillStyle = '#cfe8ff'; x.fillText(STN.scanCd > 0 ? `scan klaar over ${Math.ceil(STN.scanCd)} s` : 'scan klaar · ga naar de koepel', 24, 110); }
+  S.tex.needsUpdate = true;
+}
+function enterSpaceInterior() {
+  if (!SINT.built) buildSpaceInterior();
+  if (!INT.built) buildInterior();
+  STN.view = false; stnUI(false); INT.mode = 'space'; INT.shipScene = INT.shipScene || INT.scene; INT.scene = SINT.scene;
+  INT.on = true; INT.ship = { alive: true }; INT.pos.set(0, 0, -1.2); INT.yaw = 0; INT.pitch = 0; INT.keys = {}; SINT.vel.set(0, 0, 0);
+  INT.cam.far = 5000; INT.cam.near = .05; document.body.classList.add('inInt', 'inSpace'); intUI(true); drawResearchScreen();
+  const ex = document.getElementById('intExit'); if (ex) ex.textContent = '✕ Terug naar buiten';
+}
+// carrier visits keep their own scene
+const _enterIntS = enterInterior;
+enterInterior = function (ship) { INT.mode = 'ship'; if (INT.shipScene) INT.scene = INT.shipScene; INT.cam.far = 200; _enterIntS(ship); INT.shipScene = INT.scene; const ex = document.getElementById('intExit'); if (ex) ex.textContent = '✕ Terug naar het dek'; };
+const _exitIntS = exitInterior;
+exitInterior = function () {
+  const sp = INT.mode === 'space'; INT.mode = null; document.body.classList.remove('inSpace'); _exitIntS();
+  if (sp && state === 'play') { STN.view = true; stnUI(true); stnPanel(); }
+};
+const _intUIS = intUI;
+intUI = function (on) {
+  _intUIS(on); const d = document.getElementById('intUI'); if (!d || d.querySelector('#intUp')) return;
+  const st = document.createElement('style'); st.textContent = `#intUp,#intDn{position:absolute;right:calc(24px + env(safe-area-inset-right,0px));pointer-events:auto;appearance:none;width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.4);color:#fff;font:700 20px var(--display);display:none} body.touch.inSpace #intUp,body.touch.inSpace #intDn{display:block} #intUp{bottom:calc(180px + env(safe-area-inset-bottom,0px))} #intDn{bottom:calc(112px + env(safe-area-inset-bottom,0px))} body.inSpace #intAct{bottom:calc(250px + env(safe-area-inset-bottom,0px))}`; document.head.appendChild(st);
+  for (const [id, t, k] of [['intUp', '▲', 'Space'], ['intDn', '▼', 'ShiftLeft']]) { const b = document.createElement('button'); b.id = id; b.textContent = t; d.appendChild(b); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); INT.keys[k] = true; if (INT.look && INT.look.id === e.pointerId) INT.look = null; if (INT.joy && INT.joy.id === e.pointerId) INT.joy = null; }); const up = e => { INT.keys[k] = false; }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up); }
+  const ex = d.querySelector('#intExit'); if (ex) ex.addEventListener('pointerdown', () => { }, true);
+};
+// floating without gravity
+const _updIntS = updateInterior;
+updateInterior = function (dt) {
+  if (INT.mode !== 'space') return _updIntS(dt);
+  const K = INT.keys, J = INT.joy, cy = Math.cos(INT.pitch);
+  const fwd = new V3(Math.sin(INT.yaw) * cy, Math.sin(INT.pitch), Math.cos(INT.yaw) * cy), right = new V3(-Math.cos(INT.yaw), 0, Math.sin(INT.yaw));
+  const mz = clamp((K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0) - (J ? J.dy : 0), -1, 1), mx = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + (J ? J.dx : 0), -1, 1), my = (K.Space ? 1 : 0) - (K.ShiftLeft || K.ShiftRight ? 1 : 0);
+  const acc = fwd.multiplyScalar(mz).addScaledVector(right, mx).add(new V3(0, my, 0)); if (acc.lengthSq() > 1) acc.normalize();
+  SINT.vel.addScaledVector(acc, 3.2 * dt).multiplyScalar(Math.exp(-dt * 1.6)); if (SINT.vel.length() > 2.6) SINT.vel.setLength(2.6);
+  const p = INT.pos, v = SINT.vel;
+  if (sFree(p.x + v.x * dt, p.y, p.z)) p.x += v.x * dt; else v.x *= -.3;
+  if (sFree(p.x, p.y + v.y * dt, p.z)) p.y += v.y * dt; else v.y *= -.3;
+  if (sFree(p.x, p.y, p.z + v.z * dt)) p.z += v.z * dt; else v.z *= -.3;
+  const t = performance.now() / 1000, bob = Math.sin(t * .8) * .02;
+  INT.cam.position.set(p.x, p.y + bob, p.z); INT.cam.up.set(0, 1, 0); INT.cam.lookAt(p.x + Math.sin(INT.yaw) * Math.cos(INT.pitch), p.y + bob + Math.sin(INT.pitch), p.z + Math.cos(INT.yaw) * Math.cos(INT.pitch));
+  INT.cam.aspect = innerWidth / innerHeight; INT.cam.updateProjectionMatrix();
+  for (const c of SINT.crew) { c.a.position.y = c.y + Math.sin(t * .6 + c.ph) * .06; c.a.rotation.x = Math.sin(t * .4 + c.ph) * .05; }
+  if (SINT.helix) SINT.helix.rotation.y += dt * .8;
+  if (SINT.earth) { SINT.earth.rotation.y += dt * .004; SINT.clouds.rotation.y += dt * .006; }
+  SINT.scrT -= dt; if (SINT.scrT <= 0) { SINT.scrT = 1; drawResearchScreen(); }
+  // what is close by
+  let near = null; for (const s of SINT.spots) if (p.distanceTo(s.p) < s.r) { near = s.k; break; } INT.near = near;
+  const hint = document.getElementById('intHint'), act = document.getElementById('intAct');
+  SINT.msgT -= dt;
+  const mut = MUT.list.find(m => !m.done);
+  const txt = SINT.msgT > 0 ? SINT.msg : near === 'lab' ? (ZM.on ? `🧪 Hier zoeken ze het geneesmiddel: ${Math.floor(ZM.cure)}%${STN.an ? ` · stam ${STN.an.m.name} wordt geanalyseerd (${Math.floor(STN.an.p * 100)}%)` : mut ? ` · E = stam ${mut.name} analyseren` : ''}` : '🧪 Het ruimtelab · in de zombie-modus wordt hier het geneesmiddel gemaakt')
+    : near === 'cupola' ? `🌍 Uitzicht op de aarde · E = satellietscan${STN.scanCd > 0 ? ` (klaar over ${Math.ceil(STN.scanCd)} s)` : ''}` : near === 'sleep' ? '💤 Slaapcabines: astronauten slapen rechtop vastgemaakt in een slaapzak'
+    : near === 'dock' ? `🚀 Bevoorradingscapsule · voorraad ${Math.round(STN.sup)}% · E = nieuwe raket (⛽ 80)${STN.rocket ? ' · er is er al één onderweg' : ''}` : 'Zweven: WASD of joystick · Spatie/▲ omhoog · Shift/▼ omlaag · muis of slepen = kijken';
+  if (hint && hint.textContent !== txt) hint.textContent = txt;
+  if (act) { act.hidden = !near || near === 'sleep'; act.textContent = near === 'lab' ? '🧬 Analyseren' : near === 'cupola' ? '🛰 Scan' : '🚀 Raket'; }
+};
+const _intUseS = intUse;
+intUse = function () {
+  if (INT.mode !== 'space') return _intUseS();
+  const say = m => { SINT.msg = m; SINT.msgT = 2.6; };
+  if (INT.near === 'lab') { if (!ZM.on) return say('🧪 Geen virus om te onderzoeken in deze modus'); if (STN.an) return say(`🧬 Stam ${STN.an.m.name} wordt al geanalyseerd`); if (!MUT.list.some(m => !m.done)) return say('🧬 Geen nieuwe stam om te analyseren'); if (STN.sup <= 0) return say('📦 Geen voorraad: stuur eerst een raket'); stnCmd('analyse'); say(`🧬 Analyse van stam ${STN.an ? STN.an.m.name : ''} gestart`); }
+  else if (INT.near === 'cupola') { if (STN.scanCd > 0) return say(`🛰 Scan klaar over ${Math.ceil(STN.scanCd)} s`); stnCmd('scan'); say('🛰 Satellietscan: alle vijanden 25 s gemarkeerd'); }
+  else if (INT.near === 'dock') { if (STN.rocket) return say('🚀 Er is al een raket onderweg'); const o = ZM.on ? ZM.res.oil : 999; stnCmd('rocket'); say(STN.rocket ? '🚀 Raket gelanceerd vanaf het eiland · aankomst over 45 s' : `⛽ Niet genoeg olie: 80 nodig, je hebt ${Math.floor(o)}`); }
+};
+// the station panel gets a "go inside" button
+const _stnPanelS = stnPanel;
+stnPanel = function () {
+  _stnPanelS(); const d = document.getElementById('stnUI'); if (!d) return; const p = d.querySelector('.p'); if (!p || p.querySelector('[data-s=inside]')) return;
+  const b = document.createElement('button'); b.dataset.s = 'inside'; b.textContent = '🧑‍🚀 Naar binnen: zweef door het station'; const ex = p.querySelector('[data-s=exit]'); p.insertBefore(b, ex); d._h = null;
+};
+const _stnCmdS = stnCmd;
+stnCmd = function (c) { if (c === 'inside') { enterSpaceInterior(); return; } return _stnCmdS(c); };
+// ---------- in the AC-130, the A-10 and the other camera modes the zombies and civilians kept their old pose ----------
+// (the instanced crowds were only updated on the normal render path; now they follow the camera view in those modes too)
+const _renderMainCrowd = renderMain;
+renderMain = function (dt) {
+  if (CTL.on && state === 'play' && !INT.on && !STN.view) {
+    const keep = camera.position.clone(), f = CTL.kind === 'gunship' || CTL.kind === 'a10' || !CTL.obj || !CTL.obj.pos ? CTL.aim : CTL.obj.pos;
+    camera.position.set(f.x, keep.y, f.z);
+    try { drawSwarm(); drawCivs(); } catch (e) { }
+    camera.position.copy(keep);
+  }
+  return _renderMainCrowd(dt);
+};
+
+// ================= MORE FOOD: extra farms, greenhouses and food factories on the island =================
+const FOODB = { list: [], smT: 0, glass: null };
+(function buildFood() {
+  const X = ISLE.x, Z = ISLE.z, H = (x, z) => isleH(x, z);
+  // places that are already taken: the base, the runway, the camp, the farms and mines, the hospital, the launch pad
+  const pois = [ISL.lab, ISL.depot, ISL.farm, ISL.mine, ISL.oil, ISL.hqP, ISL.campP, ISL.gate, ...ISL.pads, { x: IHOSP.x, z: IHOSP.z }, { x: SCR.x, z: SCR.z }, { x: PAD.x, z: PAD.z }, { x: X + 190, z: Z + 62 }, { x: X - 108, z: Z - 150 }];
+  const rects = [[X + 105, X + 185, Z - 185, Z + 185], [X - 190, X - 110, Z - 165, Z - 50], [X - 195, X - 120, Z + 80, Z + 160]];
+  const placed = [];
+  const free = (x, z, w, d) => {
+    const a = Math.atan2(z - Z, x - X), r = Math.hypot(x - X, z - Z); if (r + Math.max(w, d) * .6 > fortR(a) - 40) return false;
+    for (const p of pois) if (Math.hypot(p.x - x, p.z - z) < 62 + Math.max(w, d) * .4) return false;
+    for (const [x0, x1, z0, z1] of rects) if (x + w / 2 > x0 && x - w / 2 < x1 && z + d / 2 > z0 && z - d / 2 < z1) return false;
+    for (const b of BOXES) if (x + w / 2 + 6 > b.minX && x - w / 2 - 6 < b.maxX && z + d / 2 + 6 > b.minZ && z - d / 2 - 6 < b.maxZ) return false;
+    for (const q of placed) if (Math.abs(q.x - x) < (q.w + w) / 2 + 14 && Math.abs(q.z - z) < (q.d + d) / 2 + 14) return false;
+    let lo = 1e9, hi = -1e9; for (const sx of [-.5, 0, .5]) for (const sz of [-.5, 0, .5]) { const h = H(x + sx * w, z + sz * d); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    if (lo < WATER + 1.5 || hi - lo > 4.5) return false;
+    return { lo, hi };
+  };
+  const cands = []; for (let x = X - 470; x <= X + 470; x += 22) for (let z = Z - 470; z <= Z + 470; z += 22) cands.push({ x, z, k: Math.random() });
+  cands.sort((a, b) => a.k - b.k);
+  const want = [['fac', 40, 30], ['fac', 40, 30], ['farm', 62, 36], ['farm', 62, 36], ['farm', 62, 36], ['farm', 62, 36], ['farm', 62, 36], ['gh', 30, 30], ['gh', 30, 30], ['gh', 30, 30]];
+  for (const [kind, w, d] of want) for (const c of cands) { const f = free(c.x, c.z, w, d); if (f) { placed.push({ kind, x: c.x, z: c.z, w, d, lo: f.lo, hi: f.hi, i: placed.length }); break; } }
+  FOODB.list = placed;
+  const CROPS = [[0xc9b458, 0xb39c45], [0x6f9a3a, 0x5f8a32], [0x7ea64a, 0x5f8f3a], [0xd2a64a, 0xb8913a], [0x8aa84a, 0x6f8f3a]];
+  const geo = worldGeo(K => {
+    for (const B of placed) {
+      const { x, z, lo, hi } = B, y = lo;
+      if (B.kind === 'farm') {
+        // crop rows that follow the ground, a red barn, a silo, a tractor and hay bales
+        const C = CROPS[B.i % CROPS.length];
+        for (let r = 0; r < 9; r++) for (let j = 0; j < 9; j++) { const tx = x - 30 + 2.4 + j * 4.8, tz = z - 17 + 2 + r * 3.6; K.box(4.8, .5, 2.3, C[r % 2], tx, H(tx, tz) + .15, tz); }
+        const bx = x + 22, bz = z - 6; K.box(9, hi - lo + 1, 11, 0x6e6a62, bx, y + (hi - lo) / 2 - .5, bz); K.box(8, 6, 10, 0xa33b2a, bx, hi + 3, bz);
+        for (const s of [-1, 1]) K.box(4.7, .35, 10.8, 0x5a2a22, bx + s * 2.1, hi + 7.15, bz, 0, 0, s * -.55);
+        K.box(.1, 4, 4, 0xf0ece0, bx - 4.05, hi + 2, bz); K.box(.1, .3, 4.4, 0xf0ece0, bx - 4.06, hi + 4.1, bz);
+        K.cyl(2.4, 2.4, 12 + hi - lo, 0xc9ccc8, bx, lo + (12 + hi - lo) / 2, bz + 10, 0, 0, 0, 14); K.sph(2.4, 0xb9bcbf, bx, lo + 12 + hi - lo, bz + 10, 1, .6, 1, 12);
+        const ty = H(x - 33, z + 14); K.box(1.6, 1.3, 2.8, 0x2e7d32, x - 33, ty + 1.1, z + 14); K.box(1.4, 1.1, 1.2, 0x2e7d32, x - 33, ty + 2.1, z + 13.1); for (const s of [-1, 1]) { K.cyl(.75, .75, .5, 0x1a1a1a, x - 33 + s, ty + .75, z + 13, 0, 0, Math.PI / 2, 10); K.cyl(.45, .45, .4, 0x1a1a1a, x - 33 + s * .9, ty + .45, z + 15.2, 0, 0, Math.PI / 2, 8); }
+        for (let k = 0; k < 5; k++) { const hx = x + 14 + (k % 3) * 2.6, hz = z + 12 + Math.floor(k / 3) * 2.4; K.cyl(1, 1, 1.2, 0xd8c877, hx, H(hx, hz) + .8, hz, 0, 0, Math.PI / 2, 10); }
+        for (let k = 0; k <= 12; k++) { const fx = x - 31 + k * 5, fz = z - 18; K.box(.2, 1.2, .2, 0x6b4a2a, fx, H(fx, fz) + .6, fz); } K.box(62, .12, .12, 0x6b4a2a, x, (H(x - 31, z - 18) + H(x + 31, z - 18)) / 2 + 1, z - 18);
+      } else if (B.kind === 'gh') {
+        // three greenhouses: white frames, rows of tomatoes and lettuce inside (the glass is separate)
+        K.box(30, hi - lo + .6, 30, 0x9a978e, x, lo + (hi - lo) / 2, z);
+        for (let k = 0; k < 3; k++) {
+          const gx = x - 10 + k * 10, gy = hi + .3;
+          for (let zz = -12; zz <= 12; zz += 4) for (const s of [-1, 1]) K.box(.16, 3.6, .16, 0xf2f2ee, gx + s * 4, gy + 1.8, z + zz);
+          K.box(.18, .18, 24.4, 0xf2f2ee, gx, gy + 5, z); for (const s of [-1, 1]) K.box(.16, .16, 24.4, 0xf2f2ee, gx + s * 4, gy + 3.6, z);
+          for (let zz = -12; zz <= 12; zz += 4) for (const s of [-1, 1]) K.box(4.5, .14, .14, 0xf2f2ee, gx + s * 2, gy + 4.3, z + zz, 0, 0, s * -.33);
+          for (const s of [-2.2, 0, 2.2]) { K.box(1.1, .5, 22, 0x6b4a2a, gx + s, gy + .25, z); for (let zz = -10; zz <= 10; zz += 2.2) K.sph(.45, k === 1 ? 0x8fcf5a : 0x3f8a3a, gx + s, gy + .9, z + zz, 1, 1.3, 1, 8); if (k !== 1) for (let zz = -9; zz <= 9; zz += 3) K.sph(.15, 0xd8342a, gx + s + .3, gy + 1.1, z + zz, 1, 1, 1, 6); }
+        }
+      } else {
+        // the food factory: a big hall with a sawtooth roof, an office, silos with a conveyor, a chimney, trucks at the loading dock
+        K.box(40, hi - lo + .6, 30, 0x8f8b80, x, lo + (hi - lo) / 2, z); const y0 = hi + .3;
+        K.box(28, 9, 18, 0xb8bcc0, x - 4, y0 + 4.5, z); for (let k = 0; k < 4; k++) { K.box(7.4, .3, 18.4, 0x8a8f94, x - 14.5 + k * 7, y0 + 10.2, z, 0, 0, .3); K.box(.2, 2.2, 18.2, 0x3a5a7a, x - 11 + k * 7, y0 + 10.2, z); }
+        for (let k = 0; k < 6; k++) K.box(3, 1.4, .1, 0x3a5a7a, x - 15 + k * 4.4, y0 + 6.5, z - 9.05);
+        K.box(8, 7, 10, 0xeae4d2, x + 14, y0 + 3.5, z - 4); for (let k = 0; k < 2; k++) K.box(8.1, .9, 10.1, 0x2a3a4a, x + 14, y0 + 2.2 + k * 2.8, z - 4);
+        for (let k = 0; k < 3; k++) { K.cyl(2.2, 2.2, 13, 0xe8e8e2, x + 6 + k * 5, y0 + 6.5, z + 11, 0, 0, 0, 14); K.cyl(2.2, .4, 2.2, 0xc8c8c0, x + 6 + k * 5, y0 + 14.1, z + 11, 0, 0, 0, 14); }
+        K.box(1.2, 1.2, 14, 0x9aa0a4, x + 1, y0 + 9, z + 5, .6, 0, 0);
+        K.cyl(1.1, 1.3, 20, 0x9a3a2a, x - 15, y0 + 10, z + 7, 0, 0, 0, 12); for (const yy of [16, 18]) K.cyl(1.15, 1.15, .6, 0xf0f0ea, x - 15, y0 + yy, z + 7, 0, 0, 0, 12);
+        K.box(6, 1.2, 18, 0x6e6a62, x + 21, y0 + .6, z + 4);
+        for (const [tx, c] of [[x + 21, 0xd03a2a], [x + 21, 0x2f6fd8]]) { const tz = z + (c === 0xd03a2a ? 0 : 9); K.box(2.6, 3, 7, 0xf2f2ee, tx + 4.5, y0 + 2, tz); K.box(2.4, 2.4, 2.4, c, tx + 4.5, y0 + 1.6, tz - 4.8); for (const s of [-1, 1]) for (const dz of [-4.6, 1, 3]) K.cyl(.55, .55, .4, 0x151515, tx + 4.5 + s * 1.2, y0 + .55, tz + dz, 0, 0, Math.PI / 2, 8); }
+        K.box(.2, 2.4, 8, 0x2e7d32, x - 18.1, y0 + 6, z);
+        B.chim = new V3(x - 15, y0 + 21, z + 7);
+      }
+    }
+  });
+  const m = new THREE.Mesh(geo, VCMAT); m.castShadow = m.receiveShadow = true; scene.add(m);
+  // greenhouse glass
+  const gg = worldGeo(K => { for (const B of placed) if (B.kind === 'gh') for (let k = 0; k < 3; k++) { const gx = B.x - 10 + k * 10, gy = B.hi + .3; for (const s of [-1, 1]) { K.box(.06, 3.6, 24.2, 0xffffff, gx + s * 4, gy + 1.8, B.z); K.box(4.4, .06, 24.2, 0xffffff, gx + s * 2, gy + 4.3, B.z, 0, 0, s * -.33); K.box(8, 3.6, .06, 0xffffff, gx, gy + 1.8, B.z + s * 12.1); } } });
+  scene.add(FOODB.glass = new THREE.Mesh(gg, new THREE.MeshLambertMaterial({ color: 0xd8f0ff, transparent: true, opacity: .3, depthWrite: false })));
+  // nothing else gets built on top of them
+  for (const B of placed) if (B.kind === 'fac') BOXES.push({ minX: B.x - 18, maxX: B.x + 10, minZ: B.z - 9, maxZ: B.z + 9, minY: B.lo - 2, top: B.hi + 9.3 }); else if (B.kind === 'gh') BOXES.push({ minX: B.x - 14.5, maxX: B.x + 14.5, minZ: B.z - 12.5, maxZ: B.z + 12.5, minY: B.lo - 2, top: B.hi + 5.3 });
+})();
+// food every 20 seconds: farms (much less in winter), greenhouses (all year), factories (use a little oil)
+const FOODY = { farm: 10, gh: 7, fac: 16 };
+const _isleHarvF = islandHarvest;
+islandHarvest = function (dt) {
+  _isleHarvF(dt);
+  if (HARV.t !== 20 || !FOODB.list.length || ISL.team !== CMD.team && ZM.on) return;
+  const win = WTIME.season === 3, aut = WTIME.season === 2; let add = 0;
+  for (const B of FOODB.list) {
+    let v = FOODY[B.kind]; if (B.kind === 'farm') v *= win ? .3 : aut ? 1.3 : 1;
+    if (B.kind === 'fac' && ZM.on) { if (ZM.res.oil >= 2) ZM.res.oil -= 2; else v *= .5; }
+    v = Math.round(v); add += v; HARV.pops.push({ x: B.x, z: B.z, s: ZM.on ? `+${v} 🍞` : `+◆ ${v * 4}`, t: 0 });
+  }
+  if (ZM.on) ZM.res.food = Math.min(5000, ZM.res.food + add); else if (ECO.on) ECO.money[ISL.team] = Math.min(1e14, ECO.money[ISL.team] + add * 4);
+  HARV.food = (HARV.food || 0) + add;
+};
+// labels and factory smoke
+const _drawOverlayFood = drawOverlay;
+drawOverlay = function (dt) {
+  _drawOverlayFood(dt);
+  if (state !== 'play' || !(ZM.on || ECO.on)) return; const cp = camera.position;
+  oc.font = '700 13px Chakra Petch, sans-serif'; oc.textAlign = 'center';
+  for (const B of FOODB.list) {
+    const P = new V3(B.x, B.hi + (B.kind === 'fac' ? 24 : 14), B.z); if (P.distanceTo(cp) > 900) continue; const q = project(P); if (!q) continue;
+    const s = B.kind === 'farm' ? (WTIME.season === 3 ? '🌾 BOERDERIJ · winter' : '🌾 BOERDERIJ') : B.kind === 'gh' ? '🍅 SERRES' : '🏭 VOEDSELFABRIEK';
+    oc.lineWidth = 3; oc.strokeStyle = 'rgba(0,0,0,.65)'; oc.strokeText(s, q[0], q[1]); oc.fillStyle = '#d8e89a'; oc.fillText(s, q[0], q[1]);
+  }
+};
+function updateFoodFx(dt) {
+  FOODB.smT -= dt; if (FOODB.smT > 0) return; FOODB.smT = .4;
+  for (const B of FOODB.list) if (B.chim && B.chim.distanceTo(camera.position) < 1600) spawnP(B.chim.clone(), { tex: smokeTex, color: 0xf2f2ee, op: .55, size: 3, grow: 3, life: 5, vel: new V3(WXS.wind.x * .5 + rnd(-.5, .5), rnd(3, 5), WXS.wind.z * .5 + rnd(-.5, .5)), drag: .5 });
+}
+const _updateWavesFood = updateWaves;
+updateWaves = function (dt) { _updateWavesFood(dt); if (ZM.on || ECO.on) updateFoodFx(dt); };
+// ---------- the radio on PC: T opens it, then 1-4 calls support (1-3 no longer also switch weapons at the same time) ----------
+addEventListener('keydown', e => {
+  if (state !== 'possess' || e.repeat || !PZ.unit || PZ.unit.type !== 'soldier' || PAUSE.menu) return;
+  const k = { Digit1: 'a10', Digit2: 'arty', Digit3: 'apache', Digit4: 'air' }[e.code]; if (!k) return;
+  e.stopImmediatePropagation();
+  if (RADIO.open) { radioCall(k); RADIO.open = false; }
+  else if (e.code === 'Digit4') RADIO.open = true;
+  else pzWeapon(+e.code.slice(-1) - 1);
+}, true);
+{
+  const b = document.getElementById('radioBtn'), m = document.getElementById('radioMenu');
+  if (b && !IS_TOUCH) b.innerHTML = '📻 RADIO <small style="opacity:.7">[T]</small>';
+  if (m && !IS_TOUCH) { const t = m.querySelector('.t'); if (t) t.textContent = 'KIJK NAAR HET DOEL · DRUK 1–4 · T = DICHT'; }
+  const s = pzEl('pzSoldier'); if (s && !IS_TOUCH) s.insertAdjacentHTML('beforeend', ' · <b>T</b> radio, dan <b>1–4</b> steun');
+}
+// ---------- a steady stream of zombies to the island: a wave about every minute, small groups in between ----------
+const ZFLOW = { trT: 30 };
+const zfK = () => Math.sqrt((ZM.diff || 1.75) / 1.75);
+const zCoastCands = () => ZM.list.filter(z => z.alive && !z.isleRun && !z.D.boss && z.pos.x < WORLD - 5 && z.pos.x > COAST - 240 && !z.prey && !z.civ);
+// when there are too few zombies near the east coast, more come out of the land there
+function zCoastFill(n, zc) {
+  let made = 0;
+  for (let k = 0; k < n * 3 && made < n; k++) {
+    const x = COAST - rnd(30, 200), z = clamp(zc + rnd(-160, 160), -WORLD * .85, WORLD * .85); if (getH(x, z) < WATER + .6) continue;
+    const r = Math.random(), zz = zSpawn(x, z, r < .12 ? 'brute' : r < .4 ? 'runner' : 'walker'); if (zz) made++;
+  }
+  return made;
+}
+const _zIsleAssaultFlow = zIsleAssault;
+zIsleAssault = function () {
+  if (!ZM.on || ZM.cured) return _zIsleAssaultFlow();
+  const n = Math.round(Math.min(85, 22 + ZM.t / 16) * zfK()), have = zCoastCands().length;
+  if (have < n) zCoastFill(n - have, rnd(-WORLD * .5, WORLD * .5));
+  _zIsleAssaultFlow();
+  ZM.isleT = clamp(85 - ZM.t / 30, 55, 85) / zfK() + rnd(-8, 8);
+};
+function zTrickle() {
+  let inSea = 0; for (const z of ZM.list) if (z.alive && z.isleRun) inSea++; if (inSea > 90) return;
+  const n = Math.round(rnd(4, 8) * zfK()), zc = rnd(-WORLD * .5, WORLD * .5);
+  let c = zCoastCands().sort((a, b) => Math.abs(a.pos.z - zc) - Math.abs(b.pos.z - zc)).slice(0, n);
+  if (c.length < n) { zCoastFill(n - c.length, zc); c = zCoastCands().sort((a, b) => Math.abs(a.pos.z - zc) - Math.abs(b.pos.z - zc)).slice(0, n); }
+  if (c.length < 2) return;
+  const R = zSwimTarget(zc);
+  for (const z of c) { z.isleRun = { gx: R.gx + rnd(-10, 10), gz: R.gz + rnd(-20, 20) }; z.goal = { x: z.isleRun.gx, z: z.isleRun.gz }; z.prey = null; z.civ = null; z.heard = true; z.thinkT = rnd(0, .4); }
+  if (ISL.team === CMD.team && noteOnce('trickle', 90)) addFeed(null, null, `🌊 ${c.length} zombies zwemmen naar het eiland`);
+}
+const _updateWavesFlow = updateWaves;
+updateWaves = function (dt) {
+  _updateWavesFlow(dt);
+  if (!ZM.on || ZM.cured || ZM.t < 120) return;
+  ZFLOW.trT -= dt; if (ZFLOW.trT <= 0) { ZFLOW.trT = rnd(24, 36) / zfK(); zTrickle(); }
 };
 
 </script>
