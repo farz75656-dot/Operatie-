@@ -14363,4 +14363,276 @@ updateWaves = function (dt) {
   ZFLOW.trT -= dt; if (ZFLOW.trT <= 0) { ZFLOW.trT = rnd(24, 36) / zfK(); zTrickle(); }
 };
 
+// ================= CONTROL THE MACHINE GUNS AND THE ROCKET LAUNCHERS YOURSELF · ROCKETS CALLED IN FROM A DRONE =================
+// ---------- machine guns: sandbag MG posts and the gun towers on the fort wall ----------
+const MGC = { o: null, kind: null, i: -1, yaw: 0, pitch: 0, heat: 0, over: false, cd: 0, ammo: 250, relT: 0, n: 0, kick: 0, hitT: 0, kills: 0, flashT: 0, vm: null, tip: null, fl: null };
+{
+  // the gun you see in front of you
+  const g = new THREE.Group(), K = mdlKit(g);
+  K.box(.17, .19, .72, 0x2a2b2c, 0, 0, -.1); K.cyl(.036, .036, 1.15, 0x18191a, 0, .03, -.95, Math.PI / 2, 0, 0, 8); K.cyl(.062, .062, .55, 0x3a3b3c, 0, .03, -.62, Math.PI / 2, 0, 0, 10);
+  K.box(.022, .09, .022, 0x18191a, 0, .13, -1.36); K.box(.09, .05, .02, 0x18191a, 0, .13, -.18); K.box(.03, .05, .025, 0x0a0a0a, 0, .15, -.18);
+  for (const s of [-1, 1]) K.box(.04, .15, .04, 0x3a2a1a, s * .1, -.06, .3); K.box(.24, .035, .035, 0x2a2b2c, 0, .02, .28);
+  K.box(.18, .17, .23, 0x4b5232, -.2, -.07, -.1); for (let k = 0; k < 5; k++) K.box(.03, .05, .02, 0xc9a24a, -.12 + k * .03, .02 + k * .006, -.1 - k * .02);
+  K.box(.5, .04, .05, 0x2a2b2c, 0, -.12, -.35); K.box(.04, .3, .04, 0x2a2b2c, 0, -.28, -.35);
+  const ms = []; g.traverse(o => { if (o.isMesh) ms.push(o); }); const merged = mergeRel(g, ms); ms.forEach(m => { m.parent.remove(m); m.geometry.dispose(); });
+  const vm = new THREE.Group(); vm.add(new THREE.Mesh(merged, VCMAT)); vm.visible = false; scene.add(vm); MGC.vm = vm;
+  const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0xffd27a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); fl.position.set(0, .03, -1.6); fl.scale.set(.6, .6, 1); fl.visible = false; vm.add(fl); MGC.fl = fl;
+}
+const mgTower = () => MGC.kind === 'tower' ? FORT.towers[MGC.i] : null;
+function mgEye() {
+  if (MGC.kind === 'tower') { const T = mgTower(); return new V3(T.x + Math.sin(MGC.yaw) * .5, T.y + 3.1, T.z + Math.cos(MGC.yaw) * .5); }
+  const s = MGC.o, b = s.gun.getWorldPosition(new V3()); return b.add(new V3(-Math.sin(MGC.yaw) * .6, .48, -Math.cos(MGC.yaw) * .6));
+}
+const mgDir = () => new V3(Math.sin(MGC.yaw) * Math.cos(MGC.pitch), Math.sin(MGC.pitch), Math.cos(MGC.yaw) * Math.cos(MGC.pitch));
+function mgTake(kind, o, i) {
+  if (MGC.o && MGC.kind === 'nest' && MGC.o.gun) MGC.o.gun.visible = true;
+  MGC.kind = kind; MGC.o = o; MGC.i = i ?? -1; MGC.pitch = kind === 'tower' ? -.17 : -.04; MGC.heat = 0; MGC.over = false; MGC.cd = 0;
+  if (kind === 'tower') { const T = FORT.towers[i]; MGC.yaw = T.yaw; } else { MGC.yaw = (o.yaw || 0) + (o.gun ? o.gun.rotation.y : 0); o.gun.visible = false; }
+}
+CTL.ext.mg = {
+  fov: 62, ownKeys: false,
+  enter(o) { if (o.isTower) mgTake('tower', o, o.i); else mgTake('nest', o); MGC.ammo = 250; MGC.kills = 0; MGC.vm.visible = true; CTL.cam.near = .08; if (typeof NV !== 'undefined') NV.b = -1; },
+  ui: o => `<div class="tl"><button data-c="exit">✕ Terug</button>${o.isTower ? '<button data-c="prev">◀ Toren</button><button data-c="next">Toren ▶</button>' : '<button data-c="prev">◀ Post</button><button data-c="next">Post ▶</button>'}</div>
+<div class="br"><div class="row"><button data-c="zo">－</button><button data-c="zi">＋</button><button data-c="rk">🔄 Herladen</button></div><button class="fire" data-c="fire">VUUR</button></div>
+<div class="help">Muis of WASD = richten · linkerknop of spatie (ingedrukt) = vuren · Q / E of scrollwiel = zoomen · R = herladen · , en . = vorige / volgende ${o.isTower ? 'toren' : 'post'} · N = nachtzicht · Esc = terug</div>`,
+  hello: o => o.isTower ? '🗼 Je bemant het kanon op de fortmuur · sleep of beweeg de muis om te richten, hou VUUR ingedrukt' : '🪖 Je bemant de mitrailleurpost · sleep of beweeg de muis om te richten, hou VUUR ingedrukt',
+  update(dt) {
+    const o = CTL.obj;
+    if (MGC.kind === 'nest' && (!o.alive || o.removed)) { ctlExit(false); addFeed(null, null, '💥 Je mitrailleurpost is vernietigd'); return; }
+    if (MGC.kind === 'tower' && !FORT.built) { ctlExit(false); return; }
+    // switching to the next post or tower
+    if (CTL.next) {
+      const d = CTL.next; CTL.next = 0;
+      if (MGC.kind === 'tower') { const N = FORT.towers.length, i = ((MGC.i + d) % N + N) % N, t = { isTower: true, i }; CTL.obj = t; mgTake('tower', t, i); CTL.msg = `🗼 Toren ${i + 1} van ${N}`; CTL.msgT = 1.2; }
+      else { const L = units.filter(u => u.alive && u.type === 'struct' && u.variant === 'mgnest' && u.team === CMD.team && u.buildT >= 1).sort((a, b) => Math.atan2(a.pos.z, a.pos.x) - Math.atan2(b.pos.z, b.pos.x)); if (L.length > 1) { const k = ((L.indexOf(o) + d) % L.length + L.length) % L.length; o.player = false; L[k].player = true; CTL.obj = L[k]; mgTake('nest', L[k]); CTL.msg = `🪖 Mitrailleurpost ${k + 1} van ${L.length}`; CTL.msgT = 1.2; } }
+    }
+    // reloading, heat, firing
+    MGC.heat = Math.max(0, MGC.heat - dt * (MGC.over ? .3 : .12)); if (MGC.over && MGC.heat < .3) { MGC.over = false; CTL.msg = '✅ Loop afgekoeld'; CTL.msgT = 1; }
+    if (CTL.rk) { CTL.rk = false; if (MGC.relT <= 0 && MGC.ammo < 250) { MGC.relT = 3.2; CTL.msg = '🔄 Nieuwe band…'; CTL.msgT = 1.2; } }
+    if (MGC.relT > 0) { MGC.relT -= dt; if (MGC.relT <= 0) MGC.ammo = 250; }
+    MGC.cd -= dt; MGC.hitT -= dt; MGC.flashT -= dt; MGC.kick *= Math.exp(-dt * 12);
+    if (CTL.fire && MGC.cd <= 0 && !MGC.over && MGC.relT <= 0) {
+      if (MGC.ammo <= 0) { MGC.relT = 3.2; CTL.msg = '🔄 Band leeg · herladen'; CTL.msgT = 1.2; }
+      else {
+        MGC.cd = .075; MGC.ammo--; MGC.n++; MGC.heat += .025; if (MGC.heat >= 1) { MGC.over = true; CTL.msg = '🔥 LOOP OVERVERHIT · even wachten'; CTL.msgT = 1.6; }
+        const eye = mgEye(), dir = mgDir(), tip = MGC.vm.localToWorld(new V3(0, .03, -1.55)), shooter = MGC.kind === 'tower' ? ISL.gun : o;
+        const r = fireBullet(shooter, eye, dir, { dmg: MGC.kind === 'tower' ? 24 : 28, range: 360, spread: .009 + MGC.heat * .012, ap: .1, air: .3, tracer: MGC.n % 3 === 0, from: tip, tcol: 0xffd27a });
+        if (r && r.unit && r.unit !== shooter) { MGC.hitT = .14; if (!r.unit.alive) MGC.kills++; }
+        MGC.kick += .012; MGC.flashT = .05; if (MGC.n % 2 === 0) { Snd.shot(tip, 'mg'); muzzle(tip, .35); }
+      }
+    }
+    // the gun turns with you; the AI leaves it alone
+    if (MGC.kind === 'nest') o.gun.rotation.y = MGC.yaw - (o.yaw || 0);
+    const f = mgDir(), e = mgEye(), gp = e.clone().addScaledVector(new V3(f.x, 0, f.z).normalize(), 60); CTL.aim.set(gp.x, Math.max(getH(gp.x, gp.z), WATER), gp.z);
+  },
+  exit(o) { MGC.vm.visible = false; MGC.fl.visible = false; CTL.cam.near = 1; if (MGC.kind === 'nest' && MGC.o && MGC.o.gun) MGC.o.gun.visible = true; const e = mgEye(); CTL.aim.set(e.x, 0, e.z); MGC.o = null; MGC.kind = null; },
+  camera(dt) {
+    const e = mgEye(), p = MGC.pitch + MGC.kick + (CTL.fire && MGC.cd > 0 ? (Math.random() - .5) * .004 : 0), y = MGC.yaw + (CTL.fire && MGC.cd > 0 ? (Math.random() - .5) * .004 : 0);
+    CTL.cam.position.copy(e); CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(e.x + Math.sin(y) * Math.cos(p), e.y + Math.sin(p), e.z + Math.cos(y) * Math.cos(p));
+    MGC.vm.position.copy(CTL.cam.position); MGC.vm.quaternion.copy(CTL.cam.quaternion); MGC.vm.translateX(.15); MGC.vm.translateY(-.33 + MGC.kick * 2); MGC.vm.translateZ(-.42 + MGC.kick * 3); MGC.vm.updateMatrixWorld(true);
+    MGC.fl.visible = MGC.flashT > 0; if (MGC.fl.visible) MGC.fl.material.rotation = Math.random() * 3;
+  },
+  hud(dt, pr, W, H) {
+    const cx = W / 2, cy = H / 2, ink = '#ffd27a';
+    oc.strokeStyle = MGC.hitT > 0 ? '#ff5a3a' : 'rgba(255,240,200,.85)'; oc.lineWidth = 1.6; oc.beginPath(); oc.arc(cx, cy, 16, 0, TAU); oc.moveTo(cx - 26, cy); oc.lineTo(cx - 19, cy); oc.moveTo(cx + 19, cy); oc.lineTo(cx + 26, cy); oc.moveTo(cx, cy + 19); oc.lineTo(cx, cy + 26); oc.stroke();
+    oc.fillStyle = oc.strokeStyle; oc.beginPath(); oc.arc(cx, cy, 1.8, 0, TAU); oc.fill();
+    if (MGC.hitT > 0) { oc.strokeStyle = '#ff5a3a'; oc.lineWidth = 2; oc.beginPath(); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { oc.moveTo(cx + a * 7, cy + b * 7); oc.lineTo(cx + a * 13, cy + b * 13); } oc.stroke(); }
+    // danger close: enemies right next to you that you are not looking at
+    const e = mgEye(); let foes = 0;
+    for (const u of units) {
+      if (!isFoeOf(u, CMD.team)) continue; const dx = u.pos.x - e.x, dz = u.pos.z - e.z, d = Math.hypot(dx, dz); if (d > 360) continue; foes++;
+      if (d < 45) { const a = angDiff(MGC.yaw, Math.atan2(dx, dz)); if (Math.abs(a) > .55) { const s = -a, x = cx + Math.sin(s) * Math.min(W, H) * .38, y = cy - Math.cos(s) * Math.min(W, H) * .38; oc.fillStyle = 'rgba(255,70,50,.85)'; oc.beginPath(); oc.moveTo(x + Math.sin(s) * 12, y - Math.cos(s) * 12); oc.lineTo(x + Math.cos(s) * 8, y + Math.sin(s) * 8); oc.lineTo(x - Math.cos(s) * 8, y - Math.sin(s) * 8); oc.fill(); } }
+    }
+    // ammo and barrel heat
+    const bx = 18 + (IS_TOUCH ? 10 : 0), by = H - (IS_TOUCH ? 110 : 96);
+    oc.font = '700 15px IBM Plex Mono, monospace'; oc.textAlign = 'left'; oc.fillStyle = MGC.relT > 0 ? '#ff9a7a' : ink; oc.fillText(MGC.relT > 0 ? `HERLADEN ${MGC.relT.toFixed(1)} s` : `MUNITIE ${MGC.ammo} / 250`, bx, by);
+    oc.fillStyle = 'rgba(0,0,0,.5)'; oc.fillRect(bx, by + 8, 170, 9); oc.fillStyle = MGC.over ? (Math.sin(SIMT * 16) > 0 ? '#ff3a2a' : '#ffd27a') : MGC.heat > .75 ? '#ff7a3a' : '#e9b949'; oc.fillRect(bx, by + 8, 170 * Math.min(1, MGC.heat), 9);
+    oc.font = '600 11px IBM Plex Mono, monospace'; oc.fillStyle = ink; oc.fillText(MGC.over ? 'LOOP OVERVERHIT' : `LOOP ${Math.round(MGC.heat * 100)}%`, bx, by + 32);
+    const T = mgTower();
+    ctlLine([T ? `🗼 FORTTOREN ${MGC.i + 1} / ${FORT.towers.length}` : '🪖 MITRAILLEURPOST', `${foes} vijanden binnen 360 m · ${MGC.kills} uitgeschakeld`, `zoom ${(62 / CTL.fov).toFixed(1)}×${nightAmt() > .4 ? ' · N = nachtzicht' : ''}`], ink);
+  }
+};
+// the zoom of the machine gun
+const _ctlZoomMG = ctlZoom;
+ctlZoom = function (f) { if (CTL.on && CTL.kind === 'mg') { CTL.fov = clamp(CTL.fov * f, 18, 72); return; } if (CTL.on && CTL.kind === 'mlrs') { CTL.fov = clamp(CTL.fov * f, 10, 70); return; } return _ctlZoomMG(f); };
+// the mouse or a drag turns the gun instead of moving a point on the ground
+const _ctlMoveMG = ctlMoveAim;
+ctlMoveAim = function (dx, dy) {
+  if (CTL.on && CTL.kind === 'mg') { const k = .0024 * CTL.fov / 62; MGC.yaw -= dx * k; MGC.pitch = clamp(MGC.pitch - dy * k, -.55, .95); return; }
+  return _ctlMoveMG(dx, dy);
+};
+// the AI does not fight you for the gun
+const _bunkerMG = Struct.prototype.updateBunker;
+Struct.prototype.updateBunker = function (dt) { if (this === MGC.o && CTL.on && CTL.kind === 'mg') return; return _bunkerMG.call(this, dt); };
+const _updFortMG = updateFort;
+updateFort = function (dt) {
+  const T = CTL.on && CTL.kind === 'mg' ? mgTower() : null; if (T) { T.tgt = null; T.thinkT = 1; T.cd = 1; }
+  _updFortMG(dt);
+  if (!T || !FORT.heads) return;
+  T.yaw = MGC.yaw; T.sweep = MGC.yaw; T.sp = MGC.pitch;
+  _eF.set(0, T.yaw, 0, 'YXZ'); _m4F.compose(_vF.set(T.x, T.y, T.z), _qF.setFromEuler(_eF), _sF.set(1, 1, 1)); FORT.heads.setMatrixAt(MGC.i, _m4F);
+  _eF.set(-T.sp, T.sweep, 0, 'YXZ'); _m4F.compose(_vF.set(T.x + Math.sin(T.sweep) * 1.4, T.y + 1.6, T.z + Math.cos(T.sweep) * 1.4), _qF.setFromEuler(_eF), _sF.set(1, 1, 1)); FORT.beams.setMatrixAt(MGC.i, _m4F);
+  FORT.heads.instanceMatrix.needsUpdate = true; FORT.beams.instanceMatrix.needsUpdate = true;
+};
+// "Besturen" on a selected MG post works now
+const _canPossessMG = canPossess;
+canPossess = u => _canPossessMG(u) || !!(u && u.alive && u.type === 'struct' && u.variant === 'mgnest' && u.team === CMD.team && u.buildT >= 1 && u.gun);
+const _possessMG = possess;
+possess = function (u) {
+  if (u && u.type === 'struct' && u.variant === 'mgnest') { ctlEnter('mg', u); return; }
+  if (u && u.truck && u.variant === 'mlrs' && u.team === CMD.team) { ctlEnter('mlrs', u); return; }
+  return _possessMG(u);
+};
+function mgTowerEnter() {
+  if (!FORT.built || !FORT.towers.length || state !== 'play') { flashTip('Er zijn geen fortkanonnen'); return; }
+  const foes = ISL.foes || [];
+  let best = 0, bs = -1;
+  FORT.towers.forEach((T, i) => { let n = 0; for (const u of foes) if (u.alive && (u.pos.x - T.x) ** 2 + (u.pos.z - T.z) ** 2 < 240 * 240) n++; const s = n * 1000 - Math.hypot(T.x - cam.x, T.z - cam.z); if (s > bs) { bs = s; best = i; } });
+  ctlEnter('mg', { isTower: true, i: best });
+}
+{
+  const vb = document.getElementById('viewBtns');
+  if (vb) { const b = document.createElement('button'); b.className = 'vb'; b.id = 'btnTower'; b.title = 'Bestuur een kanon op de fortmuur'; b.textContent = '🗼'; vb.appendChild(b); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); mgTowerEnter(); }); }
+}
+addEventListener('keydown', e => {
+  if (e.repeat || !CTL.on || CTL.kind !== 'mg') return;
+  if (e.code === 'Comma') CTL.next = -1; else if (e.code === 'Period') CTL.next = 1;
+}, true);
+// ---------- rocket launchers: aim them yourself, through the camera of a spotter drone ----------
+const MLC = { u: null, view: 'drone', size: 12, therm: false, want: false, held: false, fired: false, ready: false, imp: [], orb: 0, fl: '' };
+const mlrsFlight = (u, p) => { const from = u.pos.clone().add(new V3(0, 3, 0)), q = new V3(p.x, Math.max(getH(p.x, p.z), WATER), p.z), v = rocketVel(from, q, 1.0) || rocketVel(from, q, .62); return v ? Math.hypot(q.x - from.x, q.z - from.z) / Math.max(1, Math.hypot(v.x, v.z)) : 0; };
+function mlrsCallAt(A, team, skip) {
+  const all = units.filter(u => u.alive && !u.removed && u.team === team && u.truck && u.variant === 'mlrs' && u !== skip);
+  if (!all.length) return { n: 0, msg: '🚀 Je hebt geen (andere) raketwerpers · bestel ze bij Versterking → 🪖 Leger' };
+  let ready = 0, rel = 0, far = 0;
+  for (const u of all) {
+    const d = Math.hypot(A.x - u.pos.x, A.z - u.pos.z); if (d > u.V.rng * 1.6) { far++; continue; }
+    u.fireAt = new V3(A.x, 0, A.z); u.precise = 'drone'; u.order = null; u.target = null; u.toldReload = true; if (u.reload > 0 || u.salvo) rel++; else ready++;
+  }
+  markers.push({ p: new V3(A.x, Math.max(getH(A.x, A.z), WATER), A.z), t: 0, col: '#e2543c' });
+  const n = ready + rel; if (Snd.ctx && n) Snd.burst(camera.position, { f: 2400, q: 10, dur: .15, vol: .12, rng: 40 });
+  return { n, msg: n ? `🚀 ${n} raketwerper${n > 1 ? 's' : ''} vuren op het doel${rel ? ` · ${rel} herladen eerst` : ''}${far ? ` · ${far} te ver weg` : ''}` : `🚀 Alle raketwerpers staan te ver weg (max ${Math.round(all[0].V.rng * 1.6)} m)` };
+}
+CTL.ext.mlrs = {
+  fov: 42, ownKeys: false,
+  enter(u) {
+    MLC.u = u; MLC.view = 'drone'; MLC.want = MLC.fired = false; MLC.imp = []; MLC.fl = ''; u.fireAt = null; u.order = null; u.target = null;
+    const f = new V3(Math.sin(u.yaw + u.turretYaw), 0, Math.cos(u.yaw + u.turretYaw)); CTL.aim.set(u.pos.x + f.x * 800, 0, u.pos.z + f.z * 800); ctlClampAim();
+    MLC.orb = Math.atan2(u.pos.z - CTL.aim.z, u.pos.x - CTL.aim.x); CTL.cam.position.copy(CTL.aim).add(new V3(Math.cos(MLC.orb) * 260, 320, Math.sin(MLC.orb) * 260));
+  },
+  ui: u => `<div class="tl"><button data-c="exit">✕ Terug</button><button data-c="view">📷 Werper / drone</button><button data-c="therm">🌡 Warmtebeeld</button></div>
+<div class="br"><div class="row"><button data-c="zo">－</button><button data-c="zi">＋</button><button data-c="size">🎯 Salvo: 12</button></div><div class="row"><button data-c="all">🚀 Alle raketwerpers</button></div><button class="fire" data-c="fire">VUUR</button></div>
+<div class="help">Muis of WASD = kruisje (inslag) bewegen · linkerknop of spatie = salvo afvuren · G = salvo 1 / 4 / 12 · R = alle raketwerpers op het kruisje · C = camera drone / werper · T = warmtebeeld · Q / E = zoomen · Esc = terug</div>`,
+  hello: u => '🚀 Je richt de raketwerper via een verkenningsdrone boven het doel · het kruisje is waar de raketten inslaan',
+  update(dt) {
+    const u = CTL.obj; if (!u.alive || u.removed) { ctlExit(false); addFeed(null, null, '💥 De raketwerper is vernietigd'); return; }
+    if (CTL.fire && !MLC.held) { if (u.salvo) { CTL.msg = '🚀 Salvo is nog bezig'; CTL.msgT = 1; } else if (u.reload > 0) { CTL.msg = `🔄 Herladen · nog ${Math.ceil(u.reload)} s`; CTL.msgT = 1.2; } else MLC.want = true; }
+    MLC.held = CTL.fire;
+    if (CTL.rk) { CTL.rk = false; const r = mlrsCallAt(CTL.aim, u.team, u); CTL.msg = r.msg; CTL.msgT = 2.2; if (r.n) MLC.imp.push({ p: CTL.aim.clone(), t: mlrsFlight(u, CTL.aim) + 6, all: true }); if (!u.salvo && u.reload <= 0) MLC.want = true; }
+    if (MLC.fired && u.salvo) {
+      MLC.fired = false;
+      MLC.imp.push({ p: u.salvo.p.clone(), t: mlrsFlight(u, u.salvo.p) + MLC.size * u.V.gap }); CTL.msg = `🚀 ${MLC.size} raket${MLC.size > 1 ? 'ten' : ''} onderweg`; CTL.msgT = 1.6;
+    }
+    for (let i = MLC.imp.length - 1; i >= 0; i--) { MLC.imp[i].t -= dt; if (MLC.imp[i].t < -3) MLC.imp.splice(i, 1); }
+  },
+  exit(u) { renderer.domElement.style.filter = ''; MLC.fl = ''; if (MLC.u) { MLC.u.fireAt = null; } MLC.u = null; if (typeof NV !== 'undefined') NV.b = -1; },
+  camera(dt) {
+    const u = CTL.obj, A = CTL.aim, fl = MLC.therm ? 'grayscale(1) contrast(1.45) brightness(1.05)' : ''; if (MLC.fl !== fl) { MLC.fl = fl; renderer.domElement.style.filter = fl; }
+    if (MLC.view === 'drone') {
+      MLC.orb += dt * .07; const want = new V3(A.x + Math.cos(MLC.orb) * 260, A.y + 320, A.z + Math.sin(MLC.orb) * 260);
+      CTL.cam.position.lerp(want, Math.min(1, dt * 2.5)); CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(A);
+    } else {
+      const f = new V3(A.x - u.pos.x, 0, A.z - u.pos.z).normalize(), want = u.pos.clone().addScaledVector(f, -17).add(new V3(f.z * 5, 7.5, -f.x * 5));
+      CTL.cam.position.lerp(want, Math.min(1, dt * 4)); CTL.cam.up.set(0, 1, 0); CTL.cam.lookAt(u.pos.clone().addScaledVector(f, 30).add(new V3(0, 8, 0)));
+    }
+  },
+  hud(dt, pr, W, H) {
+    const u = CTL.obj, A = CTL.aim, ink = MLC.therm ? '#f2f2f2' : '#ffd27a', d = Math.hypot(A.x - u.pos.x, A.z - u.pos.z);
+    // the impact area: a circle on the ground where the rockets will land
+    oc.strokeStyle = ink; oc.lineWidth = 1.6; oc.setLineDash([6, 5]); oc.beginPath(); let first = true;
+    for (let k = 0; k <= 32; k++) { const a = k / 32 * TAU, x = A.x + Math.cos(a) * 35, z = A.z + Math.sin(a) * 35, q = pr(new V3(x, Math.max(getH(x, z), WATER) + .5, z)); if (!q) { first = true; continue; } if (first) oc.moveTo(q[0], q[1]); else oc.lineTo(q[0], q[1]); first = false; }
+    oc.stroke(); oc.setLineDash([]);
+    const q = pr(A.clone().add(new V3(0, 1, 0)));
+    if (q) { oc.beginPath(); oc.moveTo(q[0] - 26, q[1]); oc.lineTo(q[0] - 7, q[1]); oc.moveTo(q[0] + 7, q[1]); oc.lineTo(q[0] + 26, q[1]); oc.moveTo(q[0], q[1] - 26); oc.lineTo(q[0], q[1] - 7); oc.moveTo(q[0], q[1] + 7); oc.lineTo(q[0], q[1] + 26); oc.stroke(); }
+    // enemies the drone sees
+    let seen = 0;
+    for (const e of units) {
+      if (!isFoeOf(e, u.team)) continue; const c = e.center ? e.center() : e.pos; if (Math.hypot(c.x - A.x, c.z - A.z) > 700) continue;
+      const p = pr(c); if (!p || p[0] < 0 || p[1] < 0 || p[0] > W || p[1] > H) continue; seen++;
+      const big = e.type !== 'soldier' && e.type !== 'zombie', b = big ? 12 : 6, inside = Math.hypot(c.x - A.x, c.z - A.z) < 35;
+      oc.strokeStyle = inside ? '#ff5a3a' : MLC.therm ? '#ffffff' : '#9fe0ff'; oc.lineWidth = inside ? 2 : 1.2; oc.strokeRect(p[0] - b, p[1] - b, b * 2, b * 2);
+    }
+    // countdown to impact
+    const next = MLC.imp.filter(m => m.t > -1).sort((a, b) => a.t - b.t)[0];
+    if (next) { const p = pr(new V3(next.p.x, Math.max(getH(next.p.x, next.p.z), WATER) + 2, next.p.z)); oc.font = '700 16px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.fillStyle = '#ff7a5a'; const s = next.t > 0 ? `INSLAG OVER ${Math.ceil(next.t)} s` : '💥 INSLAG'; if (p) oc.fillText(s, p[0], p[1] - 46); else oc.fillText(s, W / 2, H * .22); }
+    const others = units.filter(e => e.alive && e.team === u.team && e.truck && e.variant === 'mlrs' && e !== u), oReady = others.filter(e => e.reload <= 0 && !e.salvo && Math.hypot(A.x - e.pos.x, A.z - e.pos.z) < e.V.rng).length;
+    const st = u.salvo ? `VUURT (${u.salvo.n} over)` : u.reload > 0 ? `HERLADEN ${Math.ceil(u.reload)} s` : MLC.want ? 'DRAAIT NAAR HET DOEL…' : 'KLAAR OM TE VUREN';
+    ctlLine([`🚀 RAKETWERPER · ${MLC.view === 'drone' ? 'DRONECAMERA' : 'CAMERA OP DE WERPER'}`, `salvo ${MLC.size} raket${MLC.size > 1 ? 'ten' : ''} · ${st}`, `afstand ${Math.round(d)} m (max ${u.V.rng}) · vluchttijd ±${Math.round(mlrsFlight(u, A))} s`, `${seen} vijanden bij het doel · andere raketwerpers: ${others.length} (${oReady} klaar)`], ink);
+    oc.font = '700 11px IBM Plex Mono, monospace'; oc.textAlign = 'right'; oc.fillStyle = ink; oc.fillText(`● LIVE · SPOTTERDRONE · ${(42 / CTL.fov).toFixed(1)}×`, W - 16, IS_TOUCH ? 74 : 70);
+  }
+};
+function mlrsCmd(c) {
+  if (!CTL.on || CTL.kind !== 'mlrs') return;
+  if (c === 'view') { MLC.view = MLC.view === 'drone' ? 'truck' : 'drone'; CTL.fov = MLC.view === 'drone' ? 42 : 60; }
+  else if (c === 'therm') MLC.therm = !MLC.therm;
+  else if (c === 'size') { MLC.size = MLC.size === 12 ? 1 : MLC.size === 1 ? 4 : 12; const b = CTL.ui.querySelector('[data-c=size]'); if (b) b.textContent = `🎯 Salvo: ${MLC.size}`; CTL.msg = `🎯 Salvo van ${MLC.size} raket${MLC.size > 1 ? 'ten' : ''}${MLC.size < 12 ? ' · sneller herladen' : ''}`; CTL.msgT = 1.2; }
+  else if (c === 'all') CTL.rk = true;
+}
+const _ctlBuildUIM = ctlBuildUI;
+ctlBuildUI = function (kind, obj) {
+  _ctlBuildUIM(kind, obj);
+  if (kind === 'mlrs') CTL.ui.querySelectorAll('[data-c=view],[data-c=therm],[data-c=size],[data-c=all]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); mlrsCmd(b.dataset.c); }));
+  if (kind === 'recon') {
+    const row = CTL.ui.querySelector('[data-c=s_a10]'); if (row && !CTL.ui.querySelector('[data-c=s_mlrs]')) { const b = document.createElement('button'); b.dataset.c = 's_mlrs'; b.textContent = '🚀 Raketwerpers'; row.parentNode.appendChild(b); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); reconMlrs(); }); }
+    const h = CTL.ui.querySelector('.help'); if (h) h.textContent = h.textContent.replace('Esc = terug', 'J = raketwerpers · Esc = terug');
+  }
+};
+function reconMlrs() { if (!CTL.on || CTL.kind !== 'recon') return; const r = mlrsCallAt(CTL.aim, CTL.obj.team); CTL.msg = r.msg; CTL.msgT = 2.4; if (r.n) MLC.imp.push({ p: CTL.aim.clone(), t: 20 }); }
+addEventListener('keydown', e => {
+  if (e.repeat || !CTL.on) return;
+  if (CTL.kind === 'mlrs') { const m = { KeyG: 'size', KeyC: 'view', KeyT: 'therm' }[e.code]; if (m) { mlrsCmd(m); e.preventDefault(); e.stopPropagation(); } }
+  if (CTL.kind === 'recon' && e.code === 'KeyJ') { reconMlrs(); e.preventDefault(); e.stopPropagation(); }
+}, true);
+// the impact countdown also shows in the recon drone camera
+const _reconHudM = CTL.ext.recon.hud;
+CTL.ext.recon.hud = function (dt, pr, W, H) {
+  _reconHudM(dt, pr, W, H);
+  for (let i = MLC.imp.length - 1; i >= 0; i--) { const m = MLC.imp[i]; if (CTL.kind === 'recon') { m.t -= dt; if (m.t < -3) { MLC.imp.splice(i, 1); continue; } } const p = pr(new V3(m.p.x, Math.max(getH(m.p.x, m.p.z), WATER) + 2, m.p.z)); if (p) { oc.font = '700 14px Chakra Petch, sans-serif'; oc.textAlign = 'center'; oc.fillStyle = '#ff7a5a'; oc.fillText(m.t > 4 ? '🚀 RAKETTEN ONDERWEG' : m.t > 0 ? `INSLAG OVER ${Math.ceil(m.t)} s` : '💥 INSLAG', p[0], p[1] - 40); } }
+};
+// the range of the launcher limits where you can aim
+const _ctlClampM = ctlClampAim;
+ctlClampAim = function () {
+  _ctlClampM();
+  if (!CTL.on || CTL.kind !== 'mlrs' || !CTL.obj) return; const u = CTL.obj, a = CTL.aim, dx = a.x - u.pos.x, dz = a.z - u.pos.z, d = Math.hypot(dx, dz) || 1, mn = 140, mx = u.V.rng;
+  if (d > mx || d < mn) { const k = clamp(d, mn, mx) / d; a.x = u.pos.x + dx * k; a.z = u.pos.z + dz * k; a.y = Math.max(getH(a.x, a.z), WATER); }
+};
+// the launcher turns its rack toward the cross and fires when you say so
+const _truckThinkM = Truck.prototype.think;
+Truck.prototype.think = function (dt) {
+  if (this !== MLC.u || !CTL.on || CTL.kind !== 'mlrs') return _truckThinkM.call(this, dt);
+  const I = this.in, A = CTL.aim, d = Math.hypot(A.x - this.pos.x, A.z - this.pos.z);
+  I.thr = 0; I.steer = 0; I.mg = false; I.aimYaw = Math.atan2(A.x - this.pos.x, A.z - this.pos.z); I.aimPitch = .32 + .5 * clamp(d / this.V.rng, 0, 1);
+  const err = Math.abs(angDiff(this.yaw + this.turretYaw, I.aimYaw));
+  MLC.ready = !this.salvo && this.reload <= 0 && err < .1 && Math.abs(this.gunPitch - I.aimPitch) < .1;
+  I.fire = MLC.want && MLC.ready;
+  if (I.fire) { this.fireAt = new V3(A.x, 0, A.z); this.precise = 'ctl'; MLC.want = false; MLC.fired = true; }
+};
+// a smaller salvo reloads faster
+const _truckFireM = Truck.prototype.fireCannon;
+Truck.prototype.fireCannon = function () {
+  const pre = this.precise; this.precise = null; _truckFireM.call(this); this.salvoPrecise = this.salvo ? pre : null;
+  if (this === MLC.u && CTL.on && CTL.kind === 'mlrs' && this.salvo) { this.salvo.n = MLC.size; this.reload = Math.max(6, rnd(this.V.reload[0], this.V.reload[1]) * (MLC.size / 12)); this.toldReload = true; }
+};
+// rockets aimed by you or by a drone land closer together and hit harder (cluster warheads)
+const MRKT = Object.assign({}, PDEF.arty, { splash: 700, r: 13 });
+const _launchOneM = Truck.prototype.launchOne;
+Truck.prototype.launchOne = function (p) {
+  if (this.variant !== 'mlrs' || !this.salvoPrecise) return _launchOneM.call(this, p);
+  const k = this.salvo.n % 6, s = this.salvoPrecise === 'ctl' ? 14 : 22;
+  const from = this.gun.localToWorld(new V3(-.75 + (k % 4) * .5, .15 + (k % 3) * .35, 4)), q = p.clone().add(new V3(rnd(-s, s), 0, rnd(-s, s))); q.y = Math.max(getH(q.x, q.z), WATER);
+  const v = rocketVel(from, q, 1.0) || rocketVel(from, q, .62); if (!v) return; const pr = launch('arty', from, v, this); if (pr) { pr.rkt = true; pr.def = MRKT; }
+  for (let i = 0; i < 10; i++) spawnP(from, { tex: smokeTex, color: 0xd8d2c6, op: .75, size: rnd(1.5, 3), grow: 2.5, life: rnd(1.5, 3), vel: v.clone().normalize().multiplyScalar(-rnd(4, 12)).add(new V3(rnd(-2, 2), rnd(0, 2), rnd(-2, 2))), drag: 1.5 });
+  spawnP(from, { add: true, color: 0xffc070, size: 3, grow: 0, life: .12 }); Snd.shot(from, 'rocket');
+};
+
 </script>
